@@ -1,0 +1,22 @@
+{
+  "pools": [
+    {
+      "rolls": {
+        "min": 5,
+        "max": 15
+      },
+      "bonus_rolls": 1,
+      "entries": [
+        {
+          "type": "item",
+          "name": "minecraft:gold_ingot",
+          "weight": 1,
+          "functions": [],
+          "conditions": [],
+          "pools": []
+        }
+      ],
+      "conditions": []
+    }
+  ]
+}

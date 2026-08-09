@@ -5,7 +5,7 @@ import { world, system } from "@minecraft/server";
 //====================================
 
 // Change these to balance your game.
-const HORSE_SPEED = 0.30;
+const HORSE_SPEED = 0.20;
 const HORSE_JUMP = 0.50;
 
 //====================================
