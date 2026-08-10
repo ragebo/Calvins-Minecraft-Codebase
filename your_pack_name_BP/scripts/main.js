@@ -6,6 +6,8 @@ import { startRoleSelection, LAW_SPAWNS, OUTLAW_SPAWNS, pickRandomSpawn } from "
 import "./horse.js";
 import "./gold.js";
 import "./harming.js";
+import { startTrainRobbery } from "./train.js";
+import "./train.js";
 
 const JAIL_X = -254;
 const JAIL_Y = 64;
