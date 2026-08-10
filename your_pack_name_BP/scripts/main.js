@@ -5,21 +5,87 @@ import "./ranchraid.js";
 import { startRoleSelection, LAW_SPAWNS, OUTLAW_SPAWNS, pickRandomSpawn } from "./roles.js";
 import "./horse.js";
 import "./gold.js";
-import { startTrainRobbery } from "./train.js";
-import "./train.js";
+import "./harming.js";
 
 const JAIL_X = -254;
 const JAIL_Y = 64;
 const JAIL_Z = 235;
 
+//---------------------------------------------------
+// DROP INVENTORY (used when a player dies broke)
+//---------------------------------------------------
+
+function dropInventory(player) {
+
+    try {
+
+        const dimension = player.dimension;
+        const location = player.location;
+        const inventory = player.getComponent("minecraft:inventory");
+        const container = inventory.container;
+
+        for (let i = 0; i < container.size; i++) {
+
+            const itemStack = container.getItem(i);
+
+            if (!itemStack) continue;
+
+            dimension.spawnItem(itemStack, location);
+            container.setItem(i, undefined);
+        }
+
+    } catch (error) {
+
+        world.sendMessage(`§c[DEATH ERROR] Could not drop inventory for ${player.name}: ${error}`);
+
+    }
+}
+
 world.afterEvents.entityDie.subscribe((event) => {
     const dead = event.deadEntity;
     const killer = event.damageSource.damagingEntity;
 
-    if (!killer || killer.typeId !== "minecraft:player") return;
-
     const bountyObj = world.scoreboard.getObjective("bounty");
     const coinsObj = world.scoreboard.getObjective("coins");
+
+    //---------------------------------------------------
+    // OUTLAW LOSES HALF THEIR MONEY ON DEATH
+    // Runs for ANY cause of death — fall, drown, mob, poison,
+    // not just PvP kills. Must stay above the killer check below.
+    //---------------------------------------------------
+
+    if (coinsObj && dead.typeId === "minecraft:player") {
+        const deadIdentity = dead.scoreboardIdentity;
+
+        if (deadIdentity) {
+            const currentCoins = coinsObj.getScore(deadIdentity) ?? 0;
+
+            if (currentCoins <= 0) {
+
+                dropInventory(dead);
+
+                world.sendMessage(
+                    `§c${dead.name} had no money and dropped their inventory!`
+                );
+
+            } else {
+
+                const remainingCoins = Math.floor(currentCoins / 2);
+
+                coinsObj.setScore(deadIdentity, remainingCoins);
+
+                world.sendMessage(
+                    `§c${dead.name} died and lost half their money!`
+                );
+            }
+        }
+    }
+
+    //---------------------------------------------------
+    // Everything past this point needs a player killer.
+    //---------------------------------------------------
+
+    if (!killer || killer.typeId !== "minecraft:player") return;
 
     if (!bountyObj || !coinsObj) return;
 
@@ -50,25 +116,6 @@ world.afterEvents.entityDie.subscribe((event) => {
         );
 
         return;
-    }
-
-    //---------------------------------------------------
-    // OUTLAW LOSES HALF THEIR MONEY ON DEATH
-    //---------------------------------------------------
-
-    if (dead.typeId === "minecraft:player") {
-        const deadIdentity = dead.scoreboardIdentity;
-
-        if (deadIdentity) {
-            const currentCoins = coinsObj.getScore(deadIdentity) ?? 0;
-            const remainingCoins = Math.floor(currentCoins / 2);
-
-            coinsObj.setScore(deadIdentity, remainingCoins);
-
-            world.sendMessage(
-                `§c${dead.name} died and lost half their money!`
-            );
-        }
     }
 
     //---------------------------------------------------
