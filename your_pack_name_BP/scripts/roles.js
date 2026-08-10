@@ -100,6 +100,45 @@ system.afterEvents.scriptEventReceive.subscribe((event) => {
 export { LAW_SPAWNS, OUTLAW_SPAWNS, pickRandomSpawn };
 
 //----------------------------------
+// TELEPORT TO SPAWNS
+//----------------------------------
+
+// Teleports every current law/outlaw player to a random spawn
+// point for their team. Independent of role assignment — works
+// whether roles were just randomized or set manually (e.g. by
+// hand-tagging players "law"/"outlaw" and triggering this alone).
+export function teleportPlayersToSpawns() {
+
+    for (const player of world.getAllPlayers()) {
+
+        if (!player.hasTag("law") && !player.hasTag("outlaw")) continue;
+
+        try {
+
+            const spawnList = player.hasTag("law") ? LAW_SPAWNS : OUTLAW_SPAWNS;
+            const spawnPoint = pickRandomSpawn(spawnList);
+
+            player.teleport(spawnPoint);
+
+        } catch (error) {
+
+            world.sendMessage(`§c[ROLES ERROR] Could not teleport ${player.name}: ${error}`);
+
+        }
+    }
+}
+
+// Trigger this on its own — scriptevent bounty:teleport — to
+// start a manual game (roles set by hand) without randomizing.
+system.afterEvents.scriptEventReceive.subscribe((event) => {
+
+    if (event.id !== "bounty:teleport") return;
+
+    teleportPlayersToSpawns();
+
+});
+
+//----------------------------------
 // SHUFFLE
 //----------------------------------
 
@@ -164,25 +203,10 @@ for (; index < lawCount; index++) {
 }
 
     //----------------------------------
-    // Random spawn per player
+    // Teleport everyone to their spawns
     //----------------------------------
 
-    for (const player of players) {
-
-        try {
-
-            const isLaw = player.hasTag("law");
-            const spawnList = isLaw ? LAW_SPAWNS : OUTLAW_SPAWNS;
-            const spawnPoint = pickRandomSpawn(spawnList);
-
-            player.teleport(spawnPoint);
-
-        } catch (error) {
-
-            world.sendMessage(`§c[ROLES ERROR] Could not set up ${player.name}: ${error}`);
-
-        }
-    }
+    teleportPlayersToSpawns();
 
 
     //----------------------------------
