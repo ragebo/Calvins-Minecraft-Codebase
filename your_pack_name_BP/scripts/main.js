@@ -3,9 +3,11 @@ import { attemptOutlawEscape } from "./boat.js";
 import { startRanchRaid } from "./ranchraid.js";
 import "./ranchraid.js";
 import { startRoleSelection, LAW_SPAWNS, OUTLAW_SPAWNS, pickRandomSpawn } from "./roles.js";
+import "./roles.js";
 import "./horse.js";
 import "./gold.js";
-import "./harming.js";
+import "./fort.js";
+
 import { startTrainRobbery } from "./train.js";
 import "./train.js";
 
