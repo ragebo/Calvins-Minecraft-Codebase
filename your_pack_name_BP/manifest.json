@@ -19,20 +19,17 @@
             "uuid": "65d59a18-b7c1-4f9b-96c5-5c6483df2a41",
             "version": [2, 7, 1],
             "entry": "scripts/main.js"
-        },
-        {
-            "type": "loot_table",
-            "language": "javascript",
-            "uuid": "a487da6c-5383-4fd8-979b-687e9009670a",
-            "version": [2, 7, 1],
-            "entry": "loot_tables/custom/gold.json"
         }
     ],
     "dependencies": [
         {
-            "module_name": "@minecraft/server",
-            "version": "2.0.0"
-        }
+        "module_name": "@minecraft/server",
+        "version": "2.0.0"
+    },
+    {
+        "module_name": "@minecraft/server-ui",
+        "version": "2.1.0"
+    }
     ],
     "metadata": {
         "authors": ["Ragebo"],

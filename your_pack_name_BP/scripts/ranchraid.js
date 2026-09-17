@@ -210,7 +210,7 @@ export function startRanchRaid() {
         if (raiders.length === 0) {
 
             world.sendMessage(
-                "§c[DEBUG] Raid failed."
+                "§cRaid ended early."
             );
 
             removeRaidDefenders();
@@ -260,9 +260,9 @@ export function startRanchRaid() {
 
             wave = 2;
 
-            world.sendMessage(
-                "§6[DEBUG] Wave 2!"
-            );
+            //world.sendMessage(
+            //    "§6[DEBUG] Wave 2!"
+            //);
 
             spawnWave(2);
 
@@ -276,9 +276,9 @@ export function startRanchRaid() {
 
             wave = 3;
 
-            world.sendMessage(
-                "§4[DEBUG] FINAL WAVE!"
-            );
+            //world.sendMessage(
+            //    "§4[DEBUG] FINAL WAVE!"
+            //);
 
             spawnWave(3);
 
@@ -290,9 +290,9 @@ export function startRanchRaid() {
 
         if (timer <= 0) {
 
-            world.sendMessage(
-                "§a[DEBUG] Safe unlocked!"
-            );
+            //world.sendMessage(
+            //    "§a[DEBUG] Safe unlocked!"
+            //);
 
             unlockSafe();
 
@@ -310,7 +310,7 @@ system.afterEvents.scriptEventReceive.subscribe((event) => {
 
     if (event.id !== "bounty:ranch") return;
 
-    world.sendMessage("§a[DEBUG] Ranch raid triggered!");
+    world.sendMessage("§aRanch raid started!");
 
     startRanchRaid();
 

@@ -7,7 +7,7 @@ import { world, system } from "@minecraft/server";
 // CHANGE THESE to your real spawn locations. Add as many as you
 // like to each list — one gets picked at random per player.
 const LAW_SPAWNS = [
-    { x: 125, y: 83, z: 196 },
+    { x: 79, y: 63, z: 204 },
     { x: -250, y: 64, z: 234 }
 ];
 
@@ -179,6 +179,7 @@ export function startRoleSelection() {
         player.removeTag("jailed");
         player.removeTag("eliminated");
         player.removeTag("send_to_jail");
+        player.removeTag("in_jail");
 
     }
 

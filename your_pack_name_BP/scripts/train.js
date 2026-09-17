@@ -1,4 +1,4 @@
-import { world, system, BlockVolume, BlockPermutation, ItemStack } from "@minecraft/server";
+import { world, system, BlockVolume, BlockPermutation } from "@minecraft/server";
 
 //====================================
 // TRAIN SETTINGS
@@ -33,9 +33,11 @@ const BRIDGE_RESTORE_DELAY_TICKS = 1600;
 const TRAIN_START = { x: -284, y: 94, z: -269 };
 const TRAIN_END = { x: -241, y: 94, z: -269 }; // set this to your real track end
 
-// How many blocks the train moves per step. 1 = smoothest,
-// matches what you had before but without typing every point.
-const STEP_SIZE = 1;
+// How many blocks the train moves per step. A 29-block-long
+// train barely looks different moving 1 block at a time versus
+// 5, since it already overlaps itself almost entirely — but 1
+// means 5x more structure operations. Raised from 1 to 5.
+const STEP_SIZE = 5;
 
 // Builds the list of waypoints from TRAIN_START to TRAIN_END,
 // STEP_SIZE blocks apart. Works along any direction, not just
@@ -68,19 +70,16 @@ function buildTrainPath(start, end, stepSize) {
 const TRAIN_PATH = buildTrainPath(TRAIN_START, TRAIN_END, STEP_SIZE);
 
 // How many ticks between each move. Lower = faster train.
-const MOVE_INTERVAL_TICKS = 6;
+const MOVE_INTERVAL_TICKS = 10;
 
 // Where the vault car's chest is. Set this to the chest block's
 // real coordinates.
 const VAULT_CHEST = { x: -236, y: 97, z: -268 };
 
 // The chest fills with a random amount of gold in this range.
-const GOLD_ITEM = "minecraft:gold_ingot";
-const GOLD_MIN = 5;
-const GOLD_MAX = 15;
 
 // How many pillagers spawn once the train stops at the vault car.
-const GUARD_COUNT = 2;
+const GUARD_COUNT = 3;
 
 // How long the train and guards stay after the robbery ends,
 // before they get cleaned up. 1200 ticks = 1 minute.
@@ -88,8 +87,8 @@ const CLEANUP_DELAY_TICKS = 1200;
 
 // Bridge area to clear. Fill in real coordinates.
 const BRIDGE = {
-     min: { x: -212, y: 92, z: -270},
-    max: { x: -206 , y: 94, z: -265 }
+    min: { x: -212, y: 92, z: -270 },
+    max: { x: -209, y: 94, z: -266 }
 };
 
 let trainActive = false;
@@ -164,6 +163,10 @@ function restoreTrackAt(index, point) {
 // VAULT CHEST
 //====================================
 
+// Name of the loot table to insert into the vault chest.
+// Path is relative to loot_tables/ in your behavior pack.
+const VAULT_LOOT_TABLE = "chests/gold_2";
+
 function fillVaultChest() {
 
     const dimension = world.getDimension("overworld");
@@ -184,22 +187,9 @@ function fillVaultChest() {
             return;
         }
 
-        const container = inventory.container;
-
-        const amount = Math.floor(Math.random() * (GOLD_MAX - GOLD_MIN + 1)) + GOLD_MIN;
-
-        // Gold ingots cap at a 64 stack, so split larger amounts
-        // across as many stacks as needed.
-        let remaining = amount;
-
-        while (remaining > 0) {
-
-            const stackSize = Math.min(remaining, 64);
-
-            container.addItem(new ItemStack(GOLD_ITEM, stackSize));
-
-            remaining -= stackSize;
-        }
+        dimension.runCommand(
+            `loot insert ${VAULT_CHEST.x} ${VAULT_CHEST.y} ${VAULT_CHEST.z} loot "${VAULT_LOOT_TABLE}"`
+        );
 
         world.sendMessage("§6The vault chest is full of gold!");
 

@@ -32,9 +32,9 @@ function standardizeHorse(horse) {
         // Debug
         //--------------------------------
 
-        world.sendMessage(
-            `§7[HORSE DEBUG] Horse standardized | Speed: ${HORSE_SPEED}`
-        );
+        //world.sendMessage(
+        //    `§7[HORSE DEBUG] Horse standardized | Speed: ${HORSE_SPEED}`
+        //);
 
     } catch (error) {
 

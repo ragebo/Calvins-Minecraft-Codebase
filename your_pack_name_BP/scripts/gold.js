@@ -52,7 +52,7 @@ world.afterEvents.playerInventoryItemChange.subscribe((event) => {
             (coinsObj.getScore(player) ?? 0) + coinValue
         );
 
-        player.sendMessage(`§6+${coinValue} coins §7(gold converted automatically)`);
+        player.sendMessage(`§6+${coinValue} coins`);
 
     } catch (error) {
 

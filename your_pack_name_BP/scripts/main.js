@@ -3,17 +3,13 @@ import { attemptOutlawEscape } from "./boat.js";
 import { startRanchRaid } from "./ranchraid.js";
 import "./ranchraid.js";
 import { startRoleSelection, LAW_SPAWNS, OUTLAW_SPAWNS, pickRandomSpawn } from "./roles.js";
-import "./roles.js";
 import "./horse.js";
 import "./gold.js";
 import "./fort.js";
+import "./train.js"
+import { assignJailForNewPrisoner } from "./jail.js";
+import "./jailbreak.js";
 
-import { startTrainRobbery } from "./train.js";
-import "./train.js";
-
-const JAIL_X = -254;
-const JAIL_Y = 64;
-const JAIL_Z = 235;
 
 //---------------------------------------------------
 // DROP INVENTORY (used when a player dies broke)
@@ -64,7 +60,7 @@ world.afterEvents.entityDie.subscribe((event) => {
         if (deadIdentity) {
             const currentCoins = coinsObj.getScore(deadIdentity) ?? 0;
 
-            if (currentCoins <= 0) {
+            if (currentCoins <= 0 && !dead.hasTag("law")) {
 
                 dropInventory(dead);
 
@@ -72,7 +68,7 @@ world.afterEvents.entityDie.subscribe((event) => {
                     `§c${dead.name} had no money and dropped their inventory!`
                 );
 
-            } else {
+            } else if (currentCoins > 0) {
 
                 const remainingCoins = Math.floor(currentCoins / 2);
 
@@ -82,6 +78,7 @@ world.afterEvents.entityDie.subscribe((event) => {
                     `§c${dead.name} died and lost half their money!`
                 );
             }
+            // A law player with no money takes no death penalty at all.
         }
     }
 
@@ -242,13 +239,12 @@ world.afterEvents.playerSpawn.subscribe((event) => {
     if (player.hasTag("send_to_jail")) {
         player.removeTag("send_to_jail");
         player.addTag("jailed");
+        player.addTag("in_jail");
+
+        const jailLocation = assignJailForNewPrisoner();
 
         system.run(() => {
-            player.teleport({
-                x: JAIL_X,
-                y: JAIL_Y,
-                z: JAIL_Z
-            });
+            player.teleport(jailLocation);
 
             player.sendMessage(
                 "§cYou have been captured! This is your second and final life."
