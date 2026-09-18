@@ -4,6 +4,7 @@ import { TRAIN, LOOT } from "../config/balance.js";
 import { registerSystem } from "../core/registry.js";
 import { onDeath, onScriptEvent } from "../core/events.js";
 import { addCoins } from "../core/economy.js";
+import { tryStartEvent, endEvent, getActiveEvent } from "../core/eventLock.js";
 
 /**
  * Name of the structure saved with /structure save. Not a tunable
@@ -158,6 +159,10 @@ function removeGuards(): void {
 
 onDeath("train:kill-reward", 200, (ctx) => {
 
+    // Same InvalidEntityError risk as the generic raid engine's kill
+    // reward handler — the dead entity's handle can already be gone
+    // by the time this runs.
+    if (!ctx.dead.isValid) return;
     if (!ctx.dead.hasTag("train_guard")) return;
     if (!ctx.killer) return;
 
@@ -253,6 +258,11 @@ export function startTrainRobbery(): void {
         return;
     }
 
+    if (!tryStartEvent("train")) {
+        world.sendMessage(`§cCan't start a train robbery — ${getActiveEvent()} is already in progress.`);
+        return;
+    }
+
     trainActive = true;
     currentStop = 0;
 
@@ -295,6 +305,7 @@ export function startTrainRobbery(): void {
                     restoreTrackAt(previousIndex, previousStop);
                     removeGuards();
                     world.sendMessage("§7The train has been cleaned up.");
+                    endEvent("train");
                 }, TRAIN.cleanupDelayTicks);
 
                 return;
@@ -317,6 +328,7 @@ export function startTrainRobbery(): void {
 
             trainActive = false;
             system.clearRun(trainRunId!);
+            endEvent("train");
 
             world.sendMessage(`§c[TRAIN ERROR] Robbery stopped: ${error}`);
         }

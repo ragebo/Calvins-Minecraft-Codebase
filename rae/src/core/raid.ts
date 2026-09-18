@@ -143,6 +143,11 @@ export function registerRaid(config: RaidConfig): void {
 
         onDeath(`raid:${config.id}`, 200, (ctx) => {
 
+            // A dead entity's handle can already be invalid by the time
+            // this fires (e.g. deaths from a bulk /kill sweep, or just
+            // slow enough handler chains) — hasTag() throws in that case,
+            // so there's no reward to give and nothing else to check.
+            if (!ctx.dead.isValid) return;
             if (!ctx.dead.hasTag(tagFor(config.id))) return;
             if (!ctx.killer) return;
 
@@ -262,6 +267,10 @@ export function startRaid(id: string): void {
     world.sendMessage(`§4Raid started! ${participants.length} player(s).`);
 
     spawnWave(config, 0, participants.length);
+}
+
+export function isRaidActive(id: string): boolean {
+    return raids.get(id)?.state.active ?? false;
 }
 
 export function stopRaid(id: string): void {

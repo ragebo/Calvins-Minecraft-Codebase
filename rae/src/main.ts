@@ -18,6 +18,7 @@ import "./systems/economy-rules.js";
 import "./systems/horse.js";
 import "./systems/gold.js";
 import "./systems/guns.js";
+import "./systems/compass.js";
 import "./systems/endgame.js";
 
 // ---------------------------------------------------

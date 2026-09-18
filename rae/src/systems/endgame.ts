@@ -4,8 +4,13 @@ import { onDeath } from "../core/events.js";
 
 /**
  * V1 never had a law win condition — only the outlaws' boat escape
- * (boat.ts) ended a round. This closes that gap: once every outlaw
- * has been permanently eliminated (used both lives), law wins.
+ * (boat.ts) ended a round. This closes that gap: law wins once
+ * every outlaw is neutralized — either permanently eliminated, or
+ * currently sitting in jail. "Everyone jailed" is just as dead an
+ * end as "everyone eliminated": jailbreak.ts's checkEligibility
+ * requires a rescuer who is an outlaw, not currently in_jail, and
+ * not eliminated — so if every outlaw is in one of those two
+ * states, there is no one left who could ever attempt a rescue.
  *
  * Deliberately symmetric with boat.ts's outlaw win: tag survivors
  * "winner" and announce it, no teleport (there's no established
@@ -23,14 +28,19 @@ function checkLawWin(): void {
 
     // No outlaws at all (round not started, everyone disconnected)
     // isn't a win — only every assigned outlaw actually being
-    // eliminated counts.
+    // neutralized counts.
     if (outlaws.length === 0) return;
-    if (!outlaws.every((player) => player.hasTag("eliminated"))) return;
+
+    const allNeutralized = outlaws.every((player) =>
+        player.hasTag("eliminated") || player.hasTag("in_jail")
+    );
+
+    if (!allNeutralized) return;
 
     roundEnded = true;
 
     world.sendMessage("§9§lTHE LAW HAS WON!");
-    world.sendMessage("§7Every outlaw has been captured and eliminated.");
+    world.sendMessage("§7Every outlaw is captured or eliminated — no one is left to break them out.");
 
     for (const player of world.getAllPlayers()) {
         if (player.hasTag("law") && !player.hasTag("eliminated")) {
@@ -43,6 +53,16 @@ function checkLawWin(): void {
 // "eliminated" tag ever gets set — so this always sees the result
 // of the death that might have just finished off the last outlaw.
 onDeath("endgame:law-win-check", 150, () => {
+    checkLawWin();
+});
+
+// A death alone can't catch the "everyone's now in jail" case: a
+// fresh capture only gets the in_jail tag on respawn (jail.ts's own
+// playerSpawn handler), not at the moment of death itself. jail.ts
+// registers its playerSpawn handler first (imported earlier in
+// main.ts), so in_jail is already set by the time this one runs —
+// same ordering convention main.ts's own spawn glue already relies on.
+world.afterEvents.playerSpawn.subscribe(() => {
     checkLawWin();
 });
 

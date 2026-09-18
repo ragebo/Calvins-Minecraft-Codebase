@@ -295,9 +295,12 @@ onScriptEvent("bounty:test_capture", (player) => {
     if (!player) return;
 
     player.addTag("jailed");
-    player.addTag("in_jail");
 
+    // Same ordering requirement as jail.ts's real capture path: roll
+    // the jail site before this player counts as occupying it.
     const jailLocation = assignJailForNewPrisoner();
+
+    player.addTag("in_jail");
 
     system.run(() => {
         player.teleport(jailLocation);

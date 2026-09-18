@@ -48,6 +48,10 @@ onDeath("jail:capture", 100, (ctx) => {
 
     const dead = ctx.dead as Player;
 
+    // dead.hasTag() throws InvalidEntityError if the entity's handle
+    // is already gone by the time this runs — if we can't read the
+    // outlaw tag at all there's nothing safe to capture.
+    if (!dead.isValid) return;
     if (!dead.hasTag("outlaw") || !ctx.killer.hasTag("law")) return;
 
     const deadIdentity: ScoreboardIdentity | undefined = dead.scoreboardIdentity;
@@ -89,9 +93,14 @@ world.afterEvents.playerSpawn.subscribe((event) => {
 
         player.removeTag("send_to_jail");
         player.addTag("jailed");
-        player.addTag("in_jail");
 
+        // Must run before this player gets the in_jail tag — otherwise
+        // isJailOccupied() always sees them as already occupying it,
+        // and assignJailForNewPrisoner() can never roll a fresh site
+        // once the jail has actually emptied out.
         const jailLocation = assignJailForNewPrisoner();
+
+        player.addTag("in_jail");
 
         system.run(() => {
             player.teleport(jailLocation);

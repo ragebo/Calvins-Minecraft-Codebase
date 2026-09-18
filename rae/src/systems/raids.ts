@@ -7,8 +7,9 @@ import { FORT, RANCH, LOOT } from "../config/balance.js";
 import { registerSystem } from "../core/registry.js";
 import { onDeath, onScriptEvent } from "../core/events.js";
 import { onTick } from "../core/tick.js";
-import { registerRaid, resetAllRaids, startRaid } from "../core/raid.js";
+import { registerRaid, resetAllRaids, startRaid, isRaidActive } from "../core/raid.js";
 import { addCoins } from "../core/economy.js";
+import { tryStartEvent, endEvent, getActiveEvent } from "../core/eventLock.js";
 
 /**
  * FORT — fits the shared wave engine exactly: fixed waves that
@@ -67,16 +68,30 @@ registerRaid({
         }
 
         world.sendMessage("§6The fort has been cleared! §eThe reward chest is open.");
+        endEvent("fort");
     },
     onFail() {
         world.sendMessage("§c[DEBUG] Fort raid ended");
+        endEvent("fort");
     }
 });
 
 onScriptEvent("bounty:fort", () => {
+
+    if (!tryStartEvent("fort")) {
+        world.sendMessage(`§cCan't start a fort raid — ${getActiveEvent()} is already in progress.`);
+        return;
+    }
+
     // The shared startRaid() checks for an existing run, an empty
-    // area, etc. and messages the player itself.
+    // area, etc. and messages the player itself. Neither of those
+    // paths calls onComplete/onFail, so if it didn't actually start,
+    // release the lock we just grabbed rather than leaving it stuck.
     startRaid("fort");
+
+    if (!isRaidActive("fort")) {
+        endEvent("fort");
+    }
 });
 
 /**
@@ -205,6 +220,7 @@ export function startRanchRaid(): void {
             removeRanchDefenders();
             ranchRaidActive = false;
             system.clearRun(ranchRunId!);
+            endEvent("ranch");
             return;
         }
 
@@ -232,18 +248,29 @@ export function startRanchRaid(): void {
             removeRanchDefenders();
             ranchRaidActive = false;
             system.clearRun(ranchRunId!);
+            endEvent("ranch");
         }
 
     }, 20);
 }
 
 onScriptEvent("bounty:ranch", () => {
+
+    if (!tryStartEvent("ranch")) {
+        world.sendMessage(`§cCan't start a ranch raid — ${getActiveEvent()} is already in progress.`);
+        return;
+    }
+
     world.sendMessage("§aRanch raid started!");
     startRanchRaid();
 });
 
 onDeath("ranch:kill-reward", 200, (ctx) => {
 
+    // Same InvalidEntityError risk as the generic raid engine's kill
+    // reward handler — the dead entity's handle can already be gone
+    // by the time this runs.
+    if (!ctx.dead.isValid) return;
     if (!ctx.dead.hasTag("ranch_defender")) return;
     if (!ctx.killer) return;
 

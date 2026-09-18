@@ -43,7 +43,11 @@ onDeath("economy:death-penalty", 50, (ctx) => {
 
     const currentCoins = getCoins(deadIdentity);
 
-    if (currentCoins <= 0 && !dead.hasTag("law")) {
+    // dead.hasTag() throws InvalidEntityError if the entity's handle
+    // is already gone by the time this runs — treat that as "can't
+    // tell if they're law," which just means the broke-and-drops
+    // branch doesn't fire for them (same as the law exemption below).
+    if (currentCoins <= 0 && dead.isValid && !dead.hasTag("law")) {
 
         dropInventory(dead);
         world.sendMessage(`§c${dead.name} had no money and dropped their inventory!`);

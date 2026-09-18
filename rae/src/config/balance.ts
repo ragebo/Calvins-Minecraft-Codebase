@@ -116,6 +116,27 @@ export const HARMING = {
     levelOffset: 1
 };
 
+export const COMPASS = {
+    /** What every law player's compass tracks until they switch it. */
+    defaultMode: "nearest" as "nearest" | "bounty",
+    /** Ticks between readout refreshes while the compass is held. */
+    updateIntervalTicks: 4,
+    /**
+     * Ticks a chosen target stays locked before nearest / highest
+     * bounty is re-decided. Only the bearing to the locked target is
+     * recomputed on every refresh, which is what keeps this cheap.
+     */
+    retargetIntervalTicks: 20,
+    /** Ticks after a mode switch before another is accepted. */
+    toggleCooldownTicks: 10,
+    /** Cells in the bearing bar. Odd, so there's a true center cell. */
+    barCells: 21,
+    /** The bar spans this many degrees either side of straight ahead. */
+    barHalfWidthDegrees: 90,
+    /** The marker turns green within this many degrees of dead ahead. */
+    alignToleranceDegrees: 10
+};
+
 export const LOOT = {
     trainVault: "chests/gold_2",
     fortReward: "chests/gold_2"
