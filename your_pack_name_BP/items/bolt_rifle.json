@@ -1,0 +1,16 @@
+{
+    "format_version": "1.26.50",
+    "minecraft:item": {
+        "description": {
+            "identifier": "bountysys:bolt_rifle",
+            "menu_category": { "category": "equipment" }
+        },
+        "components": {
+            "minecraft:icon": "crossbow_standby",
+            "minecraft:display_name": { "value": "Bolt-Action Rifle" },
+            "minecraft:max_stack_size": 1,
+            "minecraft:hand_equipped": true,
+            "minecraft:cooldown": { "category": "bolt_rifle", "duration": 0.5 }
+        }
+    }
+}

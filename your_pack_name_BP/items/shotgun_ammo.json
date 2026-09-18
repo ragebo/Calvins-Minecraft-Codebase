@@ -1,0 +1,14 @@
+{
+    "format_version": "1.26.50",
+    "minecraft:item": {
+        "description": {
+            "identifier": "bountysys:shotgun_ammo",
+            "menu_category": { "category": "items" }
+        },
+        "components": {
+            "minecraft:icon": "flint",
+            "minecraft:display_name": { "value": "Shotgun Shells" },
+            "minecraft:max_stack_size": 64
+        }
+    }
+}

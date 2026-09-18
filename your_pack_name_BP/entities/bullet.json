@@ -1,0 +1,29 @@
+{
+    "format_version": "1.26.50",
+    "minecraft:entity": {
+        "description": {
+            "identifier": "bountysys:bullet",
+            "is_spawnable": false,
+            "is_summonable": true,
+            "is_experimental": false
+        },
+        "components": {
+            "minecraft:collision_box": { "width": 0.15, "height": 0.15 },
+            "minecraft:physics": { "has_gravity": false, "has_collision": true },
+            "minecraft:projectile": {
+                "on_hit": {
+                    "impact_damage": {
+                        "damage": { "min": 0, "max": 0 },
+                        "knockback": false
+                    }
+                },
+                "power": 0,
+                "gravity": 0,
+                "anchor": "eye_height",
+                "offset": [0, 0, 0],
+                "should_bounce": "no",
+                "reflect_on_hurt": false
+            }
+        }
+    }
+}

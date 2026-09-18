@@ -1,0 +1,21 @@
+{
+  "compilerOptions": {
+    "target": "ES2020",
+    "module": "ES2020",
+    "moduleResolution": "bundler",
+    "rootDir": "./src",
+
+    // CHANGE THIS if your behavior pack folder has a different name.
+    // rae/ and your_pack_name_BP/ are siblings under development_behavior_packs/,
+    // so this must go up one level, not into a subfolder of rae/.
+    "outDir": "../your_pack_name_BP/scripts",
+
+    "strict": true,
+    "noUnusedLocals": true,
+    "noImplicitOverride": true,
+    "noFallthroughCasesInSwitch": true,
+    "forceConsistentCasingInFileNames": true,
+    "skipLibCheck": true
+  },
+  "include": ["src/**/*.ts"]
+}

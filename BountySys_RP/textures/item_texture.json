@@ -1,0 +1,6 @@
+{
+    "resource_pack_name": "bountysys",
+    "texture_data": {
+        "revolver": { "textures": "textures/items/revolver" }
+    }
+}

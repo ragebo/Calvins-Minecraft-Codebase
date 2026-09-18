@@ -1,0 +1,16 @@
+{
+  "name": "rae",
+  "version": "1.0.0",
+  "description": "RAE - Red Alive Escape. Minecraft Bedrock addon.",
+  "type": "module",
+  "scripts": {
+    "build": "tsc",
+    "watch": "tsc --watch",
+    "check": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@minecraft/server": "^2.0.0",
+    "@minecraft/server-ui": "^2.0.0",
+    "typescript": "^5.4.0"
+  }
+}

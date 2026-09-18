@@ -1,0 +1,16 @@
+{
+    "format_version": "1.26.50",
+    "minecraft:item": {
+        "description": {
+            "identifier": "bountysys:semi_rifle",
+            "menu_category": { "category": "equipment" }
+        },
+        "components": {
+            "minecraft:icon": "bow_standby",
+            "minecraft:display_name": { "value": "Semi-Auto Rifle" },
+            "minecraft:max_stack_size": 1,
+            "minecraft:hand_equipped": true,
+            "minecraft:cooldown": { "category": "semi_rifle", "duration": 0.3 }
+        }
+    }
+}
