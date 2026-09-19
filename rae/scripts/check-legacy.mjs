@@ -13,7 +13,8 @@ const BASE_REF = process.env.LEGACY_BASE_REF ?? "main";
 
 const PATTERNS = [
     { id: "error-to-chat", what: "errors sent to every player in chat", re: /sendMessage\((?:`|")§c\[/g },
-    { id: "role-tag-read", what: "role/status read from a tag instead of core/state", re: /hasTag\("(?:law|outlaw|eliminated|in_jail|jailed|send_to_jail|escort_vulnerable|winner|native)"\)/g },
+    { id: "role-tag-read", what: "role/status read from a tag instead of core/state", re: /hasTag\("(?:law|outlaw|eliminated|in_jail|jailed|send_to_jail|escort_vulnerable|winner|native)"\)/g, exclude: ["core/state.ts"] },
+    { id: "tag-write", what: "role/status tag written directly instead of via core/state update()", re: /\.(?:addTag|removeTag)\("(?:law|outlaw|eliminated|in_jail|jailed|send_to_jail|escort_vulnerable|winner|native)"\)/g, exclude: ["core/state.ts"] },
     { id: "name-as-key", what: "player.name used as a map/set key", re: /\.(?:get|set|has|delete)\(\s*[A-Za-z_.]*\.name\b|`\$\{[A-Za-z_.]*\.name\}:/g },
     { id: "private-interval", what: "system.runInterval outside core/tick.ts", re: /system\.runInterval\(/g, exclude: ["core/tick.ts"] },
     { id: "player-filter", what: "world.getAllPlayers/getPlayers outside core/tick.ts and core/players.ts", re: /world\.(?:getAllPlayers|getPlayers)\(/g, exclude: ["core/tick.ts", "core/players.ts"] },
