@@ -2,10 +2,10 @@ import { world, system, BlockVolume, BlockPermutation, type Vector3 } from "@min
 import { TRAIN_START, TRAIN_END, TRAIN_SIZE, TRAIN_VAULT_CHEST, BRIDGE_AREA } from "../config/world.js";
 import { TRAIN, LOOT } from "../config/balance.js";
 import { registerSystem } from "../core/registry.js";
-import { onDeath, onScriptEvent } from "../core/events.js";
+import { onDeath } from "../core/events.js";
 import { onTick } from "../core/tick.js";
 import { addCoins } from "../core/economy.js";
-import { tryStartEvent, endEvent, getActiveEvent } from "../core/eventLock.js";
+import { registerEvent, finishEvent } from "../core/director.js";
 
 /**
  * Name of the structure saved with /structure save. Not a tunable
@@ -252,16 +252,19 @@ export function destroyBridge(): void {
 // the movement handler states its own cadence.
 //====================================
 
-export function startTrainRobbery(): void {
+/** The robbery's own line for a second start while the train is still moving. */
+const ALREADY_MOVING = "§cA train robbery is already in progress.";
+
+/**
+ * Starts a robbery. Not called directly: the director calls it once the
+ * slot is free (registerEvent below), so it is reached by requestEvent("train")
+ * or the bounty:train script event.
+ */
+export function startTrainRobbery(): boolean {
 
     if (trainActive) {
-        world.sendMessage("§cA train robbery is already in progress.");
-        return;
-    }
-
-    if (!tryStartEvent("train")) {
-        world.sendMessage(`§cCan't start a train robbery — ${getActiveEvent()} is already in progress.`);
-        return;
+        world.sendMessage(ALREADY_MOVING);
+        return false;
     }
 
     trainActive = true;
@@ -306,7 +309,7 @@ export function startTrainRobbery(): void {
                     restoreTrackAt(previousIndex, previousStop);
                     removeGuards();
                     world.sendMessage("§7The train has been cleaned up.");
-                    endEvent("train");
+                    finishEvent("train");
                 }, TRAIN.cleanupDelayTicks);
 
                 return;
@@ -329,17 +332,27 @@ export function startTrainRobbery(): void {
 
             trainActive = false;
             stopTrainLoop?.();
-            endEvent("train");
+            finishEvent("train");
 
             world.sendMessage(`§c[TRAIN ERROR] Robbery stopped: ${error}`);
         }
 
     }, { everyTicks: TRAIN.moveIntervalTicks });
+
+    return true;
 }
 
 // Place a command block on your lever with: scriptevent bounty:train
-onScriptEvent("bounty:train", () => {
-    startTrainRobbery();
+registerEvent({
+    id: "train",
+    label: "train robbery",
+    trigger: "bounty:train",
+    // The director asks the slot first, so this is what a second start
+    // while the train is still moving gets, as before. Once it has
+    // stopped (vault open, guards standing) the director's own
+    // "Can't start a train robbery — train is already in progress." applies.
+    busyMessage: () => (trainActive ? ALREADY_MOVING : undefined),
+    start: startTrainRobbery
 });
 
 registerSystem({

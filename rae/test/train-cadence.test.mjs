@@ -10,7 +10,7 @@ const { TRAIN } = await load("config/balance.js");
 const { TRAIN_START, TRAIN_END } = await load("config/world.js");
 await load("systems/train.js");
 const { listSystems } = await load("core/registry.js");
-const { getActiveEvent } = await load("core/eventLock.js");
+const { activeEvent } = await load("core/director.js");
 
 // Structure names are saved in the world with /structure save; they are not config.
 const TRAIN_STRUCTURE = "mystructure:train";
@@ -66,7 +66,7 @@ const errors = () => fake.chat.filter((m) => m.includes("§c["));
 function scene() {
     fake.advance(TRAIN.bridgeRestoreDelayTicks + TRAIN.cleanupDelayTicks);      // let any leftover timeouts play out
     fake.reset();
-    for (const name of ["train", "event-lock"]) listSystems().find((s) => s.name === name).reset();
+    for (const name of ["train", "director"]) listSystems().find((s) => s.name === name).reset();
     fake.advanceTo(Math.ceil(fake.tick / 20) * 20 + 3);
     log.length = 0;
 }
@@ -118,7 +118,7 @@ test("start places the train, then it moves every moveIntervalTicks, restoring t
     // A second start while it is running is refused and must not add a second mover.
     system.afterEvents.scriptEventReceive.emit({ id: "bounty:train" });
     check("a second start is refused", chat().includes("A train robbery is already in progress."));
-    check("...and the lock is still held", getActiveEvent() === "train");
+    check("...and the lock is still held", activeEvent() === "train");
     done();
 });
 
@@ -141,13 +141,13 @@ test("the finish comes one interval after the last move: vault opens, guards spa
     const before = structureCommands().length;
     fake.advanceTo(finish + TRAIN.cleanupDelayTicks - 1);
     check("the mover stopped itself (no train commands before the cleanup)", structureCommands().length === before, `(${structureCommands().length - before} extra)`);
-    check("the lock is held until the cleanup", getActiveEvent() === "train");
+    check("the lock is held until the cleanup", activeEvent() === "train");
 
     fake.advanceTo(finish + TRAIN.cleanupDelayTicks);
     const cleanup = at(finish + TRAIN.cleanupDelayTicks);
     check("cleanup restores the last stop", JSON.stringify(cleanup.map((c) => [c.kind, c.index, c.at])) === JSON.stringify([["restore", STEPS, stop(STEPS)]]), JSON.stringify(cleanup));
     check("cleanup removes the guards and says so", guards().length === 0 && chat().includes("The train has been cleaned up."));
-    check("cleanup releases the lock", getActiveEvent() === null);
+    check("cleanup releases the lock", activeEvent() === null);
     check("no errors in the whole run", errors().length === 0, errors().join(" | "));
 
     // ...and a new robbery can start afterwards, at the same pace.
@@ -174,7 +174,7 @@ test("resetting the system mid-robbery stops the train dead", () => {
     check("no more moves after a reset", structureCommands().length === before, `(${structureCommands().length - before} extra)`);
 
     // A reset train can start over (the round reset also clears the lock).
-    listSystems().find((s) => s.name === "event-lock").reset();
+    listSystems().find((s) => s.name === "director").reset();
     log.length = 0;
     fake.advance(3);
     const t1 = startRobbery();
@@ -195,13 +195,13 @@ test("a robbery that breaks stops itself, frees the lock and reports it", () => 
     overworld.spawnEntity = () => { throw new Error("boom"); };
     try {
         fake.advanceTo(finish - 1);
-        check("(setup) still running one tick before the finish", getActiveEvent() === "train");
+        check("(setup) still running one tick before the finish", activeEvent() === "train");
         fake.advanceTo(finish);
     } finally {
         overworld.spawnEntity = realSpawn;
     }
     check("the failure is reported", chat().some((m) => m.startsWith("[TRAIN ERROR] Robbery stopped:") && m.includes("boom")), chat().join(" | "));
-    check("the lock is released", getActiveEvent() === null);
+    check("the lock is released", activeEvent() === null);
 
     const before = structureCommands().length;
     fake.advance(INTERVAL * 5);

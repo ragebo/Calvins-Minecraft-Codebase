@@ -11,7 +11,7 @@ const { RANCH_AREA, RANCH_SAFE_TRIGGER } = await load("config/world.js");
 const LOAD_TICK = fake.tick;                            // the shared 20-tick loop's handlers count from here
 await load("systems/raids.js");
 const { listSystems } = await load("core/registry.js");
-const { getActiveEvent } = await load("core/eventLock.js");
+const { activeEvent } = await load("core/director.js");
 
 const PASS = 20;                                        // ticks per raid pass; the timer counts in these
 const INSIDE = {
@@ -58,7 +58,7 @@ function timeline(raiders) {
 function scene() {
     fake.advance(1000);                                 // let anything left over play out
     fake.reset();
-    for (const name of ["raids", "event-lock"]) listSystems().find((s) => s.name === name).reset();
+    for (const name of ["raids", "director"]) listSystems().find((s) => s.name === name).reset();
     fake.advanceTo(Math.ceil(fake.tick / PASS) * PASS + 7);
     log.length = 0;
 }
@@ -101,14 +101,14 @@ test("start announces and spawns wave 1 at once; waves and the safe unlock follo
     fake.advanceTo(t0 + t.unlock * PASS - 1);
     check("the safe stays locked until the timer runs out", !chat().includes("Safe unlocked!") && !log.some((l) => l.command === unlockCommand));
     check("the defenders are still there", defenders().length === 3 * PER_WAVE);
-    check("the event lock is held during the raid", getActiveEvent() === "ranch");
+    check("the event lock is held during the raid", activeEvent() === "ranch");
 
     fake.advanceTo(t0 + t.unlock * PASS);
     check(`the safe unlocks on pass ${t.unlock} (${t.unlock * PASS} ticks after the start)`,
         chat().includes("Safe unlocked!") && log.some((l) => l.tick === t0 + t.unlock * PASS && l.command === unlockCommand),
         JSON.stringify(log.filter((l) => l.command === unlockCommand)));
     check("the defenders are removed", defenders().length === 0);
-    check("the lock is released", getActiveEvent() === null);
+    check("the lock is released", activeEvent() === null);
 
     // The loop has stopped itself.
     const spawned = overworld.spawned.length, messages = fake.chat.length;
@@ -156,7 +156,7 @@ test("raiders inside get regeneration on the shared loop's grid, while the raid 
 
     // Once the raid is over, nobody is healed any more.
     fake.advanceTo(t0 + t.unlock * PASS);
-    check("(setup) the raid is over", getActiveEvent() === null && chat().includes("Safe unlocked!"));
+    check("(setup) the raid is over", activeEvent() === null && chat().includes("Safe unlocked!"));
     const healed = healTicks().length;
     fake.advance(PASS * 3);
     check("regeneration stops when the raid ends", healTicks().length === healed, `(${healTicks().length - healed} more)`);
@@ -171,7 +171,7 @@ test("the raid ends early when everyone has left, at the next pass, and stops fo
     const t0 = startRaid();
 
     fake.advanceTo(t0 + 2 * PASS);
-    check("(setup) the raid is running", getActiveEvent() === "ranch" && !chat().includes("Raid ended early."));
+    check("(setup) the raid is running", activeEvent() === "ranch" && !chat().includes("Raid ended early."));
     outlaw.location = OUTSIDE;
 
     fake.advanceTo(t0 + 3 * PASS - 1);
@@ -179,7 +179,7 @@ test("the raid ends early when everyone has left, at the next pass, and stops fo
     fake.advanceTo(t0 + 3 * PASS);
     check("the raid ends early on the next pass", chat().includes("Raid ended early."), chat().join(" | "));
     check("the defenders are removed", defenders().length === 0);
-    check("the lock is released", getActiveEvent() === null);
+    check("the lock is released", activeEvent() === null);
 
     const messages = fake.chat.length, spawned = overworld.spawned.length;
     outlaw.location = INSIDE;                            // coming back does not resurrect a stopped raid
@@ -217,7 +217,7 @@ test("resetting the system mid-raid stops the clock and the raid flag", () => {
     const outlaw = fake.makePlayer("Bandit", { tags: ["outlaw"], location: INSIDE });
     const t0 = startRaid();
     fake.advanceTo(t0 + 2 * PASS);
-    check("(setup) the raid is running", getActiveEvent() === "ranch");
+    check("(setup) the raid is running", activeEvent() === "ranch");
 
     listSystems().find((s) => s.name === "raids").reset();
     check("defenders are removed by the reset", defenders().length === 0);

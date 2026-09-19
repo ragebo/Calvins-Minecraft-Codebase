@@ -5,11 +5,11 @@ import {
 } from "../config/world.js";
 import { FORT, RANCH, LOOT } from "../config/balance.js";
 import { registerSystem } from "../core/registry.js";
-import { onDeath, onScriptEvent } from "../core/events.js";
+import { onDeath } from "../core/events.js";
 import { onTick } from "../core/tick.js";
 import { registerRaid, resetAllRaids, startRaid, isRaidActive } from "../core/raid.js";
 import { addCoins } from "../core/economy.js";
-import { tryStartEvent, endEvent, getActiveEvent } from "../core/eventLock.js";
+import { registerEvent, finishEvent } from "../core/director.js";
 
 /**
  * FORT — fits the shared wave engine exactly: fixed waves that
@@ -68,29 +68,26 @@ registerRaid({
         }
 
         world.sendMessage("§6The fort has been cleared! §eThe reward chest is open.");
-        endEvent("fort");
+        finishEvent("fort");
     },
     onFail() {
         world.sendMessage("§c[DEBUG] Fort raid ended");
-        endEvent("fort");
+        finishEvent("fort");
     }
 });
 
-onScriptEvent("bounty:fort", () => {
-
-    if (!tryStartEvent("fort")) {
-        world.sendMessage(`§cCan't start a fort raid — ${getActiveEvent()} is already in progress.`);
-        return;
-    }
-
-    // The shared startRaid() checks for an existing run, an empty
-    // area, etc. and messages the player itself. Neither of those
-    // paths calls onComplete/onFail, so if it didn't actually start,
-    // release the lock we just grabbed rather than leaving it stuck.
-    startRaid("fort");
-
-    if (!isRaidActive("fort")) {
-        endEvent("fort");
+registerEvent({
+    id: "fort",
+    label: "fort raid",
+    trigger: "bounty:fort",
+    start() {
+        // The shared startRaid() checks for an existing run, an empty
+        // area, etc. and messages the player itself. Neither of those
+        // paths calls onComplete/onFail, so a raid that didn't actually
+        // start says so here and the director frees the slot rather than
+        // leaving it stuck.
+        startRaid("fort");
+        return isRaidActive("fort");
     }
 });
 
@@ -187,13 +184,16 @@ onTick("ranch:heal", (ctx) => {
 });
 
 /**
+ * Returns false when nobody is inside and no raid was started, so the
+ * director can free the slot the raid never used.
+ *
  * Note: like V1, this sets ranchRaidActive = true BEFORE checking
  * whether anyone is actually inside — a failed start (no raiders)
  * still leaves the flag on, which is why the heal loop above guards
  * on the flag rather than assuming an active loop exists. Preserved
  * as-is; not a behavior this port is meant to fix.
  */
-export function startRanchRaid(): void {
+export function startRanchRaid(): boolean {
 
     const raiders = getRaidersInRanch();
 
@@ -201,7 +201,7 @@ export function startRanchRaid(): void {
 
     if (raiders.length === 0) {
         world.sendMessage("§cNo outlaws are inside the ranch.");
-        return;
+        return false;
     }
 
     let originalTime = RANCH.startTimeBase + raiders.length * RANCH.startTimePerRaider;
@@ -223,7 +223,7 @@ export function startRanchRaid(): void {
             removeRanchDefenders();
             ranchRaidActive = false;
             stopRanchLoop?.();
-            endEvent("ranch");
+            finishEvent("ranch");
             return;
         }
 
@@ -251,21 +251,23 @@ export function startRanchRaid(): void {
             removeRanchDefenders();
             ranchRaidActive = false;
             stopRanchLoop?.();
-            endEvent("ranch");
+            finishEvent("ranch");
         }
 
     }, { everyTicks: 20 });
+
+    return true;
 }
 
-onScriptEvent("bounty:ranch", () => {
-
-    if (!tryStartEvent("ranch")) {
-        world.sendMessage(`§cCan't start a ranch raid — ${getActiveEvent()} is already in progress.`);
-        return;
+registerEvent({
+    id: "ranch",
+    label: "ranch raid",
+    trigger: "bounty:ranch",
+    start() {
+        // Printed before the raid looks for raiders, as in V1.
+        world.sendMessage("§aRanch raid started!");
+        return startRanchRaid();
     }
-
-    world.sendMessage("§aRanch raid started!");
-    startRanchRaid();
 });
 
 onDeath("ranch:kill-reward", 200, (ctx) => {
