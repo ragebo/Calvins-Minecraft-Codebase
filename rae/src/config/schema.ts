@@ -1,28 +1,22 @@
 /**
- * Versioning for the shape of the config, so saved data is never silently
- * misread after the config changes.
+ * Versions the shape of the config, so saved data is never silently misread.
  *
- * Each config file exports a *_SCHEMA_VERSION integer. describeSchema()
- * folds them into one fingerprint such as "balance@1,guns@1,world@1".
- * Anything persisted between rounds should store that fingerprint next to
- * its data. When loading, migrator.migrate(savedFingerprint, data) returns
- * the data as-is if the fingerprint matches, upgrades it through the
- * registered migrations if it does not, and answers { ok: false, reason }
- * when no chain of migrations leads to the running config. The caller must
- * then refuse or discard the saved data, never guess.
+ * Each config file exports a *_SCHEMA_VERSION. describeSchema() joins them
+ * into one fingerprint, e.g. "balance@1,guns@1,world@1". Persisted data
+ * should store that fingerprint. On load, migrator.migrate(saved, data)
+ * passes the data through when the fingerprint matches, upgrades it through
+ * registered migrations, or answers { ok: false, reason }, and then the
+ * caller must refuse or discard the data rather than guess.
  *
- * BUMP POLICY
- *  - Bump a file's version whenever the shape or meaning of what it exports
- *    changes in a way persisted data depends on: a key renamed, removed or
- *    retyped, a unit or scale changed, an id, index or ordering that saved
- *    data points at reshuffled.
- *  - Do not bump for a plain tuning change that nothing saved refers to.
- *  - A bump changes the fingerprint, so older saves are refused until a
- *    migration from the old fingerprint to the new one is registered.
- *  - Adding or removing a file in CONFIG_SCHEMA changes the fingerprint
- *    too, and is handled the same way.
+ * BUMP POLICY: bump a file's version whenever the shape or meaning of what
+ * it exports changes in a way persisted data depends on (a key renamed,
+ * removed or retyped, a unit changed, an id or index that saved data points
+ * at reshuffled). A plain tuning change that nothing saved refers to needs
+ * no bump. A bump changes the fingerprint, so older saves are refused until
+ * a migration from the old fingerprint to the new one is registered. Adding
+ * a file to CONFIG_SCHEMA changes the fingerprint the same way.
  *
- * Pure module: no game API imports, so it loads and tests anywhere.
+ * Pure module: no game API imports.
  */
 
 import { BALANCE_SCHEMA_VERSION } from "./balance.js";
