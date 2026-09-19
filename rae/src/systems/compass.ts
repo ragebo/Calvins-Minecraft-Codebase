@@ -3,7 +3,7 @@ import { COMPASS } from "../config/balance.js";
 import { registerSystem } from "../core/registry.js";
 import { onTick } from "../core/tick.js";
 import { getBounty } from "../core/economy.js";
-import { relativeBearing, bearingBar } from "../core/bearing.js";
+import { relativeBearing, bearingBar } from "../logic/bearing.js";
 
 /**
  * Replaces the vanilla locator bar for law. Hold the compass and the

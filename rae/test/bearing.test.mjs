@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import { load, checks, strip, approx } from "./helpers.mjs";
 
-const { relativeBearing, bearingBar } = await load("core/bearing.js");
+const { relativeBearing, bearingBar } = await load("logic/bearing.js");
 
 const S = { x: 0, y: 0, z: 1 }, N = { x: 0, y: 0, z: -1 }, E = { x: 1, y: 0, z: 0 }, W = { x: -1, y: 0, z: 0 };
 const o = { x: 0, y: 64, z: 0 };
