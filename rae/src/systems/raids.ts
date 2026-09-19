@@ -1,4 +1,4 @@
-import { world, system, type Player, type Entity, type Vector3 } from "@minecraft/server";
+import { world, type Player, type Entity, type Vector3 } from "@minecraft/server";
 import {
     FORT_AREA, FORT_SPAWNS, FORT_REWARD_CHEST,
     RANCH_AREA, RANCH_LOWER_SPAWNS, RANCH_UPPER_SPAWNS, RANCH_SAFE_TRIGGER
@@ -104,7 +104,8 @@ onScriptEvent("bounty:fort", () => {
  */
 
 let ranchRaidActive = false;
-let ranchRunId: number | null = null;
+/** Stops the raid loop started by startRanchRaid. Null when none has been started. */
+let stopRanchLoop: (() => void) | null = null;
 
 function insideRanch(loc: Vector3): boolean {
     return (
@@ -211,7 +212,9 @@ export function startRanchRaid(): void {
 
     spawnRanchWave(1);
 
-    ranchRunId = system.runInterval(() => {
+    // One pass per second, counted from the moment the raid starts: the
+    // timer below is in these passes, so the 20 must stay 20.
+    stopRanchLoop = onTick("ranch:raid", () => {
 
         const currentRaiders = getRaidersInRanch();
 
@@ -219,7 +222,7 @@ export function startRanchRaid(): void {
             world.sendMessage("§cRaid ended early.");
             removeRanchDefenders();
             ranchRaidActive = false;
-            system.clearRun(ranchRunId!);
+            stopRanchLoop?.();
             endEvent("ranch");
             return;
         }
@@ -247,11 +250,11 @@ export function startRanchRaid(): void {
             unlockRanchSafe();
             removeRanchDefenders();
             ranchRaidActive = false;
-            system.clearRun(ranchRunId!);
+            stopRanchLoop?.();
             endEvent("ranch");
         }
 
-    }, 20);
+    }, { everyTicks: 20 });
 }
 
 onScriptEvent("bounty:ranch", () => {
@@ -300,9 +303,9 @@ registerSystem({
 
         ranchRaidActive = false;
 
-        if (ranchRunId !== null) {
-            system.clearRun(ranchRunId);
-            ranchRunId = null;
+        if (stopRanchLoop !== null) {
+            stopRanchLoop();
+            stopRanchLoop = null;
         }
 
         removeRanchDefenders();
