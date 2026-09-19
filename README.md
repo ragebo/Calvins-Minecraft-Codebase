@@ -15,16 +15,28 @@ under Creative Commons Attribution (http://creativecommons.org/licenses/by/4.0/)
 rae/                    TypeScript source. This is what you edit.
   src/config/           Every coordinate (world.ts) and every tunable number (balance.ts),
                          plus gun/ammo stats (guns.ts). Nothing else defines these values.
-  src/core/              registry.ts   system registration + round reset
-                         events.ts     single entityDie / scriptEventReceive dispatcher
-                         tick.ts       one shared polling loop
+  src/logic/            Pure rules with no game imports, so they can be tested outside MC:
+                         bearing.ts    direction math + bearing-bar rendering for the law compass
+                         schema.ts     versions the config so saved data is never misread
+  src/core/             Shared engines and contracts the systems build on:
+                         registry.ts   system registration + round reset
+                         events.ts     one entityDie / playerSpawn / scriptEventReceive
+                                       dispatcher, with handlers in a defined order
+                         tick.ts       the one polling loop; every repeating job is an onTick handler
+                         state.ts      one record per player (role, jail, elimination, ammo) that
+                                       game logic reads; role tags are written from it, for command blocks
+                         players.ts    cached "who is law / a free outlaw / a prisoner" queries
+                         ui.ts         titles, the action bar (with priorities) and chat; the compass
+                                       posts through it
+                         director.ts   the one slot fort raid / ranch raid / train robbery share
                          economy.ts    the only file that touches coins/bounty
                          raid.ts       shared wave-spawn engine (used by the fort raid)
-                         eventLock.ts  one-at-a-time lock for fort raid / ranch raid / train robbery
-                         bearing.ts    direction math + bearing-bar rendering for the law
-                                       compass (no game imports, so it can be tested outside MC)
+                         round.ts      round lifecycle state machine (a contract: no system uses it yet)
+                         persist.ts    contract for state that survives a reload (nothing registers yet)
   src/systems/          One file per gameplay system (see below). Each registers itself
                          via registerSystem() and is imported once from main.ts.
+  test/                 Tests. They run the compiled code under a fake game API.
+  scripts/              The test runner and the legacy-pattern ratchet.
   MIGRATION.md          The rules this port followed, for reference.
 
 your_pack_name_BP/      The behavior pack. scripts/ is BUILD OUTPUT — never edit it by
@@ -36,7 +48,14 @@ your_pack_name_BP/      The behavior pack. scripts/ is BUILD OUTPUT — never ed
 BountySys_RP/           Resource pack: gun/ammo/compass icons, the revolver's 3D attachable
                          geometry + texture, the bullet's client entity definition.
                          sounds/ (music) is gitignored — not included here, licensing unconfirmed.
+
+docs/test-cards/        One manual in-game test card per architecture task.
+CLAUDE.md               Rules for agents working in this repo (layers, the seven rules, checks).
 ```
+
+The systems are still being moved onto these core modules. `npm run check:legacy` counts what
+is left of the old style (direct role-tag reads, private timers, errors sent straight to chat)
+and fails if a count goes up.
 
 ## Systems (`rae/src/systems/`)
 
@@ -55,9 +74,23 @@ BountySys_RP/           Resource pack: gun/ammo/compass icons, the revolver's 3D
 | `endgame.ts` | Law win condition: every outlaw eliminated **or in jail** (a jailed gang has nobody left free to run a jailbreak) |
 | `compass.ts` | Law compass — see below |
 
-Fort raid, ranch raid and train robbery all go through `core/eventLock.ts`, so only one
-of them can run at a time. Jailbreak is deliberately not part of the lock: it's a
+Fort raid, ranch raid and train robbery all go through `core/director.ts`, so only one
+of them can run at a time. Jailbreak is deliberately not part of it: it's a
 continuous system, not a scripted set-piece.
+
+### Roles, state and tags
+
+Who is law or outlaw, who is jailed or eliminated, and who has won live in one record per
+player in `core/state.ts`; game logic reads that record. The matching tags (`law`, `outlaw`,
+`eliminated`, `jailed`, `in_jail`, `send_to_jail`, `escort_vulnerable`, `winner`) are written
+from it as output, so command blocks can keep targeting `@a[tag=law]`.
+
+Tags typed by hand come back the other way: `/tag @s add law` (or `outlaw`, `eliminated`, ...)
+updates the record within a second, and adding one role's tag to a player who has the other
+switches them and takes the old tag off. `/scriptevent rae:adopt` does the same check for
+everyone right now and lists what each record says. It only changes what the game believes: it
+does not run the side effects of a role (no gamemode change, no teleport, no kit). A record with
+a change of its own still waiting to be written is left alone until it is written.
 
 ### Gun system
 
@@ -112,6 +145,8 @@ the format_version notes below.
 cd rae
 npm install         # once
 npm run check        # type-check only
+npm test              # compiles to .test-build/ and runs every test under a fake game API
+npm run check:legacy  # the migration ratchet: fails if a count of an old pattern went up
 npm run build         # compiles src/ into ../your_pack_name_BP/scripts/
 ```
 
@@ -142,8 +177,9 @@ Other guns: `pistol`, `bolt_rifle` / `rifle_ammo`, `semi_rifle` / `rifle_ammo`,
 The compass (needs the `law` tag to work): `/give @s bountysys:law_compass`, or from a
 command block `/give @a[tag=law] bountysys:law_compass`.
 
-Debug commands (from `main.ts`): `/scriptevent rae:debug` lists every registered system
-and event id; `/scriptevent rae:reset` forces a full round reset.
+Debug commands: `/scriptevent rae:debug` lists every registered system and event id;
+`/scriptevent rae:reset` forces a full round reset; `/scriptevent rae:adopt` reads every
+player's role/status tags into the records now and lists what each record says.
 
 ## Known schema gotchas on this engine version (1.26.50+)
 
