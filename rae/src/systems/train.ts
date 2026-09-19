@@ -3,6 +3,7 @@ import { TRAIN_START, TRAIN_END, TRAIN_SIZE, TRAIN_VAULT_CHEST, BRIDGE_AREA } fr
 import { TRAIN, LOOT } from "../config/balance.js";
 import { registerSystem } from "../core/registry.js";
 import { onDeath, onScriptEvent } from "../core/events.js";
+import { onTick } from "../core/tick.js";
 import { addCoins } from "../core/economy.js";
 import { tryStartEvent, endEvent, getActiveEvent } from "../core/eventLock.js";
 
@@ -47,7 +48,8 @@ const TRAIN_PATH = buildTrainPath(TRAIN_START, TRAIN_END, TRAIN.stepSize);
 
 let trainActive = false;
 let currentStop = 0;
-let trainRunId: number | null = null;
+/** Stops the movement loop started by startTrainRobbery. Null when none has been started. */
+let stopTrainLoop: (() => void) | null = null;
 
 //====================================
 // MOVE THE TRAIN
@@ -244,11 +246,10 @@ export function destroyBridge(): void {
 //====================================
 // START THE ROBBERY
 //
-// Moves every TRAIN.moveIntervalTicks (10) — finer-grained than
-// core/tick.ts's shared 20-tick loop, which can only skip passes,
-// not run faster than its own period. Using onTick here would
-// silently halve the train's speed, so this keeps its own interval
-// instead, same as V1.
+// Moves every TRAIN.moveIntervalTicks (10), counted from the moment
+// the robbery starts. onTick runs a handler every 20 ticks unless it
+// asks otherwise, which would silently halve the train's speed, so
+// the movement handler states its own cadence.
 //====================================
 
 export function startTrainRobbery(): void {
@@ -273,7 +274,7 @@ export function startTrainRobbery(): void {
     backupTrackAt(currentStop, TRAIN_PATH[currentStop]);
     placeTrainAt(TRAIN_PATH[currentStop]);
 
-    trainRunId = system.runInterval(() => {
+    stopTrainLoop = onTick("train:move", () => {
 
         try {
 
@@ -289,7 +290,7 @@ export function startTrainRobbery(): void {
             if (currentStop >= TRAIN_PATH.length) {
 
                 trainActive = false;
-                system.clearRun(trainRunId!);
+                stopTrainLoop?.();
 
                 fillVaultChest();
 
@@ -327,13 +328,13 @@ export function startTrainRobbery(): void {
         } catch (error) {
 
             trainActive = false;
-            system.clearRun(trainRunId!);
+            stopTrainLoop?.();
             endEvent("train");
 
             world.sendMessage(`§c[TRAIN ERROR] Robbery stopped: ${error}`);
         }
 
-    }, TRAIN.moveIntervalTicks);
+    }, { everyTicks: TRAIN.moveIntervalTicks });
 }
 
 // Place a command block on your lever with: scriptevent bounty:train
@@ -345,9 +346,9 @@ registerSystem({
     name: "train",
     reset() {
 
-        if (trainRunId !== null) {
-            system.clearRun(trainRunId);
-            trainRunId = null;
+        if (stopTrainLoop !== null) {
+            stopTrainLoop();
+            stopTrainLoop = null;
         }
 
         trainActive = false;
