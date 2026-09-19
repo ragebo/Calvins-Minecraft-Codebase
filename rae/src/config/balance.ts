@@ -140,6 +140,14 @@ export const COMPASS = {
     alignToleranceDegrees: 10
 };
 
+export const STATE_SYNC = {
+    /**
+     * Ticks between checks of every player's role and status tags. A tag typed by hand
+     * (`/tag @s add law`) reaches the records within this long. Whole ticks, at least 1.
+     */
+    reconcileIntervalTicks: 20
+};
+
 export const LOOT = {
     trainVault: "chests/gold_2",
     fortReward: "chests/gold_2"

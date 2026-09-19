@@ -76,6 +76,7 @@ test("adopt at spawn: an existing record is kept, not re-read from the tags", ()
 
     spawn(p);
 
+    // Spawning doesn't look at the tags. It is the poll, up to a second later, that adopts a tag typed by hand (state-adopt.test.mjs).
     check("the record is the truth", state.findRecord(p.id)?.role === "law", String(state.findRecord(p.id)?.role));
     done();
 });

@@ -1,7 +1,10 @@
-import { world, system, type Player } from "@minecraft/server";
+import { world, type Player } from "@minecraft/server";
+import { STATE_SYNC } from "../config/balance.js";
 import type { JailSite } from "../config/world.js";
-import { onSpawn } from "./events.js";
+import { onScriptEvent, onSpawn } from "./events.js";
 import { registerSystem } from "./registry.js";
+import { onTick } from "./tick.js";
+import { format, tell } from "./ui.js";
 
 /**
  * The single source of truth for per-player game state.
@@ -12,10 +15,17 @@ import { registerSystem } from "./registry.js";
  * keyed by player.id, that systems read and update through this module.
  *
  * TAGS ARE OUTPUT, NOT INPUT. update() writes the matching tags so command blocks can keep
- * targeting `@a[tag=law]`, but game logic must read the record. adoptTags() is the one way
- * back from tags to the record: it exists for players whose tags were set from outside (a
- * command block, a world that was saved mid-round). This module is the only place allowed to
- * read or write those role/status tags.
+ * targeting `@a[tag=law]`, but game logic must read the record. This module is the only place
+ * allowed to read or write those role/status tags.
+ *
+ * The one way back from tags to the record is adoption, for tags that were set from outside: a
+ * world saved mid-round, a command block, or a person typing `/tag @s add law`. Nothing tells the
+ * script when a tag changes, so a poll (every STATE_SYNC.reconcileIntervalTicks) compares each
+ * player's tags with what this module last wrote or saw, and adopts any difference. The person who
+ * typed the tag wins over the record. `/scriptevent rae:adopt` makes the same check right now, for
+ * everyone, and lists what the records say. A record with a change of its own still waiting to be
+ * written (see DEATH HANDLERS) is never overwritten by the poll. Adopting only changes what the game
+ * believes: it does not run the side effects of the change (no gamemode, no teleport, no kit).
  *
  * DEATH HANDLERS: inside an entityDie handler the dead player's entity handle may already be
  * invalid, so calling anything on it (hasTag, addTag) can throw. `id` is still readable. So there
@@ -64,6 +74,9 @@ const TAG = {
     winner: "winner"
 } as const;
 
+// The same tags as a set, to pick them out of everything else a player carries.
+const MANAGED: ReadonlySet<string> = new Set(Object.values(TAG));
+
 const records = new Map<string, PlayerRecord>();
 // The tags this module has written (or observed) per player, so a sync only touches the difference.
 const mirrored = new Map<string, Set<string>>();
@@ -100,35 +113,144 @@ function writeTags(player: Player, record: PlayerRecord): void {
     mirrored.set(record.id, desired);
 }
 
-/**
- * Rebuilds a player's record from the tags they currently carry. Use it when tags were set
- * from outside this module. Ammo and flags are kept; everything tag-backed is overwritten.
- */
-export function adoptTags(player: Player): Readonly<PlayerRecord> {
+/** The managed tags the player carries right now: one engine call, whatever else they carry. */
+function managedTagsOf(player: Player): Set<string> {
 
-    const record = records.get(player.id) ?? blank(player.id);
     const observed = new Set<string>();
 
-    const has = (tag: string): boolean => {
-        const present = player.hasTag(tag);
-        if (present) observed.add(tag);
-        return present;
-    };
+    for (const tag of player.getTags()) {
+        if (MANAGED.has(tag)) observed.add(tag);
+    }
 
-    record.role = has(TAG.law) ? "law" : has(TAG.outlaw) ? "outlaw" : null;
-    record.eliminated = has(TAG.eliminated);
-    record.captures = has(TAG.jailed) ? Math.max(record.captures, 1) : 0;
-    record.inJail = has(TAG.inJail);
-    record.pendingJail = has(TAG.pendingJail);
-    record.escortVulnerable = has(TAG.escortVulnerable);
-    record.winner = has(TAG.winner);
+    return observed;
+}
+
+function sameTags(a: ReadonlySet<string>, b: ReadonlySet<string>): boolean {
+
+    if (a.size !== b.size) return false;
+
+    for (const tag of a) {
+        if (!b.has(tag)) return false;
+    }
+
+    return true;
+}
+
+/**
+ * The role the tags name. Normally there is one role tag. When someone hand-adds the OTHER role's
+ * tag without removing the first, both are present, and the one that is new is what they meant:
+ * typing `/tag @s add outlaw` on a law player makes them an outlaw. `known` is what this module last
+ * wrote or saw, and it never holds both roles, so both being new means a first sight: law, as
+ * adoption always has.
+ */
+function roleFrom(observed: ReadonlySet<string>, known: ReadonlySet<string> | undefined): Role | null {
+
+    const law = observed.has(TAG.law);
+    const outlaw = observed.has(TAG.outlaw);
+
+    if (!law && !outlaw) return null;
+    if (law !== outlaw) return law ? "law" : "outlaw";
+
+    // Only the outlaw tag being the newcomer makes them an outlaw; a new law tag, or a tie, is law.
+    const lawIsNew = !known?.has(TAG.law);
+    const outlawIsNew = !known?.has(TAG.outlaw);
+
+    return outlawIsNew && !lawIsNew ? "outlaw" : "law";
+}
+
+/**
+ * Makes the record say what `observed` (the managed tags the player carries) say, then makes the
+ * tags agree with the record. The only tag this ever removes is a role tag that lost to the other
+ * one, so a player never carries both. Ammo and flags are kept; everything tag-backed is overwritten.
+ */
+function adoptObserved(player: Player, observed: ReadonlySet<string>): PlayerRecord {
+
+    const record = records.get(player.id) ?? blank(player.id);
+
+    record.role = roleFrom(observed, mirrored.get(record.id));
+    record.eliminated = observed.has(TAG.eliminated);
+    record.captures = observed.has(TAG.jailed) ? Math.max(record.captures, 1) : 0;
+    record.inJail = observed.has(TAG.inJail);
+    record.pendingJail = observed.has(TAG.pendingJail);
+    record.escortVulnerable = observed.has(TAG.escortVulnerable);
+    record.winner = observed.has(TAG.winner);
 
     records.set(record.id, record);
-    mirrored.set(record.id, observed);
+    mirrored.set(record.id, new Set(observed));
     dirty.delete(record.id);        // the tags just read are now the truth; nothing is pending
     version++;
 
+    writeTags(player, record);      // removes the losing role tag, if there was one
+
     return record;
+}
+
+/**
+ * Rebuilds a player's record from the tags they currently carry. Use it when tags were set
+ * from outside this module and the record must follow now. Ammo and flags are kept; everything
+ * tag-backed is overwritten, including a change that was waiting to be written.
+ */
+export function adoptTags(player: Player): Readonly<PlayerRecord> {
+    return adoptObserved(player, managedTagsOf(player));
+}
+
+/** What reconcile() found: the tags were `same` as last seen, the record `adopted` them, or a change of its own is `pending`. */
+type Reconciled = "same" | "adopted" | "pending";
+
+/**
+ * Brings one player's record in line with the tags they carry, when those changed without this
+ * module (a hand-typed /tag, a command block). Unlike adoptTags() it never discards a change that is
+ * waiting to be written, and it does nothing (no version bump) when the tags are what was last seen.
+ * The player's handle must be valid.
+ */
+function reconcile(player: Player): Reconciled {
+
+    const record = records.get(player.id);
+
+    if (!record) {
+        adoptTags(player);              // never seen: nothing to compare with
+        return "adopted";
+    }
+
+    if (dirty.has(record.id)) return "pending";
+
+    const observed = managedTagsOf(player);
+    const known = mirrored.get(record.id);
+
+    if (known && sameTags(observed, known)) return "same";
+
+    adoptObserved(player, observed);
+
+    return "adopted";
+}
+
+interface Tally {
+    /** Players whose tags were looked at. */
+    read: number;
+    /** Records created or changed to follow their tags. */
+    changed: number;
+    /** Records left alone because a change of their own is still waiting to be written. */
+    pending: number;
+}
+
+function reconcileAll(players: readonly Player[]): Tally {
+
+    const tally: Tally = { read: 0, changed: 0, pending: 0 };
+
+    for (const player of players) {
+
+        // A player who disconnected since the list was taken has nothing to read.
+        if (!player.isValid) continue;
+
+        tally.read++;
+
+        const outcome = reconcile(player);
+
+        if (outcome === "adopted") tally.changed++;
+        else if (outcome === "pending") tally.pending++;
+    }
+
+    return tally;
 }
 
 /** The player's record, created (from their current tags) the first time it is asked for. */
@@ -251,7 +373,39 @@ onSpawn("state:adopt", 0, (ctx) => {
 });
 
 // Everyone already in the world when the addon loads (a script reload, a world saved mid-round)
-// never gets a spawn event for it, so adopt them on the first tick.
-system.run(() => {
-    for (const player of world.getAllPlayers()) getRecord(player);
+// never gets a spawn event for it, so adopt them on the first tick, then stand down.
+const stopAdoptingAtLoad = onTick("state:adopt-at-load", (ctx) => {
+    reconcileAll(ctx.players);
+    stopAdoptingAtLoad();
+}, { everyTicks: 1 });
+
+// Tags typed by hand (or set by a command block) have no event, so look for them. This rides the
+// shared tick loop, and its player list is the one every other handler due on the tick shares.
+onTick("state:reconcile", (ctx) => {
+    reconcileAll(ctx.players);
+}, { everyTicks: STATE_SYNC.reconcileIntervalTicks });
+
+// `/scriptevent rae:adopt`: the same check right now instead of at the next poll, for whoever is
+// online. The reply lists what each record says, which is the only place a person can see them.
+// A command block gets no reply: it can't read chat.
+onScriptEvent("rae:adopt", (source) => {
+
+    const players = world.getAllPlayers();
+    const tally = reconcileAll(players);
+
+    if (!source) return;
+
+    const pending = tally.pending > 0 ? `, ${tally.pending} skipped (change pending)` : "";
+
+    tell(source, format("info", `Adopt: ${tally.read} read, ${tally.changed} changed${pending}`));
+
+    for (const player of players) {
+
+        const record = player.isValid ? records.get(player.id) : undefined;
+        if (!record) continue;
+
+        const tags = [...tagsFor(record)];
+
+        tell(source, format("info", `  ${player.name}: ${tags.length > 0 ? tags.join(" ") : "no role"}`));
+    }
 });
