@@ -2,6 +2,7 @@ import { world, system, type Player, type Vector3 } from "@minecraft/server";
 import { LAW_SPAWNS, OUTLAW_SPAWNS } from "../config/world.js";
 import { registerSystem, resetAllSystems } from "../core/registry.js";
 import { onScriptEvent } from "../core/events.js";
+import { getRecord, update } from "../core/state.js";
 
 /**
  * TEMPLATE FILE.
@@ -26,7 +27,7 @@ function shuffle<T>(array: T[]): T[] {
 }
 
 export function spawnListFor(player: Player): Vector3[] {
-    return player.hasTag("law") ? LAW_SPAWNS : OUTLAW_SPAWNS;
+    return getRecord(player).role === "law" ? LAW_SPAWNS : OUTLAW_SPAWNS;
 }
 
 export function teleportToSpawn(player: Player): void {
@@ -39,7 +40,7 @@ export function teleportToSpawn(player: Player): void {
 
 export function teleportPlayersToSpawns(): void {
     for (const player of world.getAllPlayers()) {
-        if (!player.hasTag("law") && !player.hasTag("outlaw")) continue;
+        if (getRecord(player).role === null) continue;
         teleportToSpawn(player);
     }
 }
@@ -59,7 +60,7 @@ export function startRoleSelection(): void {
     const lawCount = Math.max(1, Math.ceil(players.length / 4));
 
     players.forEach((player, index) => {
-        player.addTag(index < lawCount ? "law" : "outlaw");
+        update(player, { role: index < lawCount ? "law" : "outlaw" });
     });
 
     teleportPlayersToSpawns();
@@ -71,7 +72,7 @@ export function startRoleSelection(): void {
     system.runTimeout(() => {
         for (const player of players) {
             player.onScreenDisplay.setTitle(
-                player.hasTag("law") ? "§9LAWMAN" : "§cOUTLAW"
+                getRecord(player).role === "law" ? "§9LAWMAN" : "§cOUTLAW"
             );
         }
         world.sendMessage("§aRoles Assigned!");
