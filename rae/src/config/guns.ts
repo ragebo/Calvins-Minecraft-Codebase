@@ -1,7 +1,10 @@
 /**
  * EVERY gun and ammo stat lives here. Nothing else defines one.
  * First-pass balance numbers — tune freely, nothing else needs to
- * change when you do.
+ * change when you do. That includes the sounds: every id below is a
+ * vanilla sound event, and
+ *   /playsound <id> @s ~ ~ ~ <volume> <pitch>
+ * lets you audition a change in-game before editing it in here.
  */
 
 export type AmmoId = "handgun_ammo" | "rifle_ammo" | "shotgun_ammo";
@@ -38,6 +41,25 @@ export type GunId =
     | "pump_shotgun"
     | "double_barrel_shotgun";
 
+/** One layer of a gun sound: a vanilla sound event played at the shooter. */
+export interface SoundCue {
+    /** Vanilla sound event id, e.g. "firework.blast". */
+    readonly id: string;
+    /** 1 is normal and higher carries farther. Never below 0. */
+    readonly volume: number;
+    /** 1 is the sound's natural pitch. The engine rejects anything under 0.01. */
+    readonly pitch: number;
+    /** Ticks after the trigger (the shot, or the start of the reload). Omit to play immediately. */
+    readonly delayTicks?: number;
+}
+
+export interface GunSounds {
+    /** Played as the shot goes off. Delayed cues can add a pump or bolt cycle. */
+    readonly fire: readonly SoundCue[];
+    /** Played across a reload, so keep every delay under that gun's reloadTicks. */
+    readonly reload: readonly SoundCue[];
+}
+
 interface BaseGunConfig {
     readonly id: GunId;
     readonly itemId: string;
@@ -48,6 +70,7 @@ interface BaseGunConfig {
     readonly fireRateTicks: number;
     /** Ticks a reload takes once started (sneak + use to trigger). */
     readonly reloadTicks: number;
+    readonly sounds: GunSounds;
 }
 
 export interface ProjectileGunConfig extends BaseGunConfig {
@@ -78,6 +101,19 @@ export const GUNS: Record<GunId, GunConfig> = {
         magazineSize: 6,
         fireRateTicks: 8,
         reloadTicks: 40,
+        sounds: {
+            fire: [
+                { id: "firework.blast", volume: 2.0, pitch: 0.9 },
+                { id: "random.explode", volume: 0.6, pitch: 1.7 }
+            ],
+            reload: [
+                { id: "random.lever_click", volume: 0.7, pitch: 0.8 },
+                { id: "armor.equip_chain", volume: 0.6, pitch: 1.3, delayTicks: 10 },
+                { id: "random.pop", volume: 0.5, pitch: 1.5, delayTicks: 19 },
+                { id: "random.pop", volume: 0.5, pitch: 1.7, delayTicks: 25 },
+                { id: "random.lever_click", volume: 0.8, pitch: 1.3, delayTicks: 36 }
+            ]
+        },
         kind: "projectile",
         damage: 4,
         projectileSpeed: 3.5
@@ -90,6 +126,17 @@ export const GUNS: Record<GunId, GunConfig> = {
         magazineSize: 8,
         fireRateTicks: 10,
         reloadTicks: 30,
+        sounds: {
+            fire: [
+                { id: "firework.blast", volume: 1.6, pitch: 1.2 }
+            ],
+            reload: [
+                { id: "random.click", volume: 0.6, pitch: 0.9 },
+                { id: "armor.equip_chain", volume: 0.6, pitch: 1.0, delayTicks: 9 },
+                { id: "random.lever_click", volume: 0.8, pitch: 1.2, delayTicks: 20 },
+                { id: "tile.piston.in", volume: 0.5, pitch: 1.9, delayTicks: 27 }
+            ]
+        },
         kind: "projectile",
         damage: 6,
         projectileSpeed: 3.5
@@ -102,6 +149,19 @@ export const GUNS: Record<GunId, GunConfig> = {
         magazineSize: 1,
         fireRateTicks: 10,
         reloadTicks: 70,
+        sounds: {
+            fire: [
+                { id: "firework.large_blast", volume: 3.0, pitch: 0.85 },
+                { id: "random.explode", volume: 0.7, pitch: 1.5 }
+            ],
+            reload: [
+                { id: "tile.piston.out", volume: 0.7, pitch: 1.3 },
+                { id: "random.click", volume: 0.6, pitch: 0.7, delayTicks: 16 },
+                { id: "random.pop", volume: 0.6, pitch: 1.2, delayTicks: 32 },
+                { id: "tile.piston.in", volume: 0.7, pitch: 1.5, delayTicks: 48 },
+                { id: "random.lever_click", volume: 0.9, pitch: 0.9, delayTicks: 62 }
+            ]
+        },
         kind: "projectile",
         damage: 14,
         projectileSpeed: 6
@@ -114,6 +174,17 @@ export const GUNS: Record<GunId, GunConfig> = {
         magazineSize: 15,
         fireRateTicks: 6,
         reloadTicks: 35,
+        sounds: {
+            fire: [
+                { id: "firework.large_blast", volume: 2.2, pitch: 1.25 }
+            ],
+            reload: [
+                { id: "random.click", volume: 0.6, pitch: 0.8 },
+                { id: "armor.equip_iron", volume: 0.6, pitch: 1.0, delayTicks: 11 },
+                { id: "tile.piston.out", volume: 0.5, pitch: 1.8, delayTicks: 24 },
+                { id: "tile.piston.in", volume: 0.6, pitch: 2.0, delayTicks: 30 }
+            ]
+        },
         kind: "projectile",
         damage: 5,
         projectileSpeed: 4.5
@@ -126,6 +197,23 @@ export const GUNS: Record<GunId, GunConfig> = {
         magazineSize: 5,
         fireRateTicks: 15,
         reloadTicks: 45,
+        sounds: {
+            fire: [
+                { id: "random.explode", volume: 2.5, pitch: 1.1 },
+                { id: "firework.large_blast", volume: 1.5, pitch: 0.9 },
+                { id: "tile.piston.out", volume: 0.7, pitch: 1.6, delayTicks: 8 },
+                { id: "tile.piston.in", volume: 0.7, pitch: 1.8, delayTicks: 12 }
+            ],
+            reload: [
+                { id: "random.click", volume: 0.6, pitch: 0.9 },
+                { id: "random.pop", volume: 0.5, pitch: 1.2, delayTicks: 8 },
+                { id: "random.pop", volume: 0.5, pitch: 1.3, delayTicks: 15 },
+                { id: "random.pop", volume: 0.5, pitch: 1.4, delayTicks: 22 },
+                { id: "random.pop", volume: 0.5, pitch: 1.5, delayTicks: 29 },
+                { id: "tile.piston.out", volume: 0.7, pitch: 1.6, delayTicks: 37 },
+                { id: "tile.piston.in", volume: 0.7, pitch: 1.8, delayTicks: 42 }
+            ]
+        },
         kind: "hitscan",
         pelletDamage: 2,
         pelletCount: 8,
@@ -140,6 +228,20 @@ export const GUNS: Record<GunId, GunConfig> = {
         magazineSize: 2,
         fireRateTicks: 4,
         reloadTicks: 50,
+        sounds: {
+            fire: [
+                { id: "random.explode", volume: 3.0, pitch: 0.85 },
+                { id: "firework.large_blast", volume: 2.0, pitch: 0.75 }
+            ],
+            reload: [
+                { id: "random.lever_click", volume: 0.7, pitch: 0.7 },
+                { id: "random.chestopen", volume: 0.5, pitch: 1.5, delayTicks: 5 },
+                { id: "random.pop", volume: 0.5, pitch: 1.3, delayTicks: 24 },
+                { id: "random.pop", volume: 0.5, pitch: 1.5, delayTicks: 31 },
+                { id: "random.chestclosed", volume: 0.7, pitch: 1.7, delayTicks: 44 },
+                { id: "random.lever_click", volume: 0.8, pitch: 1.3, delayTicks: 48 }
+            ]
+        },
         kind: "hitscan",
         pelletDamage: 2.5,
         pelletCount: 10,

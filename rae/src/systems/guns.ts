@@ -3,7 +3,7 @@ import {
     type Player, type Entity, type Vector3,
     EquipmentSlot, EntityDamageCause
 } from "@minecraft/server";
-import { AMMO, GUNS, BULLET_ENTITY_ID, BULLET_LIFETIME_TICKS, type GunConfig, type GunId } from "../config/guns.js";
+import { AMMO, GUNS, BULLET_ENTITY_ID, BULLET_LIFETIME_TICKS, type GunConfig, type GunId, type SoundCue } from "../config/guns.js";
 import { registerSystem } from "../core/registry.js";
 
 /**
@@ -42,6 +42,45 @@ function stateKey(player: Player, gunId: GunId): string {
 function getMainhandItemTypeId(player: Player): string | undefined {
     const equippable = player.getComponent("minecraft:equippable");
     return equippable?.getEquipmentSlot(EquipmentSlot.Mainhand)?.getItem()?.typeId;
+}
+
+const reportedSoundErrors = new Set<string>();
+
+function playCue(player: Player, cue: SoundCue): void {
+
+    try {
+        // Positional, so everyone nearby hears it — not just the shooter.
+        player.dimension.playSound(cue.id, player.location, { volume: cue.volume, pitch: cue.pitch });
+    } catch (error) {
+        // A bad cue must never break firing, and it would repeat on
+        // every shot, so report each broken id once.
+        if (!reportedSoundErrors.has(cue.id)) {
+            reportedSoundErrors.add(cue.id);
+            world.sendMessage(`§c[GUN SOUND ERROR] ${cue.id}: ${error}`);
+        }
+    }
+}
+
+/**
+ * Delayed cues re-check that the player is still around and still
+ * holding this gun, so swapping away or disconnecting mid-reload
+ * doesn't leave sounds playing for a weapon nobody is using.
+ */
+function playCues(player: Player, gun: GunConfig, cues: readonly SoundCue[]): void {
+
+    for (const cue of cues) {
+
+        if (!cue.delayTicks) {
+            playCue(player, cue);
+            continue;
+        }
+
+        system.runTimeout(() => {
+            if (!player.isValid) return;
+            if (getMainhandItemTypeId(player) !== gun.itemId) return;
+            playCue(player, cue);
+        }, cue.delayTicks);
+    }
 }
 
 /** Rounds currently chambered. A freshly given gun reads as full. */
@@ -120,10 +159,14 @@ function startReload(player: Player, gun: GunConfig): void {
 
     reloadingKeys.add(key);
     player.sendMessage(`§7Reloading ${gun.displayName}...`);
+    playCues(player, gun, gun.sounds.reload);
 
     system.runTimeout(() => {
 
         reloadingKeys.delete(key);
+
+        // The player may have disconnected while the reload was in progress.
+        if (!player.isValid) return;
 
         // The player may have swapped items away and back while the
         // reload was in progress.
@@ -142,7 +185,6 @@ function startReload(player: Player, gun: GunConfig): void {
         }
 
         setLoadedRounds(player, gun, stillLoaded + consumed);
-        player.playSound("random.levelup", { volume: 0.6 });
         player.sendMessage(`§a${gun.displayName} reloaded. (${stillLoaded + consumed}/${gun.magazineSize})`);
 
     }, gun.reloadTicks);
@@ -174,7 +216,7 @@ function tryFire(player: Player, gun: GunConfig): void {
         fireHitscan(player, gun);
     }
 
-    player.dimension.playSound("random.bow", player.location, { pitch: 0.9, volume: 1 });
+    playCues(player, gun, gun.sounds.fire);
 }
 
 function fireProjectile(player: Player, gun: Extract<GunConfig, { kind: "projectile" }>): void {

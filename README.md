@@ -79,6 +79,12 @@ First-person rendering for the revolver isn't wired up yet — that needs its ow
 `hold_first_person` animation authored in Blockbench (custom attachable geometry doesn't
 get first-person rendering for free the way simple icon items do).
 
+Every gun has its own fire sound and a timed reload sequence, all vanilla sound events,
+defined per gun in `src/config/guns.ts` (`sounds.fire` / `sounds.reload`, each a list of
+`{ id, volume, pitch, delayTicks? }` layers). They play positionally so nearby players hear
+them. Every id was checked against the sound names the game's own `sounds.json` files
+reference. To audition a change first: `/playsound <id> @s ~ ~ ~ <volume> <pitch>`.
+
 ### Law compass
 
 `bountysys:law_compass` replaces the vanilla locator bar for law. Hold it in the main
