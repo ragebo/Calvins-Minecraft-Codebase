@@ -136,7 +136,7 @@ function checkSource(file, text) {
 }
 
 /** One line naming the file and the import. */
-const describe = ({ file, line, verb, specifier, reason }) =>
+const describeViolation = ({ file, line, verb, specifier, reason }) =>
     `src/${file}:${line}: ${verb} ${specifier === null ? "(a computed path)" : `"${specifier}"`}: ${reason}`;
 
 // ---------------------------------------------------------------------------------------------------------
@@ -166,7 +166,7 @@ function applyAllowList(violations, known) {
 
 test("the source tree respects the layering (config <- logic <- core <- systems)", () => {
     const { unexpected } = applyAllowList(scanTree(), KNOWN_VIOLATIONS);
-    assert.equal(unexpected.length, 0, `\n  ${unexpected.map(describe).join("\n  ")}\n  (CLAUDE.md rules 1 and 2)`);
+    assert.equal(unexpected.length, 0, `\n  ${unexpected.map(describeViolation).join("\n  ")}\n  (CLAUDE.md rules 1 and 2)`);
 });
 
 test("KNOWN_VIOLATIONS holds no entry whose import is already gone", () => {
@@ -317,15 +317,15 @@ test("checker: reads every way an import can be written, and ignores text that o
 test("checker: a violation names the file, the line and the import", () => {
     const [violation] = checkSource("logic/fake.ts", `export const a = 1;\nimport { world } from "${GAME}";`);
     assert.ok(violation, "no violation reported");
-    const message = describe(violation);
+    const message = describeViolation(violation);
     assert.match(message, /src\/logic\/fake\.ts:2\b/, message);
     assert.ok(message.includes(`"${GAME}"`), message);
 
     const [core] = checkSource("core/fake.ts", `import { x } from "../systems/compass.js";`);
-    assert.match(describe(core), /src\/core\/fake\.ts:1: imports "\.\.\/systems\/compass\.js"/);
+    assert.match(describeViolation(core), /src\/core\/fake\.ts:1: imports "\.\.\/systems\/compass\.js"/);
 
     const [system] = checkSource("systems/fake.ts", `import { x } from "./jail.js";`);
-    assert.match(describe(system), /src\/systems\/fake\.ts:1: imports "\.\/jail\.js"/);
+    assert.match(describeViolation(system), /src\/systems\/fake\.ts:1: imports "\.\/jail\.js"/);
 });
 
 test("allow-list: an excused violation passes, an unexcused one fails, and an entry whose import is gone is stale", () => {
