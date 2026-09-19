@@ -96,16 +96,16 @@ export function createMigrator(current: string): Migrator {
         const seen = new Set<string>([saved]);
         const queue: { at: string; chain: Migration[] }[] = [{ at: saved, chain: [] }];
 
-        for (let head = 0; head < queue.length; head++) {
-            const { at, chain } = queue[head];
+        // Entries leave the queue as they are searched, so it never holds more than the current frontier.
+        for (let entry = queue.shift(); entry; entry = queue.shift()) {
 
-            for (const step of stepsFrom.get(at) ?? []) {
+            for (const step of stepsFrom.get(entry.at) ?? []) {
                 if (seen.has(step.to)) continue;
                 seen.add(step.to);
 
-                const next = [...chain, step];
-                if (step.to === current) return next;
-                queue.push({ at: step.to, chain: next });
+                const chain = [...entry.chain, step];
+                if (step.to === current) return chain;
+                queue.push({ at: step.to, chain });
             }
         }
 
