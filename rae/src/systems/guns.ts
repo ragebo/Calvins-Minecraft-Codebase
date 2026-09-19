@@ -21,7 +21,8 @@ for (const gun of Object.values(GUNS)) {
     gunsByItemId.set(gun.itemId, gun);
 }
 
-// Per player+gun. Keyed by "<player name>:<gun id>".
+// Per player+gun. Keyed by "<player id>:<gun id>". Never the name: two
+// players can share a display name, while Entity.id is unique.
 //
 // Rounds chambered would ideally live on the gun's own ItemStack (via
 // setDynamicProperty), so two guns of the same kind could track ammo
@@ -36,7 +37,7 @@ const reloadingKeys = new Set<string>();
 const loadedRounds = new Map<string, number>();
 
 function stateKey(player: Player, gunId: GunId): string {
-    return `${player.name}:${gunId}`;
+    return `${player.id}:${gunId}`;
 }
 
 function getMainhandItemTypeId(player: Player): string | undefined {

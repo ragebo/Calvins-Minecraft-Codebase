@@ -23,11 +23,14 @@ const PING_SOUND = "random.orb";
 const SUCCESS_SOUND = "random.levelup";
 
 let successfulHits = 0;
-let contributors = new Set<Player>();
+// Player ids, not Player handles: a handle goes invalid when its player
+// disconnects, an id stays readable. Ids are resolved to whoever is
+// still online when the attempt is paid out or called off.
+let contributors = new Set<string>();
 let failTimeoutId: number | null = null;
 let sweetSpotTarget: number | null = null; // null = needs to be rolled on the next attempt
-const lastClickTick = new Map<string, number>(); // player name -> tick, for the cooldown
-const escortOrigin = new Map<string, Vector3>(); // player name -> jail location at the moment they were freed
+const lastClickTick = new Map<string, number>(); // player id -> tick, for the cooldown
+const escortOrigin = new Map<string, Vector3>(); // player id -> jail location at the moment they were freed
 
 function distance(a: Vector3, b: Vector3): number {
     const dx = a.x - b.x;
@@ -36,8 +39,13 @@ function distance(a: Vector3, b: Vector3): number {
     return Math.sqrt(dx * dx + dy * dy + dz * dz);
 }
 
+/** Everyone connected right now. The one place this file asks the engine for the player list. */
+function getOnlinePlayers(): Player[] {
+    return world.getAllPlayers();
+}
+
 function getLawNear(point: Vector3, radius: number): Player[] {
-    return world.getAllPlayers().filter((player) =>
+    return getOnlinePlayers().filter((player) =>
         player.hasTag("law") &&
         !player.hasTag("eliminated") &&
         distance(player.location, point) <= radius
@@ -67,13 +75,18 @@ function openJailDoor(doorTrigger: Vector3 | null): void {
     }
 }
 
-function succeedBreakout(rescuers: Player[], jailLocation: Vector3, doorTrigger: Vector3 | null): void {
+function succeedBreakout(rescuerIds: readonly string[], jailLocation: Vector3, doorTrigger: Vector3 | null): void {
 
     world.sendMessage("§6The jailbreak succeeded!");
 
     openJailDoor(doorTrigger);
 
-    for (const player of rescuers) {
+    // One snapshot of who is online serves both lookups below. A rescuer
+    // who disconnected since their pick has no live handle to pay any
+    // more, so they are simply not in it and get skipped.
+    const online = getOnlinePlayers();
+
+    for (const player of online.filter((p) => rescuerIds.includes(p.id))) {
 
         try {
             addCoins(player, JAILBREAK.rescueReward);
@@ -84,7 +97,7 @@ function succeedBreakout(rescuers: Player[], jailLocation: Vector3, doorTrigger:
     }
 
     // Free every prisoner currently held at the jail.
-    const prisoners = world.getAllPlayers().filter((player) => player.hasTag("in_jail"));
+    const prisoners = online.filter((player) => player.hasTag("in_jail"));
 
     for (const prisoner of prisoners) {
 
@@ -92,7 +105,7 @@ function succeedBreakout(rescuers: Player[], jailLocation: Vector3, doorTrigger:
 
             prisoner.removeTag("in_jail");
             prisoner.addTag("escort_vulnerable");
-            escortOrigin.set(prisoner.name, jailLocation);
+            escortOrigin.set(prisoner.id, jailLocation);
 
             clearBounty(prisoner);
 
@@ -120,7 +133,9 @@ function failBreakout(): void {
 
     sweetSpotTarget = null;
 
-    for (const player of contributors) {
+    // Only contributors still online: anyone who disconnected since their
+    // pick has no live handle to weaken.
+    for (const player of getOnlinePlayers().filter((p) => contributors.has(p.id))) {
 
         try {
             player.addEffect("weakness", JAILBREAK.failWeaknessTicks, {
@@ -208,14 +223,14 @@ function resolveLockpickAttempt(player: Player, sliderValue: number): void {
     // spamming submissions. Still reopens — by the time a human
     // submits again the cooldown will likely have passed anyway.
     const nowTick = system.currentTick;
-    const lastTick = lastClickTick.get(player.name) ?? -Infinity;
+    const lastTick = lastClickTick.get(player.id) ?? -Infinity;
 
     if (nowTick - lastTick < JAILBREAK.attemptCooldownTicks) {
         showSliderChallenge(player);
         return;
     }
 
-    lastClickTick.set(player.name, nowTick);
+    lastClickTick.set(player.id, nowTick);
 
     const jail = getCurrentJail();
 
@@ -257,7 +272,7 @@ function resolveLockpickAttempt(player: Player, sliderValue: number): void {
     sweetSpotTarget = null; // next attempt rolls a fresh target
 
     successfulHits++;
-    contributors.add(player);
+    contributors.add(player.id);
 
     player.sendMessage(`§aFound it! §7Correct picks: §e${successfulHits}/${JAILBREAK.hitsToUnlock}`);
 
@@ -314,7 +329,7 @@ onTick("jailbreak:escort", (ctx) => {
 
         if (!player.hasTag("escort_vulnerable")) continue;
 
-        const origin = escortOrigin.get(player.name);
+        const origin = escortOrigin.get(player.id);
 
         // If we somehow lost the origin (e.g. a script reload),
         // don't trap them vulnerable forever — let them go.
@@ -322,7 +337,7 @@ onTick("jailbreak:escort", (ctx) => {
 
         if (reachedSafety) {
             player.removeTag("escort_vulnerable");
-            escortOrigin.delete(player.name);
+            escortOrigin.delete(player.id);
             player.sendMessage("§aYou made it to safety!");
             continue;
         }

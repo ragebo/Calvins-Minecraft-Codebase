@@ -35,7 +35,7 @@ interface Lock {
     readonly pickedAtTick: number;
 }
 
-// Per player, keyed by name (same as guns.ts). Modes are in memory
+// Per player, keyed by player id (same as guns.ts). Modes are in memory
 // rather than on the item itself: item dynamic properties are refused
 // on stackable items, which every custom item here counts as.
 const modeByPlayer = new Map<string, CompassMode>();
@@ -43,7 +43,7 @@ const lastSwitchTick = new Map<string, number>();
 const locks = new Map<string, Lock>();
 
 function getMode(player: Player): CompassMode {
-    return modeByPlayer.get(player.name) ?? COMPASS.defaultMode;
+    return modeByPlayer.get(player.id) ?? COMPASS.defaultMode;
 }
 
 function isHoldingCompass(player: Player): boolean {
@@ -101,7 +101,7 @@ function pickTarget(tracker: Player, mode: CompassMode): Candidate | undefined {
 function getLock(tracker: Player, mode: CompassMode): Lock | undefined {
 
     const now = system.currentTick;
-    const existing = locks.get(tracker.name);
+    const existing = locks.get(tracker.id);
 
     if (existing && existing.player.isValid && now - existing.pickedAtTick < COMPASS.retargetIntervalTicks) {
         return existing;
@@ -110,7 +110,7 @@ function getLock(tracker: Player, mode: CompassMode): Lock | undefined {
     const picked = pickTarget(tracker, mode);
 
     if (!picked) {
-        locks.delete(tracker.name);
+        locks.delete(tracker.id);
         return undefined;
     }
 
@@ -121,7 +121,7 @@ function getLock(tracker: Player, mode: CompassMode): Lock | undefined {
         pickedAtTick: now
     };
 
-    locks.set(tracker.name, lock);
+    locks.set(tracker.id, lock);
     return lock;
 }
 
@@ -201,14 +201,14 @@ world.afterEvents.itemUse.subscribe((event) => {
     // Guards against one press being delivered as two use events, which
     // would switch and immediately switch back.
     const now = system.currentTick;
-    if (now - (lastSwitchTick.get(player.name) ?? -Infinity) < COMPASS.toggleCooldownTicks) return;
-    lastSwitchTick.set(player.name, now);
+    if (now - (lastSwitchTick.get(player.id) ?? -Infinity) < COMPASS.toggleCooldownTicks) return;
+    lastSwitchTick.set(player.id, now);
 
     const next: CompassMode = current === "nearest" ? "bounty" : "nearest";
-    modeByPlayer.set(player.name, next);
+    modeByPlayer.set(player.id, next);
 
     // The old lock was chosen under the other mode's rules.
-    locks.delete(player.name);
+    locks.delete(player.id);
 
     player.playSound("random.click", { volume: 0.5 });
     player.sendMessage(`§9Compass now tracking the §f${MODES[next].chat}§9.`);
