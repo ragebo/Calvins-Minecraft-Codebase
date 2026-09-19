@@ -171,9 +171,10 @@ test("a fort raid with nobody inside says so and does not keep the slot", () => 
     done();
 });
 
-// The slot leaked here: the ranch marked itself busy, found nobody inside and never freed the slot,
-// so every other event was refused until a round reset. Fixed by the director; see ARCH-09.
-test("a ranch raid with nobody inside says so and does not keep the slot", { todo: "known bug: the slot leaks until a round reset (fixed by the director)" }, () => {
+// The slot used to leak here: the ranch took it, found nobody inside and never gave it back, so
+// every other event was refused until a round reset. The ranch's start() now returns false and the
+// director frees the slot at once.
+test("a ranch raid with nobody inside says so and does not keep the slot", () => {
     const { check, done } = checks();
     for (const next of ["fort", "train"]) {
         const people = scene();
