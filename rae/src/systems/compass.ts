@@ -3,6 +3,7 @@ import { COMPASS } from "../config/balance.js";
 import { registerSystem } from "../core/registry.js";
 import { onTick } from "../core/tick.js";
 import { getBounty } from "../core/economy.js";
+import { setActionBar } from "../core/ui.js";
 import { relativeBearing, bearingBar } from "../logic/bearing.js";
 
 /**
@@ -167,7 +168,7 @@ onTick("compass", () => {
 
             if (!isHoldingCompass(player)) continue;
 
-            player.onScreenDisplay.setActionBar(renderReadout(player, getMode(player)));
+            setActionBar(player, "compass", renderReadout(player, getMode(player)));
 
         } catch (error) {
             // Runs several times a second — throttle so a persistent

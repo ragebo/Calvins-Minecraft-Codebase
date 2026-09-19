@@ -381,3 +381,38 @@ test("an engine failure reaches the caller, and nothing is reported to chat", ()
     assert.throws(() => ui.showTitle(p, "T"), /InvalidEntityError/);
     assert.deepEqual(fake.chat, []);
 });
+
+// ---------------------------------------------------------------------------
+// The compass, the first real caller
+// ---------------------------------------------------------------------------
+
+test("the compass posts through core/ui: it keeps refreshing, an ambient line cannot overwrite it, and it lets go after it is put away", () => {
+    const { check, done } = checks();
+    fake.reset();
+    registered("ui").reset();
+    registered("compass").reset();
+    const sheriff = fake.makePlayer("Sheriff", { tags: ["law"], holding: COMPASS_ITEM });
+    fake.makePlayer("Near", { tags: ["outlaw"], location: { x: 10, y: 64, z: 0 } });
+
+    // Five compass passes, each followed by an ambient post that must lose.
+    for (let i = 0; i < 5; i++) {
+        fake.advance(COMPASS.updateIntervalTicks);
+        ui.setActionBar(sheriff, "hud", "HUD", AMBIENT);
+    }
+    const readouts = [...sheriff.actionBar];
+    check("every pass sent its readout, although the text never changed", readouts.length === 5 && new Set(readouts).size === 1,
+        `(${readouts.length} packets, ${new Set(readouts).size} distinct)`);
+    check("and it is the compass readout", strip(readouts[0] ?? "").includes("NEAREST") && strip(readouts[0] ?? "").includes("Near"), strip(readouts[0] ?? ""));
+    check("the ambient line never got through while the compass was held", !readouts.includes("HUD"));
+
+    // Put the compass away. It stops posting, and its last post keeps the bar until its ttl is up: which is somewhere in
+    // the last COMPASS.updateIntervalTicks ticks before now, plus the ttl.
+    sheriff.holding = null;
+    fake.advance(TTL - COMPASS.updateIntervalTicks);
+    ui.setActionBar(sheriff, "hud", "HUD", AMBIENT);
+    check("the compass's last post still holds the bar for its ttl", !sheriff.actionBar.includes("HUD"), JSON.stringify(sheriff.actionBar.slice(5)));
+    fake.advance(COMPASS.updateIntervalTicks);
+    ui.setActionBar(sheriff, "hud", "HUD", AMBIENT);
+    check("once that has run out the ambient line is shown", sheriff.actionBar.at(-1) === "HUD" && sheriff.actionBar.length === 6, JSON.stringify(sheriff.actionBar.slice(5)));
+    done();
+});
