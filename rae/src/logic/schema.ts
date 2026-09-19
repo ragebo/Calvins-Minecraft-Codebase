@@ -19,9 +19,9 @@
  * Pure module: no game API imports.
  */
 
-import { BALANCE_SCHEMA_VERSION } from "./balance.js";
-import { GUNS_SCHEMA_VERSION } from "./guns.js";
-import { WORLD_SCHEMA_VERSION } from "./world.js";
+import { BALANCE_SCHEMA_VERSION } from "../config/balance.js";
+import { GUNS_SCHEMA_VERSION } from "../config/guns.js";
+import { WORLD_SCHEMA_VERSION } from "../config/world.js";
 
 export const CONFIG_SCHEMA = Object.freeze({
     balance: BALANCE_SCHEMA_VERSION,

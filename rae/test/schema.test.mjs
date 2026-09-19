@@ -6,7 +6,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { load, checks } from "./helpers.mjs";
 
-const { CONFIG_SCHEMA, describeSchema, createMigrator, migrator } = await load("config/schema.js");
+const { CONFIG_SCHEMA, describeSchema, createMigrator, migrator } = await load("logic/schema.js");
 const { WORLD_SCHEMA_VERSION } = await load("config/world.js");
 const { BALANCE_SCHEMA_VERSION } = await load("config/balance.js");
 const { GUNS_SCHEMA_VERSION } = await load("config/guns.js");
@@ -266,16 +266,16 @@ test("migrators are independent of each other and see steps registered later", (
     done();
 });
 
-test("schema.js is pure: it imports only its sibling config files, never the game API", () => {
+test("schema.js is pure: it imports only config files, never the game API", () => {
     const { check, done } = checks();
-    const compiled = path.resolve(import.meta.dirname, "..", ".test-build", "config", "schema.js");
+    const compiled = path.resolve(import.meta.dirname, "..", ".test-build", "logic", "schema.js");
     const code = readFileSync(compiled, "utf8")
         .replace(/\/\*[\s\S]*?\*\//g, "")        // comments may say anything
         .replace(/^\s*\/\/.*$/gm, "");
     const specifiers = [...code.matchAll(/(?:\bfrom\s*|\bimport\s*\(?\s*)["']([^"']+)["']/g)].map((match) => match[1]);
 
-    check("it imports the three config files", ["./balance.js", "./guns.js", "./world.js"].every((s) => specifiers.includes(s)), specifiers.join());
-    check("every import is a sibling file", specifiers.every((s) => /^\.\/[a-z]+\.js$/.test(s)), specifiers.join());
+    check("it imports the three config files", ["../config/balance.js", "../config/guns.js", "../config/world.js"].every((s) => specifiers.includes(s)), specifiers.join());
+    check("every import is a config file", specifiers.every((s) => /^\.\.\/config\/[a-z]+\.js$/.test(s)), specifiers.join());
     check("no game API import", !specifiers.some((s) => s.startsWith("@minecraft")), specifiers.join());
     done();
 });
