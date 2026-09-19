@@ -53,14 +53,17 @@ const now = count(listSourceFiles(srcDir), (file) => readFileSync(path.join(srcD
 let baseline = null;
 // Runs from rae/, so the pathspec is relative to it; --full-name makes git print repo-root paths
 // (rae/src/...), which is what `git show <ref>:<path>` expects.
-const listing = git(["ls-tree", "-r", "--name-only", "--full-name", BASE_REF, "--", "src"]);
+// Judge a branch by its OWN change: compare with the commit it forked from (the merge-base),
+// not with a `main` that other branches have improved or worsened since.
+const forkPoint = git(["merge-base", "HEAD", BASE_REF])?.trim() || BASE_REF;
+const listing = git(["ls-tree", "-r", "--name-only", "--full-name", forkPoint, "--", "src"]);
 if (listing !== null) {
     const files = listing.split("\n").filter((f) => f.endsWith(".ts")).map((f) => f.replace(/^rae\/src\//, ""));
-    baseline = count(files, (file) => git(["show", `${BASE_REF}:rae/src/${file}`]));
+    baseline = count(files, (file) => git(["show", `${forkPoint}:rae/src/${file}`]));
 }
 
 let failed = false;
-console.log(`legacy-pattern ratchet (compared with ${baseline ? BASE_REF : "nothing: no base ref found"})\n`);
+console.log(`legacy-pattern ratchet (compared with ${baseline ? `${forkPoint.slice(0, 7)}, where this branch left ${BASE_REF}` : "nothing: no base ref found"})\n`);
 console.log("pattern            now   base  status");
 for (const p of PATTERNS) {
     const base = baseline?.[p.id];
