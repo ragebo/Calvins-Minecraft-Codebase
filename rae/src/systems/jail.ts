@@ -3,7 +3,7 @@ import { JAIL_SITES } from "../config/world.js";
 import { registerSystem } from "../core/registry.js";
 import { onDeath, onScriptEvent, onSpawn } from "../core/events.js";
 import { addCoins, getBounty, clearBounty } from "../core/economy.js";
-import { getRecord, getJailSite, setJailSite, update } from "../core/state.js";
+import { getRecord, recordOf, getJailSite, setJailSite, syncTags, update, updateById } from "../core/state.js";
 import { prisoners } from "../core/players.js";
 
 /**
@@ -38,6 +38,15 @@ export function assignJailForNewPrisoner(): Vector3 {
     return site.jail;
 }
 
+/**
+ * A player's name for a chat line. A dead player's entity handle may already be
+ * invalid, and Player.name can throw on one; the scoreboard identity outlives the
+ * entity, so its display name is what we use then.
+ */
+function nameOf(player: Player, identity: ScoreboardIdentity): string {
+    return player.isValid ? player.name : identity.displayName;
+}
+
 onDeath("jail:capture", 100, (ctx) => {
 
     if (ctx.dead.typeId !== "minecraft:player") return;
@@ -45,11 +54,14 @@ onDeath("jail:capture", 100, (ctx) => {
 
     const dead = ctx.dead as Player;
 
-    // dead.hasTag() throws InvalidEntityError if the entity's handle
-    // is already gone by the time this runs — if we can't read the
-    // outlaw tag at all there's nothing safe to capture.
-    if (!dead.isValid) return;
-    if (!dead.hasTag("outlaw") || !ctx.killer.hasTag("law")) return;
+    // The dead player's entity handle may already be invalid, so nothing here
+    // calls anything on it except `id`, `isValid` and `scoreboardIdentity`, which
+    // stay readable. Who they are comes from their record, and what happens to
+    // them is written to it; their tags catch up when they next spawn
+    // (state:adopt, then jail:spawn below).
+    const record = recordOf(dead);
+
+    if (record?.role !== "outlaw" || getRecord(ctx.killer).role !== "law") return;
 
     const deadIdentity: ScoreboardIdentity | undefined = dead.scoreboardIdentity;
 
@@ -58,6 +70,7 @@ onDeath("jail:capture", 100, (ctx) => {
         return;
     }
 
+    const deadName = nameOf(dead, deadIdentity);
     const bounty = getBounty(deadIdentity);
 
     if (bounty > 0) {
@@ -65,21 +78,21 @@ onDeath("jail:capture", 100, (ctx) => {
         clearBounty(deadIdentity);
 
         world.sendMessage(
-            `§6${ctx.killer.name} collected a bounty of §e${bounty}§6 coins from ${dead.name}!`
+            `§6${ctx.killer.name} collected a bounty of §e${bounty}§6 coins from ${deadName}!`
         );
     }
 
-    if (!dead.hasTag("jailed")) {
-        dead.addTag("send_to_jail");
+    if (record.captures < 1) {
+        updateById(dead.id, { pendingJail: true });
 
-        world.sendMessage(`§6${dead.name} was captured by the law and sent to jail!`);
+        world.sendMessage(`§6${deadName} was captured by the law and sent to jail!`);
 
         return;
     }
 
-    dead.addTag("eliminated");
+    updateById(dead.id, { eliminated: true });
 
-    world.sendMessage(`§4${dead.name} has been permanently eliminated!`);
+    world.sendMessage(`§4${deadName} has been permanently eliminated!`);
 });
 
 // Order 100: decides where a captured or eliminated player goes, and marks them
@@ -88,10 +101,16 @@ onSpawn("jail:spawn", 100, (ctx) => {
 
     const player = ctx.player;
 
-    if (player.hasTag("send_to_jail")) {
+    // What happened to this player while they were dead (captured, eliminated) is
+    // in their record but not yet on their tags: write it out now that the handle
+    // is valid again, then decide from the record.
+    syncTags(player);
 
-        player.removeTag("send_to_jail");
-        update(player, { captures: Math.max(getRecord(player).captures, 1) });
+    const record = getRecord(player);
+
+    if (record.pendingJail) {
+
+        update(player, { pendingJail: false, captures: Math.max(record.captures, 1) });
 
         // Must run before this player is marked in jail — otherwise
         // isJailOccupied() always sees them as already occupying it,
@@ -110,7 +129,7 @@ onSpawn("jail:spawn", 100, (ctx) => {
         return;
     }
 
-    if (player.hasTag("eliminated")) {
+    if (record.eliminated) {
         system.run(() => {
             player.runCommand("gamemode spectator @s");
             player.sendMessage("§4You have been permanently eliminated.");

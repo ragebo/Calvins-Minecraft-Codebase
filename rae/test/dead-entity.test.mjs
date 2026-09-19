@@ -13,9 +13,9 @@ const { JAIL_SITES, OUTLAW_SPAWNS } = await load("config/world.js");
 const { ECONOMY } = await load("config/balance.js");
 const { resetAllSystems } = await load("core/registry.js");
 
-// Tests marked with this fail on the code before ARCH-03 step 4: with an invalid dead handle
-// jail:capture gives up, economy-rules skips the penalty message, and endgame's law-win check
-// throws from hasTag() on the dead player. They are the point of the exercise; step 4 removes the marker.
+// A test marked with this fails on the code before ARCH-03 step 4 (with an invalid dead handle
+// jail:capture gave up, economy-rules read the dead player's name, and endgame's law-win check threw
+// from hasTag()). It is the point of the exercise; the step that fixes it removes the marker.
 const TODO = "fails until ARCH-03 step 4: the dead player's state must be read without touching their entity";
 
 const sameSpot = (a, b) => a.x === b.x && a.y === b.y && a.z === b.z;
@@ -84,9 +84,9 @@ function scene(...specs) {
 // Capture and elimination by law, whatever state the dead handle is in
 // ---------------------------------------------------------------------------
 
-for (const [label, die, mark] of [["a valid handle", (v, k) => emitDeath(v, k), {}], ["an INVALID handle", dieGone, { todo: TODO }]]) {
+for (const [label, die] of [["a valid handle", (v, k) => emitDeath(v, k)], ["an INVALID handle", dieGone]]) {
 
-    test(`law kills an outlaw with ${label}: announced, bounty collected, and they respawn in jail`, mark, () => {
+    test(`law kills an outlaw with ${label}: announced, bounty collected, and they respawn in jail`, () => {
         const { check, done } = checks();
         const [sheriff, bandit] = scene(["Sheriff", { tags: ["law"] }], ["Bandit", { tags: ["outlaw"] }], ["Other", { tags: ["outlaw"] }]);
         fake.setScore("bounty", "Bandit", 120);
@@ -111,7 +111,7 @@ for (const [label, die, mark] of [["a valid handle", (v, k) => emitDeath(v, k), 
         done();
     });
 
-    test(`a second capture with ${label} eliminates: announced, spectator on respawn, no teleport`, mark, () => {
+    test(`a second capture with ${label} eliminates: announced, spectator on respawn, no teleport`, () => {
         const { check, done } = checks();
         const [sheriff, bandit] = scene(
             ["Sheriff", { tags: ["law"] }],
@@ -134,7 +134,7 @@ for (const [label, die, mark] of [["a valid handle", (v, k) => emitDeath(v, k), 
         done();
     });
 
-    test(`the law wins when the last outlaw is eliminated with ${label}, as the death is processed`, mark, () => {
+    test(`the law wins when the last outlaw is eliminated with ${label}, as the death is processed`, () => {
         const { check, done } = checks();
         const [sheriff, bandit] = scene(["Sheriff", { tags: ["law"] }], ["Bandit", { tags: ["outlaw", "jailed"] }]);   // free, but already captured once
         check("(setup) no win yet", !said("THE LAW HAS WON!"), chat().join(" | "));
@@ -250,7 +250,7 @@ test("penalty with an INVALID handle: money is still halved and announced, and n
     done();
 });
 
-test("penalty with an INVALID handle: a broke law player takes no penalty, and nothing throws", { todo: TODO }, () => {
+test("penalty with an INVALID handle: a broke law player takes no penalty, and nothing throws", () => {
     const { check, done } = checks();
     const [sheriff] = scene(["Sheriff", { tags: ["law"] }]);
     dieGone(sheriff, undefined);
@@ -259,7 +259,7 @@ test("penalty with an INVALID handle: a broke law player takes no penalty, and n
     done();
 });
 
-test("penalty with an INVALID handle: a broke outlaw cannot drop an inventory that can't be reached, and nothing throws", { todo: TODO }, () => {
+test("penalty with an INVALID handle: a broke outlaw cannot drop an inventory that can't be reached, and nothing throws", () => {
     const { check, done } = checks();
     const [, bandit] = scene(["Sheriff", { tags: ["law"] }], ["Bandit", { tags: ["outlaw"] }]);
     withInventory(bandit);

@@ -1,6 +1,8 @@
 import { world } from "@minecraft/server";
 import { registerSystem } from "../core/registry.js";
 import { onDeath, onSpawn } from "../core/events.js";
+import { getRecord, update } from "../core/state.js";
+import { outlaws, lawPlayers } from "../core/players.js";
 
 /**
  * V1 never had a law win condition — only the outlaws' boat escape
@@ -24,16 +26,17 @@ function checkLawWin(): void {
 
     if (roundEnded) return;
 
-    const outlaws = world.getAllPlayers().filter((player) => player.hasTag("outlaw"));
+    const everyOutlaw = outlaws();
 
     // No outlaws at all (round not started, everyone disconnected)
     // isn't a win — only every assigned outlaw actually being
     // neutralized counts.
-    if (outlaws.length === 0) return;
+    if (everyOutlaw.length === 0) return;
 
-    const allNeutralized = outlaws.every((player) =>
-        player.hasTag("eliminated") || player.hasTag("in_jail")
-    );
+    const allNeutralized = everyOutlaw.every((player) => {
+        const record = getRecord(player);
+        return record.eliminated || record.inJail;
+    });
 
     if (!allNeutralized) return;
 
@@ -42,24 +45,24 @@ function checkLawWin(): void {
     world.sendMessage("§9§lTHE LAW HAS WON!");
     world.sendMessage("§7Every outlaw is captured or eliminated — no one is left to break them out.");
 
-    for (const player of world.getAllPlayers()) {
-        if (player.hasTag("law") && !player.hasTag("eliminated")) {
-            player.addTag("winner");
-        }
+    for (const player of lawPlayers()) {
+        update(player, { winner: true });
     }
 }
 
-// Runs after jail:capture (order 100), which is the only place the
-// "eliminated" tag ever gets set — so this always sees the result
-// of the death that might have just finished off the last outlaw.
+// Runs after jail:capture (order 100), which is the only place a player
+// ever becomes "eliminated" — so this always sees the result of the
+// death that might have just finished off the last outlaw. It reads
+// records, not tags: jail:capture can only change the record of a dead
+// player (their tags catch up when they respawn).
 onDeath("endgame:law-win-check", 150, () => {
     checkLawWin();
 });
 
 // A death alone can't catch the "everyone's now in jail" case: a
-// fresh capture only gets the in_jail tag on respawn (jail:spawn,
+// fresh capture only becomes "in jail" on respawn (jail:spawn,
 // order 100), not at the moment of death itself. This runs at 150,
-// after it, so in_jail is already set by the time it looks.
+// after it, so the prisoner is already in jail by the time it looks.
 onSpawn("endgame:law-win-check", 150, () => {
     checkLawWin();
 });
