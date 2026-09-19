@@ -9,7 +9,8 @@ import { fake, world, system, fakeUi, load, checks, strip } from "./helpers.mjs"
 await load("main.js");
 const { JAIL_SITES } = await load("config/world.js");
 const { JAILBREAK } = await load("config/balance.js");
-const { resetAllSystems } = await load("core/registry.js");
+const { resetAllSystems, listSystems } = await load("core/registry.js");
+const state = await load("core/state.js");
 const { uiFake } = fakeUi;
 
 const scriptEvent = (id, sourceEntity) => system.afterEvents.scriptEventReceive.emit({ id, sourceEntity, message: "" });
@@ -276,5 +277,64 @@ test("breakout: an eliminated prisoner is freed along with the rest (current beh
     await attempt(r2, pick(HIT));
     check("the breakout goes ahead, there being a prisoner", chat().some((m) => m.includes("The jailbreak succeeded!")), chat().join(" | "));
     check("the eliminated player is swept up too", !a.tags.has("in_jail") && a.tags.has("escort_vulnerable") && a.tags.has("eliminated"), [...a.tags].join());
+    done();
+});
+
+// ---------------------------------------------------------------------------
+// The site lives in core/state
+// ---------------------------------------------------------------------------
+
+test("jail site: the jail keeps the site it rolls in state, and the jailbreak opens the door of whatever site state holds", async (t) => {
+    let roll = 0;                                        // Math.random: 0 rolls JAIL_SITES[0]; 0.5 puts the lock's hidden target at 50
+    t.mock.method(Math, "random", () => roll);
+    const { check, done } = checks();
+    scene();
+    const [prisoner, r1, r2] = cast(["Prisoner", { tags: ["outlaw"] }], ["R1", { tags: ["outlaw"] }], ["R2", { tags: ["outlaw"] }]);
+
+    scriptEvent("bounty:test_capture", prisoner);
+    fake.advance(1);
+    check("the jail put the site it rolled into state", state.getJailSite() === JAIL_SITES[0], JSON.stringify(state.getJailSite()));
+    check("and sent the prisoner there", prisoner.teleports.length === 1 && sameSpot(prisoner.teleports[0], JAIL_SITES[0].jail), JSON.stringify(prisoner.teleports));
+
+    // The jailbreak has no site of its own: whatever state holds is where it looks for the door.
+    state.setJailSite(JAIL_SITES[1]);
+    roll = 0.5;
+    await attempt(r1, pick(HIT));
+    await attempt(r2, pick(HIT));
+    const commands = setblocks();
+    check("the breakout succeeded", chat().some((m) => m.includes("The jailbreak succeeded!")), chat().join(" | "));
+    check("it opened the door of the site state holds, and only that one", commands.includes(doorOf(JAIL_SITES[1])) && !commands.includes(doorOf(JAIL_SITES[0])), JSON.stringify(commands));
+    check("the freed prisoner is under escort", prisoner.tags.has("escort_vulnerable") && !prisoner.tags.has("in_jail"), [...prisoner.tags].join());
+    done();
+});
+
+test("jail site: a reset of the jail system forgets the site, so the next prisoner rolls again", (t) => {
+    let roll = 0;
+    t.mock.method(Math, "random", () => roll);
+    const { check, done } = checks();
+    scene();
+    const [a, b] = cast(["A", { tags: ["outlaw"] }], ["B", { tags: ["outlaw"] }]);
+
+    scriptEvent("bounty:test_capture", a);
+    check("(setup) a site is in use", state.getJailSite() === JAIL_SITES[0]);
+
+    listSystems().find((s) => s.name === "jail").reset();
+    check("the reset cleared it", state.getJailSite() === null);
+
+    roll = 0.99;                                         // A is still in jail, but with no site remembered the next capture must roll
+    scriptEvent("bounty:test_capture", b);
+    check("and the next capture rolled afresh", state.getJailSite() === JAIL_SITES[1], JSON.stringify(state.getJailSite()));
+    done();
+});
+
+test("a pending jail that exists only as a tag (set before the addon loaded) is acted on when the player spawns", () => {
+    const { check, done } = checks();
+    scene();
+    const [p] = cast(["P", { tags: ["outlaw", "send_to_jail"] }]);
+
+    respawn(p);
+
+    check("they are jailed, and the marker is gone", [...p.tags].sort().join() === "in_jail,jailed,outlaw", [...p.tags].join());
+    check("they were sent to a jail site", p.teleports.length === 1 && JAIL_SITES.some((site) => sameSpot(site.jail, p.teleports[0])), JSON.stringify(p.teleports));
     done();
 });
