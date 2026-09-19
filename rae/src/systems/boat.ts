@@ -4,6 +4,8 @@ import { ECONOMY, BOAT } from "../config/balance.js";
 import { registerSystem } from "../core/registry.js";
 import { onScriptEvent } from "../core/events.js";
 import { getCoins, takeCoins } from "../core/economy.js";
+import { getRecord, update } from "../core/state.js";
+import { aliveOutlaws } from "../core/players.js";
 
 function isNearBoatNPC(player: Player): boolean {
 
@@ -16,28 +18,25 @@ function isNearBoatNPC(player: Player): boolean {
 
 export function attemptOutlawEscape(player: Player): void {
 
-    if (!player.hasTag("outlaw")) {
+    if (getRecord(player).role !== "outlaw") {
         player.sendMessage("§cOnly outlaws can use the escape boat.");
         return;
     }
 
-    const aliveOutlaws = world.getAllPlayers().filter((p) =>
-        p.hasTag("outlaw") &&
-        !p.hasTag("eliminated")
-    );
+    const survivors = aliveOutlaws();
 
-    const nearbyOutlaws = aliveOutlaws.filter(isNearBoatNPC);
+    const nearbyOutlaws = survivors.filter(isNearBoatNPC);
 
-    if (nearbyOutlaws.length !== aliveOutlaws.length) {
+    if (nearbyOutlaws.length !== survivors.length) {
         world.sendMessage("§cAll surviving outlaws must gather at the escape boat!");
         return;
     }
 
-    const requiredCoins = ECONOMY.boatEscapePerOutlaw * aliveOutlaws.length;
+    const requiredCoins = ECONOMY.boatEscapePerOutlaw * survivors.length;
 
     let totalCoins = 0;
 
-    for (const outlaw of aliveOutlaws) {
+    for (const outlaw of survivors) {
         totalCoins += getCoins(outlaw);
     }
 
@@ -49,7 +48,7 @@ export function attemptOutlawEscape(player: Player): void {
 
     let remainingCost = requiredCoins;
 
-    for (const outlaw of aliveOutlaws) {
+    for (const outlaw of survivors) {
 
         if (remainingCost <= 0) break;
 
@@ -59,8 +58,8 @@ export function attemptOutlawEscape(player: Player): void {
     world.sendMessage("§6§lTHE OUTLAWS HAVE ESCAPED!");
     world.sendMessage(`§eThe gang pooled ${requiredCoins} coins and escaped by boat!`);
 
-    for (const outlaw of aliveOutlaws) {
-        outlaw.addTag("winner");
+    for (const outlaw of survivors) {
+        update(outlaw, { winner: true });
     }
 
     world.getDimension("overworld").runCommand(
