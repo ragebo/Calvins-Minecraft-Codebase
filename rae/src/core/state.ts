@@ -1,5 +1,6 @@
-import type { Player } from "@minecraft/server";
+import { world, system, type Player } from "@minecraft/server";
 import type { JailSite } from "../config/world.js";
+import { onSpawn } from "./events.js";
 import { registerSystem } from "./registry.js";
 
 /**
@@ -18,8 +19,12 @@ import { registerSystem } from "./registry.js";
  *
  * DEATH HANDLERS: inside an entityDie handler the dead player's entity handle may already be
  * invalid, so calling anything on it (hasTag, addTag) can throw. `id` is still readable. So there
- * read with findRecord(deadEntity.id) and change with updateById(deadEntity.id, ...), which never
- * touch the entity, then call syncTags(player) once the player is valid again (their next spawn).
+ * read with findRecord(deadEntity.id) (or recordOf(deadEntity)) and change with
+ * updateById(deadEntity.id, ...), which never touch the entity, then call syncTags(player) once the
+ * player is valid again (their next spawn: the "state:adopt" spawn handler below does it first).
+ *
+ * That only works if the record exists BEFORE the death, so everyone is adopted early: at their
+ * first spawn (joining or respawning), and at load for whoever is already in the world.
  */
 
 export type Role = "law" | "outlaw";
@@ -135,6 +140,16 @@ export function findRecord(id: string): Readonly<PlayerRecord> | undefined {
     return records.get(id);
 }
 
+/**
+ * The record for a player who may no longer have a valid entity, such as a death handler's
+ * deadEntity. It uses the record that exists. A player the game has never seen (which adopting
+ * everyone early makes rare) is read from their tags, but only while the handle is still valid:
+ * with an invalid handle there is nothing to go on, so the answer is undefined.
+ */
+export function recordOf(player: Player): Readonly<PlayerRecord> | undefined {
+    return records.get(player.id) ?? (player.isValid ? adoptTags(player) : undefined);
+}
+
 export function allRecords(): readonly Readonly<PlayerRecord>[] {
     return [...records.values()];
 }
@@ -225,4 +240,18 @@ registerSystem({
         clearRecords();
         setJailSite(null);
     }
+});
+
+// Order 0, before any handler that decides from a record: every spawn (a join or a respawn) makes
+// sure the player has a record, and writes out whatever changed while they were dead (a death
+// handler can only change the record, not the invalid entity).
+onSpawn("state:adopt", 0, (ctx) => {
+    getRecord(ctx.player);
+    syncTags(ctx.player);
+});
+
+// Everyone already in the world when the addon loads (a script reload, a world saved mid-round)
+// never gets a spawn event for it, so adopt them on the first tick.
+system.run(() => {
+    for (const player of world.getAllPlayers()) getRecord(player);
 });

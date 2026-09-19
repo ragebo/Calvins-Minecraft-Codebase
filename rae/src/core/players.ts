@@ -1,5 +1,5 @@
 import { world, system, type Player } from "@minecraft/server";
-import { getRecord, stateVersion, type PlayerRecord } from "./state.js";
+import { recordOf, stateVersion, type PlayerRecord } from "./state.js";
 
 /**
  * Cached answers to "which players are ...?", read from core/state records.
@@ -34,7 +34,12 @@ function ask(key: string, keep: (record: Readonly<PlayerRecord>) => boolean): re
 
     if (cached && cached.version === version) return cached.players;
 
-    const players = all.filter((player) => keep(getRecord(player)));
+    // A player whose handle went invalid (disconnected earlier this tick) and whom the game never
+    // recorded has nothing to classify them by, so they are in no answer.
+    const players = all.filter((player) => {
+        const record = recordOf(player);
+        return record !== undefined && keep(record);
+    });
     answers.set(key, { version, players });
 
     return players;
