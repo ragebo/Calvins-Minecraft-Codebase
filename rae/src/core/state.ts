@@ -1,4 +1,5 @@
 import type { Player } from "@minecraft/server";
+import type { JailSite } from "../config/world.js";
 import { registerSystem } from "./registry.js";
 
 /**
@@ -63,6 +64,8 @@ const records = new Map<string, PlayerRecord>();
 const mirrored = new Map<string, Set<string>>();
 // Records changed by id whose tags haven't been written yet.
 const dirty = new Set<string>();
+// The jail in use right now. Not a per-player fact, so it isn't on a record, but it is round state too.
+let jailSite: JailSite | null = null;
 let version = 0;
 
 function blank(id: string): PlayerRecord {
@@ -183,6 +186,23 @@ export function setFlag(player: Player, name: string, value: boolean): void {
     version++;
 }
 
+/**
+ * The jail site prisoners are currently sent to, or null when none has been chosen (before the first
+ * capture, and after a reset). Choosing one is the jail system's job; this is only where it is kept,
+ * so the jailbreak can find the door without importing the jail.
+ */
+export function getJailSite(): JailSite | null {
+    return jailSite;
+}
+
+export function setJailSite(site: JailSite | null): void {
+
+    if (site === jailSite) return;
+
+    jailSite = site;
+    version++;
+}
+
 /** Increments on every change, so caches built from records can tell when they are stale. */
 export function stateVersion(): number {
     return version;
@@ -203,5 +223,6 @@ registerSystem({
     reset() {
         // The registry has just removed every owned tag from every player; forget the records to match.
         clearRecords();
+        setJailSite(null);
     }
 });

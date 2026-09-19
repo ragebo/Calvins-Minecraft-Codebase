@@ -69,3 +69,8 @@ export function freeOutlaws(): readonly Player[] {
 export function spectators(): readonly Player[] {
     return ask("spectators", (r) => r.eliminated);
 }
+
+/** Players physically detained right now (in jail), whoever they are. Empty means the jail is empty. */
+export function prisoners(): readonly Player[] {
+    return ask("prisoners", (r) => r.inJail);
+}

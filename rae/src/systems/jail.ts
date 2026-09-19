@@ -1,20 +1,23 @@
 import { world, system, type Player, type ScoreboardIdentity, type Vector3 } from "@minecraft/server";
-import { JAIL_SITES, type JailSite } from "../config/world.js";
+import { JAIL_SITES } from "../config/world.js";
 import { registerSystem } from "../core/registry.js";
-import { onDeath, onSpawn } from "../core/events.js";
+import { onDeath, onScriptEvent, onSpawn } from "../core/events.js";
 import { addCoins, getBounty, clearBounty } from "../core/economy.js";
+import { getRecord, getJailSite, setJailSite, update } from "../core/state.js";
+import { prisoners } from "../core/players.js";
 
 /**
- * Tracks which jail site is currently in use and captures outlaws
+ * Chooses which jail site prisoners are sent to and captures outlaws
  * caught by law. A prisoner's first capture sends them to jail; a
  * second capture eliminates them permanently.
+ *
+ * The site in use is kept in core/state (getJailSite), not here, so the
+ * jailbreak can find the jail's door without importing this file.
  */
 
-let activeJailEntry: JailSite | null = null;
-
 /** Is anyone currently physically detained right now? */
-export function isJailOccupied(): boolean {
-    return world.getAllPlayers().some((player) => player.hasTag("in_jail"));
+function isJailOccupied(): boolean {
+    return prisoners().length > 0;
 }
 
 /**
@@ -24,21 +27,15 @@ export function isJailOccupied(): boolean {
  * share the same one.
  */
 export function assignJailForNewPrisoner(): Vector3 {
-    if (!isJailOccupied() || !activeJailEntry) {
-        activeJailEntry = JAIL_SITES[Math.floor(Math.random() * JAIL_SITES.length)];
+
+    let site = getJailSite();
+
+    if (!isJailOccupied() || !site) {
+        site = JAIL_SITES[Math.floor(Math.random() * JAIL_SITES.length)];
+        setJailSite(site);
     }
 
-    return activeJailEntry.jail;
-}
-
-/** Read-only lookup of wherever the jail currently is. Never rolls a new one. */
-export function getCurrentJail() {
-    return activeJailEntry ? activeJailEntry.jail : null;
-}
-
-/** The door-trigger point that matches whichever jail is currently active. */
-export function getCurrentDoorTrigger() {
-    return activeJailEntry ? activeJailEntry.doorTrigger : null;
+    return site.jail;
 }
 
 onDeath("jail:capture", 100, (ctx) => {
@@ -94,15 +91,15 @@ onSpawn("jail:spawn", 100, (ctx) => {
     if (player.hasTag("send_to_jail")) {
 
         player.removeTag("send_to_jail");
-        player.addTag("jailed");
+        update(player, { captures: Math.max(getRecord(player).captures, 1) });
 
-        // Must run before this player gets the in_jail tag — otherwise
+        // Must run before this player is marked in jail — otherwise
         // isJailOccupied() always sees them as already occupying it,
         // and assignJailForNewPrisoner() can never roll a fresh site
         // once the jail has actually emptied out.
         const jailLocation = assignJailForNewPrisoner();
 
-        player.addTag("in_jail");
+        update(player, { inJail: true });
 
         system.run(() => {
             player.teleport(jailLocation);
@@ -123,10 +120,32 @@ onSpawn("jail:spawn", 100, (ctx) => {
     }
 });
 
+// scriptevent bounty:test_capture — instantly captures YOU. Skips
+// needing a law player to actually catch you, so combined with
+// TESTING_MODE in jailbreak.ts, you can test the entire capture →
+// lockpick → escort loop completely alone.
+onScriptEvent("bounty:test_capture", (player) => {
+
+    if (!player) return;
+
+    update(player, { captures: Math.max(getRecord(player).captures, 1) });
+
+    // Same ordering requirement as the real capture path above: roll
+    // the jail site before this player counts as occupying it.
+    const jailLocation = assignJailForNewPrisoner();
+
+    update(player, { inJail: true });
+
+    system.run(() => {
+        player.teleport(jailLocation);
+        player.sendMessage("§7[TEST] You've been sent to jail for testing.");
+    });
+});
+
 registerSystem({
     name: "jail",
     ownedTags: ["jailed", "in_jail", "send_to_jail", "eliminated"],
     reset() {
-        activeJailEntry = null;
+        setJailSite(null);
     }
 });

@@ -5,12 +5,8 @@ import { registerSystem } from "../core/registry.js";
 import { onScriptEvent } from "../core/events.js";
 import { onTick } from "../core/tick.js";
 import { addCoins, clearBounty } from "../core/economy.js";
-import {
-    isJailOccupied,
-    getCurrentJail,
-    getCurrentDoorTrigger,
-    assignJailForNewPrisoner
-} from "./jail.js";
+import { getRecord, getJailSite, update } from "../core/state.js";
+import { prisoners } from "../core/players.js";
 
 /**
  * Flip to true while testing solo. Normally a player who's currently
@@ -97,14 +93,13 @@ function succeedBreakout(rescuerIds: readonly string[], jailLocation: Vector3, d
     }
 
     // Free every prisoner currently held at the jail.
-    const prisoners = online.filter((player) => player.hasTag("in_jail"));
+    const held = online.filter((player) => getRecord(player).inJail);
 
-    for (const prisoner of prisoners) {
+    for (const prisoner of held) {
 
         try {
 
-            prisoner.removeTag("in_jail");
-            prisoner.addTag("escort_vulnerable");
+            update(prisoner, { inJail: false, escortVulnerable: true });
             escortOrigin.set(prisoner.id, jailLocation);
 
             clearBounty(prisoner);
@@ -169,11 +164,11 @@ function checkEligibility(player: Player): { eligible: boolean; message: string 
         return { eligible: false, message: null };
     }
 
-    if (!TESTING_MODE && player.hasTag("in_jail")) {
+    if (!TESTING_MODE && getRecord(player).inJail) {
         return { eligible: false, message: "§cYou can't pick your own lock — you need help." };
     }
 
-    if (!isJailOccupied()) {
+    if (prisoners().length === 0) {
         return { eligible: false, message: "§7No one is currently jailed." };
     }
 
@@ -232,9 +227,11 @@ function resolveLockpickAttempt(player: Player, sliderValue: number): void {
 
     lastClickTick.set(player.id, nowTick);
 
-    const jail = getCurrentJail();
+    const site = getJailSite();
 
-    if (!jail) return;
+    if (!site) return;
+
+    const jail = site.jail;
 
     if (getLawNear(jail, JAILBREAK.lawBlockRadius).length > 0) {
         player.sendMessage("§cLaw is nearby — you can't work on the lock right now!");
@@ -287,7 +284,7 @@ function resolveLockpickAttempt(player: Player, sliderValue: number): void {
     }, JAILBREAK.failTimeoutTicks);
 
     if (successfulHits >= JAILBREAK.hitsToUnlock) {
-        succeedBreakout([...contributors], jail, getCurrentDoorTrigger());
+        succeedBreakout([...contributors], jail, site.doorTrigger);
     } else {
         showSliderChallenge(player);
     }
@@ -301,33 +298,15 @@ onScriptEvent("bounty:lockpick", (player) => {
     showSliderChallenge(player);
 });
 
-// scriptevent bounty:test_capture — instantly captures YOU. Skips
-// needing a law player to actually catch you, so combined with
-// TESTING_MODE above, you can test the entire capture → lockpick →
-// escort loop completely alone.
-onScriptEvent("bounty:test_capture", (player) => {
-
-    if (!player) return;
-
-    player.addTag("jailed");
-
-    // Same ordering requirement as jail.ts's real capture path: roll
-    // the jail site before this player counts as occupying it.
-    const jailLocation = assignJailForNewPrisoner();
-
-    player.addTag("in_jail");
-
-    system.run(() => {
-        player.teleport(jailLocation);
-        player.sendMessage("§7[TEST] You've been sent to jail for testing.");
-    });
-});
+// (scriptevent bounty:test_capture, which jails you instantly so the whole
+// capture → lockpick → escort loop can be tested alone with TESTING_MODE
+// above, lives in jail.ts with the rest of the capture path.)
 
 onTick("jailbreak:escort", (ctx) => {
 
     for (const player of ctx.players) {
 
-        if (!player.hasTag("escort_vulnerable")) continue;
+        if (!getRecord(player).escortVulnerable) continue;
 
         const origin = escortOrigin.get(player.id);
 
@@ -336,7 +315,7 @@ onTick("jailbreak:escort", (ctx) => {
         const reachedSafety = !origin || distance(player.location, origin) >= JAILBREAK.escortSafeDistance;
 
         if (reachedSafety) {
-            player.removeTag("escort_vulnerable");
+            update(player, { escortVulnerable: false });
             escortOrigin.delete(player.id);
             player.sendMessage("§aYou made it to safety!");
             continue;

@@ -212,6 +212,7 @@ test("compass: reset forgets modes, switch cooldowns and locked targets", () => 
 // ---------------------------------------------------------------------------
 
 await load("systems/jailbreak.js");
+await load("systems/jail.js");                      // owns bounty:test_capture and the jail site: systems don't import each other, so the scenes below load it
 const { JAILBREAK } = await load("config/balance.js");
 const { uiFake } = fakeUi;
 
@@ -244,6 +245,8 @@ function scene(prisonerNames) {
     fake.reset();
     resetSystem("jailbreak");
     resetSystem("jail");
+    resetSystem("state");                           // records are kept by player id, and the same ids come back in every scene
+    fake.advance(1);                                // and the cached player list is per tick, so start from a fresh one
     fake.addObjective("coins");
     fake.addObjective("bounty");
     const prisoners = prisonerNames.map((name, i) => fake.makePlayer(name, { id: `prisoner-${i + 1}`, tags: ["outlaw"] }));

@@ -4,6 +4,7 @@ import { fake, world, load, checks, strip } from "./helpers.mjs";
 // Loads every system exactly as the game does, so handler ORDER across files matters here.
 await load("main.js");
 const { JAIL_SITES, OUTLAW_SPAWNS, LAW_SPAWNS } = await load("config/world.js");
+const { resetAllSystems } = await load("core/registry.js");
 
 const sameSpot = (a, b) => a.x === b.x && a.y === b.y && a.z === b.z;
 const isJail = (spot) => JAIL_SITES.some((s) => sameSpot(s.jail, spot));
@@ -18,6 +19,7 @@ function respawn(player) {
 }
 function scene() {
     fake.reset();
+    resetAllSystems();                                   // player state is kept by player id, and the same ids come back in every scene
     fake.addObjective("coins"); fake.addObjective("bounty");
     const law = fake.makePlayer("Sheriff", { tags: ["law"] });
     const outlaw = fake.makePlayer("Bandit", { tags: ["outlaw"] });
