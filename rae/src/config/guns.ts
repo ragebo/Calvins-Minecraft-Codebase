@@ -7,6 +7,9 @@
  * lets you audition a change in-game before editing it in here.
  */
 
+/** Bump whenever the shape or meaning of what this file exports changes in a way persisted data depends on. */
+export const GUNS_SCHEMA_VERSION = 1;
+
 export type AmmoId = "handgun_ammo" | "rifle_ammo" | "shotgun_ammo";
 
 export interface AmmoConfig {

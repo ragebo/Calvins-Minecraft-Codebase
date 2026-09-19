@@ -5,6 +5,9 @@
  * You should never have to read system code to change a number.
  */
 
+/** Bump whenever the shape or meaning of what this file exports changes in a way persisted data depends on. */
+export const BALANCE_SCHEMA_VERSION = 1;
+
 export const ECONOMY = {
     /** Villager robbery reward range. */
     villagerRewardMin: 15,

@@ -7,6 +7,9 @@ import type { Vector3 } from "@minecraft/server";
  * wrong, it is wrong in exactly one place.
  */
 
+/** Bump whenever the shape or meaning of what this file exports changes in a way persisted data depends on. */
+export const WORLD_SCHEMA_VERSION = 1;
+
 // ---------------------------------------------------
 // SPAWNS
 // ---------------------------------------------------
