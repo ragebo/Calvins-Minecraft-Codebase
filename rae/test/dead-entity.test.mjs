@@ -13,11 +13,6 @@ const { JAIL_SITES, OUTLAW_SPAWNS } = await load("config/world.js");
 const { ECONOMY } = await load("config/balance.js");
 const { resetAllSystems } = await load("core/registry.js");
 
-// A test marked with this fails on the code before ARCH-03 step 4 (with an invalid dead handle
-// jail:capture gave up, economy-rules read the dead player's name, and endgame's law-win check threw
-// from hasTag()). It is the point of the exercise; the step that fixes it removes the marker.
-const TODO = "fails until ARCH-03 step 4: the dead player's state must be read without touching their entity";
-
 const sameSpot = (a, b) => a.x === b.x && a.y === b.y && a.z === b.z;
 const isJail = (spot) => JAIL_SITES.some((s) => sameSpot(s.jail, spot));
 const isOutlawSpawn = (spot) => OUTLAW_SPAWNS.some((s) => sameSpot(s, spot));
@@ -239,7 +234,7 @@ test("penalty: money is halved for law and outlaws alike, and the inventory is k
     done();
 });
 
-test("penalty with an INVALID handle: money is still halved and announced, and nothing throws", { todo: TODO }, () => {
+test("penalty with an INVALID handle: money is still halved and announced, and nothing throws", () => {
     const { check, done } = checks();
     const [, bandit] = scene(["Sheriff", { tags: ["law"] }], ["Bandit", { tags: ["outlaw"] }]);
     fake.setScore("coins", "Bandit", 80);
@@ -266,5 +261,34 @@ test("penalty with an INVALID handle: a broke outlaw cannot drop an inventory th
     dieGone(bandit, undefined);
     check("no handler failed", errorLines().length === 0, errorLines().join(" | "));
     check("nothing is dropped, and no false claim of it", droppedItems() === 0 && penaltyLines().length === 0, chat().join(" | "));
+    done();
+});
+
+// ---------------------------------------------------------------------------
+// Villager robbery (economy-rules.ts): an outlaw who kills a homestead villager
+// ---------------------------------------------------------------------------
+
+const villager = (...tags) => fake.makeEntity({ typeId: "minecraft:villager_v2", tags });
+
+test("robbery: an outlaw who kills a homestead villager is paid, gains bounty and is told", (t) => {
+    t.mock.method(Math, "random", () => 0);                 // the lowest reward in the range
+    const { check, done } = checks();
+    const [, bandit] = scene(["Sheriff", { tags: ["law"] }], ["Bandit", { tags: ["outlaw"] }]);
+    emitDeath(villager("homestead"), bandit);
+    check("paid the smallest reward", coinsOf("Bandit") === ECONOMY.villagerRewardMin, `(${coinsOf("Bandit")})`);
+    check("bounty goes up", bountyOf("Bandit") === ECONOMY.villagerBountyGain, `(${bountyOf("Bandit")})`);
+    check("both are announced to them", bandit.messages.map(strip).includes(`You robbed a homestead! +${ECONOMY.villagerRewardMin} coins`) && bandit.messages.map(strip).includes(`Your bounty increased by ${ECONOMY.villagerBountyGain}!`), JSON.stringify(bandit.messages));
+    check("no handler failed", errorLines().length === 0, errorLines().join(" | "));
+    done();
+});
+
+test("robbery: law, or a villager that is not a homestead's, pays nothing", () => {
+    const { check, done } = checks();
+    const [sheriff, bandit] = scene(["Sheriff", { tags: ["law"] }], ["Bandit", { tags: ["outlaw"] }]);
+    emitDeath(villager("homestead"), sheriff);
+    emitDeath(villager(), bandit);
+    check("no coins for anyone", coinsOf("Sheriff") === 0 && coinsOf("Bandit") === 0, `(${coinsOf("Sheriff")}, ${coinsOf("Bandit")})`);
+    check("no bounty for anyone", bountyOf("Sheriff") === 0 && bountyOf("Bandit") === 0);
+    check("nobody is told", sheriff.messages.length === 0 && bandit.messages.length === 0, JSON.stringify([sheriff.messages, bandit.messages]));
     done();
 });
