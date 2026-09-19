@@ -14,6 +14,11 @@ import { registerSystem } from "./registry.js";
  * back from tags to the record: it exists for players whose tags were set from outside (a
  * command block, a world that was saved mid-round). This module is the only place allowed to
  * read or write those role/status tags.
+ *
+ * DEATH HANDLERS: inside an entityDie handler the dead player's entity handle may already be
+ * invalid, so calling anything on it (hasTag, addTag) can throw. `id` is still readable. So there
+ * read with findRecord(deadEntity.id) and change with updateById(deadEntity.id, ...), which never
+ * touch the entity, then call syncTags(player) once the player is valid again (their next spawn).
  */
 
 export type Role = "law" | "outlaw";
@@ -56,6 +61,8 @@ const TAG = {
 const records = new Map<string, PlayerRecord>();
 // The tags this module has written (or observed) per player, so a sync only touches the difference.
 const mirrored = new Map<string, Set<string>>();
+// Records changed by id whose tags haven't been written yet.
+const dirty = new Set<string>();
 let version = 0;
 
 function blank(id: string): PlayerRecord {
@@ -110,6 +117,7 @@ export function adoptTags(player: Player): Readonly<PlayerRecord> {
 
     records.set(record.id, record);
     mirrored.set(record.id, observed);
+    dirty.delete(record.id);        // the tags just read are now the truth; nothing is pending
     version++;
 
     return record;
@@ -128,14 +136,39 @@ export function allRecords(): readonly Readonly<PlayerRecord>[] {
     return [...records.values()];
 }
 
-/** Applies a change to the record and writes the matching tags. The only way to change role or status. */
-export function update(player: Player, patch: RecordPatch): Readonly<PlayerRecord> {
+/**
+ * Changes a record by player id, without touching the entity: safe inside a death handler, where
+ * the handle may be invalid. The matching tags are written by the next syncTags(player). A player
+ * with no record yet gets a blank one (adopt everyone at load and spawn so this is rare).
+ */
+export function updateById(id: string, patch: RecordPatch): Readonly<PlayerRecord> {
 
-    const record = records.get(player.id) ?? (getRecord(player) as PlayerRecord);
+    const record = records.get(id) ?? blank(id);
 
     Object.assign(record, patch);
+    records.set(id, record);
+    dirty.add(id);
     version++;
+
+    return record;
+}
+
+/** Writes any pending record changes to the player's tags. Call it once the player is valid again. */
+export function syncTags(player: Player): void {
+
+    const record = records.get(player.id);
+    if (!record || !dirty.has(record.id)) return;
+
     writeTags(player, record);
+    dirty.delete(record.id);
+}
+
+/** Changes the record and writes the matching tags now. The normal way to change role or status. */
+export function update(player: Player, patch: RecordPatch): Readonly<PlayerRecord> {
+
+    getRecord(player);                          // first sight of this player: seed from their tags
+    const record = updateById(player.id, patch);
+    syncTags(player);
 
     return record;
 }
@@ -158,6 +191,7 @@ export function stateVersion(): number {
 export function clearRecords(): void {
     records.clear();
     mirrored.clear();
+    dirty.clear();
     version++;
 }
 

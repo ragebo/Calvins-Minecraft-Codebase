@@ -215,3 +215,52 @@ test("persist: registration rejects duplicates and lists what was registered", (
     assert.throws(() => persist.registerPersistable({ key: "test.a", version: 2, save: () => ({}), restore() {} }), /already registered/);
     assert.ok(persist.listPersistables().some((p) => p.key === "test.a"));
 });
+
+// ---------------------------------------------------------------------------
+// core/state: dead-entity safety (an entityDie handler may hold an invalid handle)
+// ---------------------------------------------------------------------------
+
+test("state: a record can be read and changed by id while the entity handle is invalid", () => {
+    fake.reset(); state.clearRecords();
+    const p = fake.makePlayer("Victim", { id: "victim-1" });
+    state.update(p, { role: "outlaw" });
+
+    p.isValid = false;                                   // what the game may hand a death handler
+    const { check, done } = checks();
+    let threw = null;
+    try {
+        check("findRecord needs no entity", state.findRecord("victim-1")?.role === "outlaw");
+        state.updateById("victim-1", { pendingJail: true, captures: 1 });
+    } catch (e) { threw = e; }
+    check("no entity call, so nothing throws", threw === null, String(threw));
+    check("the record changed immediately", state.findRecord("victim-1")?.pendingJail === true);
+    check("the tags have not been written yet", !p.tags.has("send_to_jail") && !p.tags.has("jailed"));
+
+    p.isValid = true;                                    // the player respawns
+    state.syncTags(p);
+    check("syncTags catches the tags up", p.tags.has("send_to_jail") && p.tags.has("jailed") && p.tags.has("outlaw"), [...p.tags].join());
+    done();
+});
+
+test("state: syncTags does nothing when nothing is pending", () => {
+    fake.reset(); state.clearRecords();
+    const p = fake.makePlayer("A");
+    state.update(p, { role: "law" });
+    let writes = 0;
+    const addTag = p.addTag, removeTag = p.removeTag;
+    p.addTag = (t) => { writes++; return addTag.call(p, t); };
+    p.removeTag = (t) => { writes++; return removeTag.call(p, t); };
+    state.syncTags(p);
+    assert.equal(writes, 0);
+});
+
+test("state: adoptTags discards pending changes (the tags it reads win)", () => {
+    fake.reset(); state.clearRecords();
+    const p = fake.makePlayer("A", { tags: ["law"] });
+    state.getRecord(p);
+    state.updateById(p.id, { role: "outlaw" });
+    state.adoptTags(p);
+    assert.equal(state.getRecord(p).role, "law");
+    state.syncTags(p);
+    assert.deepEqual([...p.tags], ["law"], "and nothing stale is written afterwards");
+});
