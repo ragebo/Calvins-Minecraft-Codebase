@@ -18,6 +18,8 @@ const PATTERNS = [
     { id: "name-as-key", what: "player.name used as a map/set key", re: /\.(?:get|set|has|delete)\(\s*[A-Za-z_.]*\.name\b|`\$\{[A-Za-z_.]*\.name\}:/g },
     { id: "private-interval", what: "system.runInterval outside core/tick.ts", re: /system\.runInterval\(/g, exclude: ["core/tick.ts"] },
     { id: "player-filter", what: "world.getAllPlayers/getPlayers outside core/tick.ts and core/players.ts", re: /world\.(?:getAllPlayers|getPlayers)\(/g, exclude: ["core/tick.ts", "core/players.ts"] },
+    { id: "ui-direct", what: "title/action bar written directly instead of via core/ui", re: /onScreenDisplay\.(?:setActionBar|setTitle)\(/g, exclude: ["core/ui.ts"] },
+    { id: "sound-direct", what: "playSound called directly instead of via core/sound", re: /\.playSound\(/g, exclude: ["core/sound.ts"] },
     { id: "system-import", what: "a system importing another system", re: /from "\.\/[A-Za-z-]+\.js"/g, only: /^systems\// }
 ];
 

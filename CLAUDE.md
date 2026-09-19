@@ -6,10 +6,13 @@ RAE is a bounty-hunter-vs-outlaws Minecraft Bedrock addon. TypeScript source in 
 
 ```
 rae/src/config/    numbers and coordinates only          rae/test/       tests (run the COMPILED code under a fake game API)
-rae/src/core/      shared engines and contracts          rae/scripts/    test runner and legacy ratchet
-rae/src/systems/   one file per gameplay system          your_pack_name_BP/   behavior pack (scripts/ is BUILD OUTPUT, gitignored)
-rae/src/main.ts    imports + debug commands              BountySys_RP/   resource pack
+rae/src/logic/     pure rules, no game imports           rae/scripts/    test runner and legacy ratchet
+rae/src/core/      shared engines and contracts          your_pack_name_BP/   behavior pack (scripts/ is BUILD OUTPUT, gitignored)
+rae/src/systems/   one file per gameplay system          BountySys_RP/   resource pack
+rae/src/main.ts    imports + debug commands              docs/test-cards/   one manual test card per task
 ```
+
+`rae/test/layers.test.mjs` enforces the layer rules below from the source, so a bad import fails `npm test`.
 
 ## Commands (run from `rae/`; run `npm ci` once in a fresh worktree)
 
