@@ -1,7 +1,7 @@
 import { world, system, type Player, type ScoreboardIdentity, type Vector3 } from "@minecraft/server";
 import { JAIL_SITES, type JailSite } from "../config/world.js";
 import { registerSystem } from "../core/registry.js";
-import { onDeath } from "../core/events.js";
+import { onDeath, onSpawn } from "../core/events.js";
 import { addCoins, getBounty, clearBounty } from "../core/economy.js";
 
 /**
@@ -85,9 +85,11 @@ onDeath("jail:capture", 100, (ctx) => {
     world.sendMessage(`§4${dead.name} has been permanently eliminated!`);
 });
 
-world.afterEvents.playerSpawn.subscribe((event) => {
+// Order 100: decides where a captured or eliminated player goes, and marks them
+// placed so the generic respawn (order 200, main.ts) leaves them alone.
+onSpawn("jail:spawn", 100, (ctx) => {
 
-    const player = event.player;
+    const player = ctx.player;
 
     if (player.hasTag("send_to_jail")) {
 
@@ -107,6 +109,7 @@ world.afterEvents.playerSpawn.subscribe((event) => {
             player.sendMessage("§cYou have been captured! This is your second and final life.");
         });
 
+        ctx.placed = true;
         return;
     }
 
@@ -115,6 +118,8 @@ world.afterEvents.playerSpawn.subscribe((event) => {
             player.runCommand("gamemode spectator @s");
             player.sendMessage("§4You have been permanently eliminated.");
         });
+
+        ctx.placed = true;
     }
 });
 

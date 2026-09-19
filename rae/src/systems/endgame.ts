@@ -1,6 +1,6 @@
 import { world } from "@minecraft/server";
 import { registerSystem } from "../core/registry.js";
-import { onDeath } from "../core/events.js";
+import { onDeath, onSpawn } from "../core/events.js";
 
 /**
  * V1 never had a law win condition — only the outlaws' boat escape
@@ -57,12 +57,10 @@ onDeath("endgame:law-win-check", 150, () => {
 });
 
 // A death alone can't catch the "everyone's now in jail" case: a
-// fresh capture only gets the in_jail tag on respawn (jail.ts's own
-// playerSpawn handler), not at the moment of death itself. jail.ts
-// registers its playerSpawn handler first (imported earlier in
-// main.ts), so in_jail is already set by the time this one runs —
-// same ordering convention main.ts's own spawn glue already relies on.
-world.afterEvents.playerSpawn.subscribe(() => {
+// fresh capture only gets the in_jail tag on respawn (jail:spawn,
+// order 100), not at the moment of death itself. This runs at 150,
+// after it, so in_jail is already set by the time it looks.
+onSpawn("endgame:law-win-check", 150, () => {
     checkLawWin();
 });
 

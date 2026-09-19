@@ -1,7 +1,7 @@
 import { world, system } from "@minecraft/server";
 import { LAW_SPAWNS, OUTLAW_SPAWNS } from "./config/world.js";
 import { verifyScoreboards } from "./core/economy.js";
-import { onScriptEvent, listScriptEvents } from "./core/events.js";
+import { onScriptEvent, onSpawn, listScriptEvents } from "./core/events.js";
 import { listSystems, resetAllSystems } from "./core/registry.js";
 import { onTick } from "./core/tick.js";
 import { pickRandom } from "./systems/roles.js";
@@ -48,19 +48,21 @@ system.run(() => {
 // same as the debug commands above.
 // ---------------------------------------------------
 
-world.afterEvents.playerSpawn.subscribe((event) => {
+// Order 0: everyone gets effectively infinite saturation.
+onSpawn("main:saturation", 0, (ctx) => {
+    ctx.player.addEffect("saturation", 20000000, { amplifier: 255, showParticles: false });
+});
 
-    const player = event.player;
+// Order 200, after jail:spawn (100) has had its say: anyone in a role that
+// nothing earlier has already placed (jail, elimination) goes to a random
+// spawn. V1 did this as one function with early returns; ctx.placed is the
+// explicit version of those returns.
+onSpawn("main:respawn-placement", 200, (ctx) => {
 
-    // Give effectively infinite saturation.
-    player.addEffect("saturation", 20000000, { amplifier: 255, showParticles: false });
+    const player = ctx.player;
 
-    // jail.ts's own playerSpawn handler owns the send_to_jail and
-    // eliminated cases — skip the generic respawn below for those,
-    // same mutual exclusion V1 had as one function with early returns.
-    if (player.hasTag("send_to_jail") || player.hasTag("eliminated")) return;
+    if (ctx.placed) return;
 
-    // Random respawn point for everyone else currently in a role.
     if (player.hasTag("law") || player.hasTag("outlaw")) {
 
         try {
