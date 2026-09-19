@@ -29,9 +29,7 @@ const GAME_FREE = new Set(["config", "logic"]);
  * a real violation, so the entry is deleted together with the import it excuses. Never add an entry to make
  * a new import pass: fix the import.
  */
-const KNOWN_VIOLATIONS = [
-    { file: "systems/jailbreak.ts", specifier: "./jail.js", removedBy: "ARCH-03" }
-];
+const KNOWN_VIOLATIONS = [];
 
 // ---------------------------------------------------------------------------------------------------------
 // Reading imports
