@@ -1,6 +1,7 @@
 import { world, system, EquipmentSlot, type Player } from "@minecraft/server";
 import { COMPASS } from "../config/balance.js";
 import { registerSystem } from "../core/registry.js";
+import { onTick } from "../core/tick.js";
 import { getBounty } from "../core/economy.js";
 import { relativeBearing, bearingBar } from "../core/bearing.js";
 
@@ -153,12 +154,12 @@ function renderReadout(tracker: Player, mode: CompassMode): string {
     return `${label}  ${bar}  §f${lock.name}  §7${distance}m${bountyText}`;
 }
 
-// Its own interval rather than onTick: the shared loop only runs once
-// a second, far too coarse for a marker that has to follow the
-// player's camera. Same reasoning as train.ts.
+// Its own cadence rather than onTick's default of once a second, which
+// is far too coarse for a marker that has to follow the player's
+// camera. Same reasoning as train.ts.
 let lastErrorTick = -Infinity;
 
-system.runInterval(() => {
+onTick("compass", () => {
 
     for (const player of world.getPlayers({ tags: ["law"], excludeTags: ["eliminated"] })) {
 
@@ -178,7 +179,7 @@ system.runInterval(() => {
         }
     }
 
-}, COMPASS.updateIntervalTicks);
+}, { everyTicks: COMPASS.updateIntervalTicks });
 
 world.afterEvents.itemUse.subscribe((event) => {
 
