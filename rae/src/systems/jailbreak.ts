@@ -41,11 +41,10 @@ function getOnlinePlayers(): Player[] {
 }
 
 function getLawNear(point: Vector3, radius: number): Player[] {
-    return getOnlinePlayers().filter((player) =>
-        player.hasTag("law") &&
-        !player.hasTag("eliminated") &&
-        distance(player.location, point) <= radius
-    );
+    return getOnlinePlayers().filter((player) => {
+        const record = getRecord(player);
+        return record.role === "law" && !record.eliminated && distance(player.location, point) <= radius;
+    });
 }
 
 /**
@@ -156,15 +155,17 @@ function failBreakout(): void {
  */
 function checkEligibility(player: Player): { eligible: boolean; message: string | null } {
 
-    if (!player.hasTag("outlaw")) {
+    const record = getRecord(player);
+
+    if (record.role !== "outlaw") {
         return { eligible: false, message: "§cOnly outlaws can attempt this." };
     }
 
-    if (player.hasTag("eliminated")) {
+    if (record.eliminated) {
         return { eligible: false, message: null };
     }
 
-    if (!TESTING_MODE && getRecord(player).inJail) {
+    if (!TESTING_MODE && record.inJail) {
         return { eligible: false, message: "§cYou can't pick your own lock — you need help." };
     }
 
