@@ -160,8 +160,11 @@ test("a fort raid with nobody inside says so and does not keep the slot", () => 
         const people = scene();
         people.fortGuy.location = OUTSIDE;
 
-        const said = request("fort");
-        check("it says nobody is inside, and nothing else", same(said.map(strip), ["No one is inside the area."]), JSON.stringify(said));
+        // The refusal line is unchanged. It is followed by one line per player saying why they don't
+        // count (what each says is pinned in raid-explain.test.mjs).
+        const said = request("fort").map(strip);
+        check("it says nobody is inside first", said[0] === "No one is inside the area.", JSON.stringify(said));
+        check("then only says why, for the two players", said.length === 3 && said.slice(1).every((line) => line.startsWith("  ")), JSON.stringify(said));
         check("nothing was spawned", overworld.spawned.length === 0);
 
         const then = request(next);
@@ -180,9 +183,11 @@ test("a ranch raid with nobody inside says so and does not keep the slot", () =>
         const people = scene();
         people.ranchGuy.location = OUTSIDE;
 
-        const said = request("ranch");
-        // "Ranch raid started!" is printed before the raid looks for raiders, and stays.
-        check("it announces, then says the ranch is empty", same(said.map(strip), ["Ranch raid started!", "No outlaws are inside the ranch."]), JSON.stringify(said));
+        const said = request("ranch").map(strip);
+        // "Ranch raid started!" is printed before the raid looks for raiders, and stays. The two lines
+        // that follow say why nobody counted (raid-explain.test.mjs).
+        check("it announces, then says the ranch is empty", same(said.slice(0, 2), ["Ranch raid started!", "No outlaws are inside the ranch."]), JSON.stringify(said));
+        check("then only says why, for the two players", said.length === 4 && said.slice(2).every((line) => line.startsWith("  ")), JSON.stringify(said));
         check("nothing was spawned", overworld.spawned.length === 0);
 
         const then = request(next);

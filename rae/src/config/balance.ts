@@ -55,7 +55,9 @@ export const RAIDS = {
     /** Applied to every raid mob so they hit less hard. */
     mobWeaknessAmplifier: 0,
     /** Regeneration refresh for players inside an active raid. */
-    playerRegenTicks: 100
+    playerRegenTicks: 100,
+    /** Players listed by name when a raid refuses to start because nobody counted as inside; the rest are summarised. */
+    failureListMaxPlayers: 8
 };
 
 export const FORT = {

@@ -3,6 +3,7 @@ import { RAIDS } from "../config/balance.js";
 import { onDeath } from "./events.js";
 import { onTick } from "./tick.js";
 import { addCoins } from "./economy.js";
+import { announce, format } from "./ui.js";
 
 /**
  * Fixes the duplication problem from V1.
@@ -66,20 +67,65 @@ function tagFor(id: string): string {
     return `raid_${id}`;
 }
 
+const AXES = ["x", "y", "z"] as const;
+
+/**
+ * The axes on which `loc` is outside `area`. Empty means inside, and the edges count as inside. This is
+ * the one place that decides it: inside() and the reasons a refused start gives both come from here, so
+ * the message cannot disagree with the check.
+ */
+function axesOutside(loc: Vector3, area: Area): (typeof AXES)[number][] {
+    return AXES.filter((axis) => loc[axis] < area.min[axis] || loc[axis] > area.max[axis]);
+}
+
 function inside(loc: Vector3, area: Area): boolean {
-    return (
-        loc.x >= area.min.x && loc.x <= area.max.x &&
-        loc.y >= area.min.y && loc.y <= area.max.y &&
-        loc.z >= area.min.z && loc.z <= area.max.z
-    );
+    return axesOutside(loc, area).length === 0;
+}
+
+function everyone(): readonly Player[] {
+    return world.getAllPlayers();
+}
+
+/** An eliminated player is a spectator now: they never count towards a raid, wherever they stand. */
+function isEliminated(player: Player): boolean {
+    return player.hasTag("eliminated");
 }
 
 function participantsOf(config: RaidConfig): Player[] {
-    return world.getAllPlayers().filter((player) =>
-        !player.hasTag("eliminated") &&
+    return everyone().filter((player) =>
+        !isEliminated(player) &&
         (!config.outlawsOnly || player.hasTag("outlaw")) &&
         inside(player.location, config.area)
     );
+}
+
+/** Why a player who is not eliminated doesn't count, one clause per axis: "y 68.5 is outside 69 to 79". */
+function outsideReason(loc: Vector3, area: Area): string {
+    return axesOutside(loc, area)
+        .map((axis) => `${axis} ${loc[axis].toFixed(1)} is outside ${area.min[axis]} to ${area.max[axis]}`)
+        .join("; ");
+}
+
+/**
+ * Says why nobody counted as inside `area`, one chat line per player, after the line a refused
+ * start has already printed. "Nobody is inside" on its own cannot tell a player who is a block too
+ * low from one who is eliminated, and an eliminated player is skipped wherever they stand.
+ */
+export function reportWhyNoOneIsInside(area: Area): void {
+
+    const players = everyone();
+    const shown = players.slice(0, RAIDS.failureListMaxPlayers);
+
+    for (const player of shown) {
+
+        const reason = isEliminated(player)
+            ? "eliminated, so they don't count wherever they stand"
+            : outsideReason(player.location, area);
+
+        if (reason !== "") announce(format("info", `  ${player.name}: ${reason}`));
+    }
+
+    if (players.length > shown.length) announce(format("info", `  and ${players.length - shown.length} more`));
 }
 
 function aliveDefenders(id: string): Entity[] {
@@ -253,6 +299,7 @@ export function startRaid(id: string): void {
 
     if (participants.length === 0) {
         world.sendMessage("§cNo one is inside the area.");
+        reportWhyNoOneIsInside(config.area);
         return;
     }
 

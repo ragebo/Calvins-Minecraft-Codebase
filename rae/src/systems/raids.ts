@@ -7,7 +7,7 @@ import { FORT, RANCH, LOOT } from "../config/balance.js";
 import { registerSystem } from "../core/registry.js";
 import { onDeath } from "../core/events.js";
 import { onTick } from "../core/tick.js";
-import { registerRaid, resetAllRaids, startRaid, isRaidActive } from "../core/raid.js";
+import { registerRaid, resetAllRaids, startRaid, isRaidActive, reportWhyNoOneIsInside } from "../core/raid.js";
 import { addCoins } from "../core/economy.js";
 import { registerEvent, finishEvent } from "../core/director.js";
 
@@ -201,6 +201,7 @@ export function startRanchRaid(): boolean {
 
     if (raiders.length === 0) {
         world.sendMessage("§cNo outlaws are inside the ranch.");
+        reportWhyNoOneIsInside(RANCH_AREA);
         return false;
     }
 
