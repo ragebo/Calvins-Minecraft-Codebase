@@ -117,6 +117,10 @@ export function registerEvent(definition: EventDefinition): void {
  */
 function begin(definition: EventDefinition): RequestResult {
 
+    // However it got here, it is not waiting any more.
+    const waiting = queue.indexOf(definition.id);
+    if (waiting !== -1) queue.splice(waiting, 1);
+
     active = definition.id;
 
     let started = false;

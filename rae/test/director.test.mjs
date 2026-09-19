@@ -284,6 +284,29 @@ test("queue: an event waiting out its cooldown is passed over, then starts on th
     done();
 });
 
+test("queue: an event that starts some other way stops waiting, so it does not start a second time", () => {
+    const { check, done } = checks();
+    scene();
+    define("a", { cooldownTicks: 100 });
+    requestEvent("a");
+    finishEvent("a");
+    const readyAt = fake.tick + 100;                    // scene() starts 3 ticks past a sweep, so this is 3 past one too
+
+    requestEvent("a", { queue: true });
+    check("(setup) a waits out its cooldown", same(queuedEvents(), ["a"]));
+
+    fake.advanceTo(readyAt);
+    check("(setup) the cooldown is over but no sweep has run yet", activeEvent() === null && same(queuedEvents(), ["a"]));
+
+    check("asked for directly, a starts", same(requestEvent("a"), { status: "started" }) && activeEvent() === "a");
+    check("...and is no longer in the line", same(queuedEvents(), []), JSON.stringify(queuedEvents()));
+
+    finishEvent("a");
+    fake.advance(100 + SWEEP);
+    check("nothing starts it again once its new cooldown is over", same(log, ["a:start", "a:start"]) && activeEvent() === null, JSON.stringify(log));
+    done();
+});
+
 // ---------------------------------------------------------------------------
 // Cooldown
 // ---------------------------------------------------------------------------
