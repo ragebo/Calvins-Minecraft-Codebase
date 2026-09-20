@@ -106,6 +106,19 @@ test("the revolver is a flat item: its icon is the 16x16 sprite, and nothing ove
     done();
 });
 
+test("the pistol and the bolt rifle have their own sprites, and no gun borrows a vanilla icon that is also mapped", () => {
+    const { check, done } = checks();
+
+    for (const [id, icon] of [["bountysys:pistol", "pistol"], ["bountysys:bolt_rifle", "bolt_rifle"]]) {
+        const item = items.find((candidate) => candidate.id === id);
+        check(`${id}: the item exists`, item !== undefined);
+        check(`${id}: its icon is "${icon}"`, item?.icon === icon, String(item?.icon));
+        check(`${id}: the item map points "${icon}" at textures/items/${icon}`, textureMap[icon]?.textures === `textures/items/${icon}`, JSON.stringify(textureMap[icon]));
+        check(`${id}: the sprite exists`, existsSync(path.join(RP, "textures", "items", `${icon}.png`)));
+    }
+    done();
+});
+
 test("each pack's manifest has one version, on the header and on every module", () => {
     const { check, done } = checks();
 

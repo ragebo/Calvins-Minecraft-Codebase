@@ -129,8 +129,10 @@ export const TRANSIT = {
      */
     correctionGain: 1,
     /**
-     * What one unit of velocity delivers in one tick (1 = no drag). The spike (`rae:train_spike drag`)
-     * measures the real value; set it here from the content log.
+     * What one unit of velocity delivers in one tick (1 = no drag). MEASURED in the real game on
+     * 2026-09-20 (`rae:train_spike drag`): a velocity moves an entity by its full size on the first tick and
+     * then decays by about 0.546 a tick, so a driver that clears and re-applies the velocity every tick gets
+     * exactly 1. Leave it at 1 unless the engine changes.
      */
     velocityScale: 1,
     /** The largest velocity a car is given in one tick. */

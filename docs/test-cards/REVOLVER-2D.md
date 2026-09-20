@@ -2,6 +2,8 @@
 
 Not an ARCH task: added on request. The revolver was a 3D model (an attachable with geometry and a 32x32 texture) whose held look was never finished, and its inventory icon was a scaled-down picture on a solid white background. It is now a flat 16x16 sprite, taken from a crossbow texture pack the user supplied (`revolver.mcpack`, made with createtextures.com, which replaced `crossbow_pulling_0.png`).
 
+**Update 2026-09-20:** the project owner replaced the sprite in the game folder with the original, un-turned one (barrel pointing left) and added their own sprites for the pistol (`pistol.png`) and the bolt rifle (`bolt_rifle.png`); the repo now holds exactly those (behavior pack 0.1.9 points the two items at them). The 45-degree turn described below is therefore history (commit 43d5963): step 2 and the orientation section are what to re-check with the horizontal sprite, and the pistol and bolt rifle need the same look in hand.
+
 What changed, all in the resource pack: `textures/items/revolver.png` is the mcpack's sprite turned to aim forward when held (see Orientation), on a transparent background; `attachables/revolver.json`, `models/entity/revolver.geo.json` and `textures/items/revolver_3d.png` are gone; the pack is 1.0.14. The behavior pack and the scripts are untouched, so the gun fires, reloads and sounds exactly as before.
 
 `npm test` checks the files (`assets.test.mjs`: the texture path resolves, the sprite is a 16x16 PNG with alpha, no attachable or geometry is left over for the revolver, each pack's versions agree). It cannot show how the sprite looks in the game. This card does.

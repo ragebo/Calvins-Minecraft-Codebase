@@ -6,7 +6,7 @@
             "menu_category": { "category": "equipment" }
         },
         "components": {
-            "minecraft:icon": "wooden_hoe",
+            "minecraft:icon": "pistol",
             "minecraft:display_name": { "value": "Pistol" },
             "minecraft:max_stack_size": 1,
             "minecraft:hand_equipped": true,

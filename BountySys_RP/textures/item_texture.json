@@ -2,6 +2,8 @@
     "resource_pack_name": "bountysys",
     "texture_data": {
         "revolver": { "textures": "textures/items/revolver" },
+        "pistol": { "textures": "textures/items/pistol" },
+        "bolt_rifle": { "textures": "textures/items/bolt_rifle" },
         "law_compass": { "textures": "textures/items/law_compass" }
     }
 }

@@ -6,10 +6,13 @@ that compiles into the behavior pack.
 
 ## Credits
 
-The revolver's flat 16x16 sprite (`BountySys_RP/textures/items/revolver.png`) comes from a
-texture pack named "revolver" made with createtextures.com, turned 45 degrees clockwise (a
-pixel-art rotation that keeps its colours) so the barrel points forward when the item is
-held. The pack states no license, so its terms are unconfirmed.
+The revolver's flat 16x16 sprite (`BountySys_RP/textures/items/revolver.png`) started as a
+texture pack named "revolver" made with createtextures.com. The pack states no license, so
+its terms are unconfirmed. The sprite in the repo is the one the project owner put in the
+game folder on 2026-09-20 (the original, barrel pointing left; earlier commits held a version
+turned 45 degrees clockwise). The pistol and bolt-rifle sprites (`pistol.png`,
+`bolt_rifle.png`) were supplied by the project owner in the same way; their source and terms
+are not known.
 
 Until commit `6661ecb` the revolver was a 3D model, "Minecraft Revolver [Block Bench]"
 (https://skfb.ly/prxvz) by Jgcsketch, licensed under Creative Commons Attribution
@@ -118,10 +121,10 @@ apply damage on hit via script (not the entity's own vanilla damage) so each gun
 number is independent. Shotguns jitter several rays per trigger pull via
 `Dimension.getEntitiesFromRay` for real per-pellet spread.
 
-Every gun is a flat 2D item held like a tool (`minecraft:hand_equipped`). Only the revolver
-has its own texture (`BountySys_RP/textures/items/revolver.png`, 16x16, mapped in
-`textures/item_texture.json`); the other five borrow a vanilla item's icon as a placeholder
-(a wooden hoe for the pistol, a crossbow for the bolt rifle, and so on). The revolver used
+Every gun is a flat 2D item held like a tool (`minecraft:hand_equipped`). The revolver, the
+pistol and the bolt rifle have their own textures (`BountySys_RP/textures/items/<gun>.png`,
+16x16, mapped in `textures/item_texture.json`); the other three borrow a vanilla item's icon
+as a placeholder (a bow for the semi-auto rifle, shovel and hoe for the shotguns). The revolver used
 to be a 3D model with an attachable; that is still in git history
 (`git show 6661ecb:BountySys_RP/attachables/revolver.json`) if it is ever wanted back.
 `npm test` checks that the two packs agree with each other (`assets.test.mjs`).

@@ -29,6 +29,16 @@ Do these in a world with a stretch of track (the old train's straight is fine: x
 | 8 | `/scriptevent rae:train_spike teleport` and ride again. | The same route, moved by placing it every tick. **Say which of the two felt smoother.** |
 | 9 | `/scriptevent rae:train_spike stop`. Leave the world, come back, look around the Depot. | No carriage is left behind. `rae:train_info` still shows your route. |
 
+## Results so far (2026-09-20, BP 0.1.8, resource pack not yet deployed: the car was invisible)
+
+Measured in the real game from the content log, one rider, a 65.8 block loop, 773 ticks:
+
+- **Momentum tracks the route exactly.** Error 0.000 (mean and max) every second, `delivered=1.000`, no resyncs, no ticks held. The rider reported it worked well.
+- **Drag:** a velocity moves the car by its full size on the first tick, then decays by about 0.546 a tick (0.05 -> 0.027 -> 0.015 ...). The driver clears and re-applies the velocity every tick, so it always gets the full first tick: `TRANSIT.velocityScale` stays 1.
+- **Impulse limit:** none found up to 1000 blocks per tick.
+- **Seats:** the 4 seats take 4 riders at the positions in the entity file (x +-0.65, z -0.90 and 0.80, feet 0.40 above the car origin, seen with cows); a 5th and 6th are refused. A player's own offset read 0.00 high, because a player's position is not the same point as a cow's.
+- **Not yet seen:** the model (its facing, the seat height against the benches), a second player, and the teleport mode.
+
 ## What to tell me
 
 1. Momentum or teleport: which one is smoother, and is either one jerky (steps, rubber-banding, the camera shaking)?
