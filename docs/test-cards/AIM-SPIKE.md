@@ -78,6 +78,6 @@ Must not appear: `[Scripting][error]` lines, or an item, texture or `[UI]` error
 
 ## Not checked
 
-- The game was not run for this change: every claim about what the game reports is unmeasured until you do this card.
-- Whether a left-click in the air counts as a swing, whether `setFov` works on the normal first-person view, and whether the HUD accepts the overlay are all open questions here, not findings.
+- Answered by the run (see Results): a left-click in the air is a swing, `setFov` works on the normal view, and the HUD accepts the overlay.
+- Still unmeasured: the off-hand swap, the drop, everything on a horse, and whether `scope off` now works (fixed in 0.1.11, not yet run).
 - Controller and touch controls were not considered; the off-hand swap and drop are keyboard keys here.
