@@ -9,7 +9,7 @@ What is new:
 - **`rae:train_spike`**, which drives that one car along the route two ways so we can compare them, and logs numbers to the content log: `momentum` (the car is given a velocity every tick, aimed at the next point) and `teleport` (it is placed on the next point every tick). Also `drag`, `limits` and `seats` measurements.
 - A generated model (`rae/scripts/gen-train-model.mjs`): a red carriage with a gold rail and two benches, **yellow lamps at the front, red lamps at the back**.
 
-Packs: behavior pack **0.1.7** and resource pack **1.0.15**. The resource pack holds the model, so deploy it with Minecraft **closed** and launch fresh (the game reads a resource pack at launch; a running game would also write the old pin back).
+Packs: behavior pack **0.1.8** and resource pack **1.0.15**. The resource pack holds the model, so deploy it with Minecraft **closed** and launch fresh (the game reads a resource pack at launch; a running game would also write the old pin back).
 
 `npm test` checks the maths (curve, distance, heading, speed profile, steering), the recorder and the driver against a fake physics model, and that the packs agree with each other. It cannot say how the ride feels, whether the seats work, or what the engine does with a velocity. This card does.
 
@@ -51,7 +51,7 @@ Must not appear: `[Scripting][error]` lines, or a train entity or texture error 
 ## If something is off
 
 - **The carriage is invisible, or a purple-and-black box:** the resource pack was not picked up. Deploy it with the game closed and launch fresh; check the world's `world_resource_packs.json` says 1.0.15.
-- **"Could not spawn the car":** the behavior pack is older than 0.1.7, or the entity definition failed to load (the content log names the file).
+- **"Could not spawn the car":** the behavior pack is older than 0.1.8, or the entity definition failed to load (the content log names the file).
 - **Riders sink into the floor, or float:** seat height is `position[1]` in `your_pack_name_BP/entities/train_car.json` (0.4 now). Tell me which and by how much.
 - **It runs the wrong way round the model:** the model's front is -Z; if the yellow lamps are at the back, the yaw convention is off by 180 and it is one line in `logic/route.ts`.
 - **Jerky momentum but smooth teleport (or the reverse):** that is exactly what the spike is for; report it and I set the default from your answer.

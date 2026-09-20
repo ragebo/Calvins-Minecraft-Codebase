@@ -11,7 +11,6 @@
             "minecraft:type_family": { "family": ["train"] },
             "minecraft:collision_box": { "width": 3.2, "height": 2.4 },
             "minecraft:physics": { "has_gravity": false, "has_collision": false },
-            "minecraft:pushable": { "is_pushable": false, "is_pushable_by_piston": false },
             "minecraft:damage_sensor": {
                 "triggers": { "cause": "all", "deals_damage": "no" }
             },

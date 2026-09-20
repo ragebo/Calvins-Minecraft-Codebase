@@ -196,7 +196,9 @@ test("the train car: its texture is the size its geometry says, and its seats an
     check("every seat is over the car's floor (inside its hit box, above the ground)", rideable?.seats.every((s) => Math.abs(s.position[0]) <= box.width / 2 && Math.abs(s.position[2]) <= box.width / 2 && s.position[1] >= 0 && s.position[1] < box.height), JSON.stringify(rideable?.seats.map((s) => s.position)));
     check("no two seats are in the same place", new Set(rideable?.seats.map((s) => s.position.join(","))).size === rideable?.seats.length);
     check("it does not fall or collide (a script drives it)", components["minecraft:physics"]?.has_gravity === false && components["minecraft:physics"]?.has_collision === false, JSON.stringify(components["minecraft:physics"]));
-    check("nothing can push it", components["minecraft:pushable"]?.is_pushable === false && components["minecraft:pushable"]?.is_pushable_by_piston === false);
+    // The game rejects this component for a custom entity ("found in the input, but is not present in the Schema") and the whole
+    // entity then fails to load, so it must stay out. The vanilla boat has it, which is what makes it tempting.
+    check("it has no minecraft:pushable (the schema rejects it and the entity would not load)", !("minecraft:pushable" in components), Object.keys(components).join(", "));
     check("nothing can hurt it", components["minecraft:damage_sensor"]?.triggers?.cause === "all" && components["minecraft:damage_sensor"]?.triggers?.deals_damage === "no", JSON.stringify(components["minecraft:damage_sensor"]));
     check("only a script or a command spawns it", car.description.is_spawnable === false && car.description.is_summonable === true);
     done();

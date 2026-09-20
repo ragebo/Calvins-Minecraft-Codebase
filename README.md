@@ -228,9 +228,11 @@ Discovered the hard way this session — current as of when this was written, ma
 - `impact_damage.damage` is `{min, max}`, not a bare number.
 - `should_bounce` is one of the strings `"no"` / `"if_invulnerable"` /
   `"if_no_damage_dealt"`, not a boolean.
-- `minecraft:pushable` **does** exist as an entity component (`is_pushable`,
-  `is_pushable_by_piston`; the boat and the minecart use it). An older note here said it did
-  not: that was wrong for this build.
+- `minecraft:pushable` doesn't exist as an entity component in this schema — omit it. The
+  vanilla boat and minecart have it, which makes it tempting to copy, but the game reports
+  "found in the input, but is not present in the Schema" and the whole entity fails to load
+  (seen on `bountysys:train_car` in BP 0.1.7, and the older note here was right all along).
+  Vanilla entity JSON is not a safe template for what a custom entity may contain.
 - `minecraft:rideable` seats can be an array of `{ position, min_rider_count, max_rider_count }`;
   the vanilla boat uses the counts to change its seat layout as riders board, and no vanilla
   entity has a fixed four-seat layout to copy. `bountysys:train_car`'s seats are a guess until
