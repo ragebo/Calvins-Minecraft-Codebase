@@ -1,0 +1,32 @@
+{
+    "format_version": "1.26.50",
+    "minecraft:entity": {
+        "description": {
+            "identifier": "bountysys:train_car",
+            "is_spawnable": false,
+            "is_summonable": true,
+            "is_experimental": false
+        },
+        "components": {
+            "minecraft:type_family": { "family": ["train"] },
+            "minecraft:collision_box": { "width": 3.2, "height": 2.4 },
+            "minecraft:physics": { "has_gravity": false, "has_collision": false },
+            "minecraft:pushable": { "is_pushable": false, "is_pushable_by_piston": false },
+            "minecraft:damage_sensor": {
+                "triggers": { "cause": "all", "deals_damage": "no" }
+            },
+            "minecraft:rideable": {
+                "seat_count": 4,
+                "family_types": ["player", "mob"],
+                "interact_text": "Board the train",
+                "pull_in_entities": false,
+                "seats": [
+                    { "position": [0.65, 0.4, -0.9], "min_rider_count": 0, "max_rider_count": 4 },
+                    { "position": [-0.65, 0.4, -0.9], "min_rider_count": 0, "max_rider_count": 4 },
+                    { "position": [0.65, 0.4, 0.8], "min_rider_count": 0, "max_rider_count": 4 },
+                    { "position": [-0.65, 0.4, 0.8], "min_rider_count": 0, "max_rider_count": 4 }
+                ]
+            }
+        }
+    }
+}

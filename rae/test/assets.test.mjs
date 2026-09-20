@@ -1,5 +1,7 @@
 import { test } from "node:test";
 import { readFileSync, readdirSync, existsSync } from "node:fs";
+import { inflateSync } from "node:zlib";
+import { pathToFileURL } from "node:url";
 import path from "node:path";
 import { checks } from "./helpers.mjs";
 
@@ -116,5 +118,131 @@ test("each pack's manifest has one version, on the header and on every module", 
             check(`${name}: the ${module.type} module has the header's version`, JSON.stringify(module.version) === JSON.stringify(header), `${JSON.stringify(module.version)} vs ${JSON.stringify(header)}`);
         }
     }
+    done();
+});
+
+// ---------------------------------------------------------------------------------------------------------
+// Entities: the behavior pack's definition, the resource pack's client entity, the model and its texture
+// ---------------------------------------------------------------------------------------------------------
+
+const behaviorEntities = jsonFiles(path.join(BP, "entities")).map((file) => ({ file, body: readJson(file)["minecraft:entity"] }));
+const clientEntities = jsonFiles(path.join(RP, "entity")).map((file) => ({ file, body: readJson(file)["minecraft:client_entity"] }));
+const geometries = jsonFiles(path.join(RP, "models", "entity"))
+    .flatMap((file) => (readJson(file)["minecraft:geometry"] ?? []).map((geometry) => ({ file, geometry })));
+
+test("every entity has a client entity in the resource pack and the reverse, and each client entity's geometry and texture exist", () => {
+    const { check, done } = checks();
+    const behaviorIds = behaviorEntities.map((e) => e.body.description.identifier);
+    const clientIds = clientEntities.map((e) => e.body.description.identifier);
+
+    for (const id of behaviorIds) check(`${id}: the resource pack has a client entity for it`, clientIds.includes(id), `client entities: ${clientIds.join(", ")}`);
+    for (const id of clientIds) check(`${id}: the behavior pack defines it`, behaviorIds.includes(id), `entities: ${behaviorIds.join(", ")}`);
+
+    for (const { file, body } of clientEntities) {
+        const where = rel(file);
+        for (const [name, geometry] of Object.entries(body.description.geometry ?? {})) {
+            check(`${where}: geometry "${name}" (${geometry}) is defined in models/entity`, geometryIds.includes(geometry), `defined: ${geometryIds.join(", ")}`);
+        }
+        for (const [name, texture] of Object.entries(body.description.textures ?? {})) {
+            if (texture.startsWith("textures/misc/")) continue;         // the game's own
+            check(`${where}: texture "${name}" (${texture}.png) exists`, existsSync(path.join(RP, `${texture}.png`)));
+        }
+    }
+    done();
+});
+
+test("geometry identifiers are unique, and every face of every box points inside its texture", () => {
+    const { check, done } = checks();
+    const ids = geometries.map(({ geometry }) => geometry.description.identifier);
+    check("no geometry identifier is defined twice", new Set(ids).size === ids.length, ids.join(", "));
+
+    for (const { file, geometry } of geometries) {
+        const { texture_width: width, texture_height: height } = geometry.description;
+        const where = `${rel(file)} ${geometry.description.identifier}`;
+        for (const bone of geometry.bones) {
+            for (const [index, cube] of bone.cubes.entries()) {
+                if (Array.isArray(cube.uv)) {
+                    check(`${where}: ${bone.name} cube ${index} starts inside the texture`, cube.uv[0] >= 0 && cube.uv[1] >= 0 && cube.uv[0] < width && cube.uv[1] < height, JSON.stringify(cube.uv));
+                    continue;
+                }
+                for (const [face, uv] of Object.entries(cube.uv ?? {})) {
+                    const [u, v] = uv.uv, [w, h] = uv.uv_size ?? [0, 0];
+                    check(`${where}: ${bone.name} cube ${index} ${face} inside the texture`, u >= 0 && v >= 0 && u + w <= width && v + h <= height, JSON.stringify(uv));
+                }
+            }
+        }
+    }
+    done();
+});
+
+test("the train car: its texture is the size its geometry says, and its seats and hit box agree", () => {
+    const { check, done } = checks();
+    const car = behaviorEntities.find((e) => e.body.description.identifier === "bountysys:train_car")?.body;
+    const client = clientEntities.find((e) => e.body.description.identifier === "bountysys:train_car")?.body;
+    check("the behavior entity exists", car !== undefined);
+    check("the client entity exists", client !== undefined);
+    if (!car || !client) return done();
+
+    const geometry = geometries.find(({ geometry: g }) => g.description.identifier === client.description.geometry.default)?.geometry;
+    const texture = path.join(RP, `${client.description.textures.default}.png`);
+    const info = existsSync(texture) ? pngInfo(texture) : null;
+    check("the texture is a PNG", info !== null);
+    check("its size is what the geometry says it is", info?.width === geometry?.description.texture_width && info?.height === geometry?.description.texture_height, `${JSON.stringify(info)} vs ${geometry?.description.texture_width}x${geometry?.description.texture_height}`);
+
+    const components = car.components;
+    const rideable = components["minecraft:rideable"];
+    const box = components["minecraft:collision_box"];
+    check("it can be ridden, and has as many seats as it says", Array.isArray(rideable?.seats) && rideable.seats.length === rideable.seat_count, `${rideable?.seat_count} vs ${rideable?.seats?.length}`);
+    check("every seat is over the car's floor (inside its hit box, above the ground)", rideable?.seats.every((s) => Math.abs(s.position[0]) <= box.width / 2 && Math.abs(s.position[2]) <= box.width / 2 && s.position[1] >= 0 && s.position[1] < box.height), JSON.stringify(rideable?.seats.map((s) => s.position)));
+    check("no two seats are in the same place", new Set(rideable?.seats.map((s) => s.position.join(","))).size === rideable?.seats.length);
+    check("it does not fall or collide (a script drives it)", components["minecraft:physics"]?.has_gravity === false && components["minecraft:physics"]?.has_collision === false, JSON.stringify(components["minecraft:physics"]));
+    check("nothing can push it", components["minecraft:pushable"]?.is_pushable === false && components["minecraft:pushable"]?.is_pushable_by_piston === false);
+    check("nothing can hurt it", components["minecraft:damage_sensor"]?.triggers?.cause === "all" && components["minecraft:damage_sensor"]?.triggers?.deals_damage === "no", JSON.stringify(components["minecraft:damage_sensor"]));
+    check("only a script or a command spawns it", car.description.is_spawnable === false && car.description.is_summonable === true);
+    done();
+});
+
+/** The RGBA pixels of a PNG made by our generator (8 bits, RGBA, filter 0, no interlace), or null for any other kind. */
+function pngPixels(file) {
+    const bytes = readFileSync(file);
+    if (!bytes.subarray(0, 8).equals(PNG_SIGNATURE)) return null;
+    const idat = [];
+    let offset = 8, header = null;
+    while (offset < bytes.length) {
+        const length = bytes.readUInt32BE(offset), type = bytes.toString("ascii", offset + 4, offset + 8);
+        const data = bytes.subarray(offset + 8, offset + 8 + length);
+        if (type === "IHDR") header = data;
+        if (type === "IDAT") idat.push(data);
+        offset += length + 12;
+    }
+    if (!header || header[8] !== 8 || header[9] !== 6 || header[12] !== 0) return null;
+    const width = header.readUInt32BE(0), height = header.readUInt32BE(4);
+    const raw = inflateSync(Buffer.concat(idat));
+    const pixels = Buffer.alloc(width * height * 4);
+    for (let y = 0; y < height; y++) {
+        if (raw[y * (width * 4 + 1)] !== 0) return null;
+        raw.copy(pixels, y * width * 4, y * (width * 4 + 1) + 1, (y + 1) * (width * 4 + 1));
+    }
+    return pixels;
+}
+
+test("the train model and texture in the pack are exactly what scripts/gen-train-model.mjs makes", async () => {
+    const { check, done } = checks();
+    const generator = await import(pathToFileURL(path.join(import.meta.dirname, "..", "scripts", "gen-train-model.mjs")).href);
+
+    const geometryFile = path.join(RP, "models", "entity", "train.geo.json");
+    const textureFile = path.join(RP, "textures", "entity", "train.png");
+    check("the geometry file exists", existsSync(geometryFile));
+    check("the texture file exists", existsSync(textureFile));
+    if (!existsSync(geometryFile) || !existsSync(textureFile)) return done();
+
+    check("the geometry file is what the generator writes (run: node scripts/gen-train-model.mjs)", readFileSync(geometryFile, "utf8").replace(/\r\n/g, "\n") === generator.renderGeometry());
+    const pixels = pngPixels(textureFile);
+    check("the texture is a plain RGBA PNG", pixels !== null);
+    check("and its pixels are the generator's palette (the compressed bytes may differ between Node versions, the pixels may not)", pixels !== null && pixels.equals(generator.buildPixels()));
+
+    const palette = Object.values(generator.PALETTE).map((c) => c.join(","));
+    check("every palette colour is different", new Set(palette).size === palette.length);
+    check("the palette fits in one row of the texture", palette.length <= generator.TEXTURE_SIZE, String(palette.length));
     done();
 });

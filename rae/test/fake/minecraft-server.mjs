@@ -107,7 +107,11 @@ function makeDimension(id) {
         fillBlocks(volume, permutation) { dim.filled.push({ volume, permutation }); },
         getBlock() { return undefined; },
         getBlockFromRay() { return undefined; },
-        getEntitiesFromRay() { return []; }
+        getEntitiesFromRay() { return []; },
+        particles: [],
+        spawnParticle(effectName, location) { dim.particles.push({ tick: fake.tick, id: effectName, location: { ...location } }); },
+        // The whole fake world counts as loaded; a test that wants an unloaded stretch replaces this.
+        isChunkLoaded() { return true; }
     };
     return dim;
 }
@@ -134,14 +138,55 @@ function makeEntity(options = {}) {
         getTags() { guard(entity); return [...entity.tags]; },
         getViewDirection() { guard(entity); return entity.facing; },
         getHeadLocation() { guard(entity); return { x: entity._location.x, y: entity._location.y + 1.6, z: entity._location.z }; },
-        getRotation() { guard(entity); return { x: 0, y: 0 }; },
+        // Momentum. `velocity` moves the entity once per tick after the scripts have run (see fake.advance),
+        // scaled by fake.physics.drag afterwards. applyImpulse adds to it, as the real one does.
+        velocity: { x: 0, y: 0, z: 0 },
+        rotation: { x: 0, y: 0 },
+        applyImpulse(v) {
+            guard(entity);
+            if (Math.hypot(v.x, v.y, v.z) > fake.maxImpulse) throw new Error("ArgumentOutOfBoundsError: impulse too large");
+            entity.velocity = { x: entity.velocity.x + v.x, y: entity.velocity.y + v.y, z: entity.velocity.z + v.z };
+        },
+        clearVelocity() { guard(entity); entity.velocity = { x: 0, y: 0, z: 0 }; },
+        getVelocity() { guard(entity); return { ...entity.velocity }; },
+        setRotation(r) { guard(entity); entity.rotation = { ...r }; },
+        getRotation() { guard(entity); return { ...entity.rotation }; },
         addEffect(id, duration, opts) { guard(entity); entity.effects.push({ id, duration, ...opts }); },
         applyDamage(amount, opts) { guard(entity); entity.damage.push({ amount, ...opts }); return true; },
-        teleport(location) { guard(entity); entity.teleports.push({ ...location }); entity._location = { ...location }; },
+        teleport(location, options = {}) {
+            guard(entity);
+            entity.teleports.push({ ...location });
+            entity._location = { ...location };
+            if (options.rotation) entity.rotation = { ...options.rotation };
+            if (!options.keepVelocity) entity.velocity = { x: 0, y: 0, z: 0 };
+        },
         runCommand(command) { guard(entity); return entity._dimension.runCommand(command); },
         getDynamicProperty(k) { guard(entity); return entity.dynamic.get(k); },
         setDynamicProperty(k, v) { guard(entity); if (v === undefined || v === null) entity.dynamic.delete(k); else entity.dynamic.set(k, v); },
-        getComponent() { guard(entity); return undefined; },
+        // A vehicle: entities made with `seats` (and the train car, always) accept riders. A rider is moved along
+        // with the vehicle by fake.advance and reads its mount back through minecraft:riding.
+        seats: options.seats ?? (options.typeId === "bountysys:train_car" ? 4 : 0),
+        riders: [],
+        ridingOn: undefined,
+        getComponent(id) {
+            guard(entity);
+            if (id === "minecraft:rideable" && entity.seats > 0) {
+                const live = () => entity.riders.filter((r) => r.isValid);
+                return {
+                    seatCount: entity.seats,
+                    getRiders: () => live(),
+                    addRider(rider) {
+                        if (live().length >= entity.seats || rider.ridingOn) return false;
+                        entity.riders.push(rider); rider.ridingOn = entity;
+                        return true;
+                    },
+                    ejectRider(rider) { entity.riders = entity.riders.filter((r) => r !== rider); if (rider.ridingOn === entity) rider.ridingOn = undefined; },
+                    ejectRiders() { for (const r of entity.riders) if (r.ridingOn === entity) r.ridingOn = undefined; entity.riders = []; }
+                };
+            }
+            if (id === "minecraft:riding" && entity.ridingOn?.isValid) return { entityRidingOn: entity.ridingOn };
+            return undefined;
+        },
         kill() { entity.remove(); return true; },
         remove() { entity.isValid = false; const i = fake.entities.indexOf(entity); if (i >= 0) fake.entities.splice(i, 1); const p = fake.players.indexOf(entity); if (p >= 0) fake.players.splice(p, 1); }
     };
@@ -188,6 +233,7 @@ function makePlayer(name, options = {}) {
             }
             if (id === "minecraft:inventory") return { container };
             if (id === "minecraft:health") return { currentValue: 20, effectiveMax: 20, resetToMaxValue() {} };
+            if (id === "minecraft:riding" && player.ridingOn?.isValid) return { entityRidingOn: player.ridingOn };
             return undefined;
         }
     });
@@ -261,6 +307,10 @@ export const fake = {
     structures: new Set(),
     itemTypes: new Set(["minecraft:stick", "minecraft:gold_ingot"]),
     calls: freshCalls(),
+    // How bodies move (below), and the largest impulse applyImpulse accepts.
+    // drag: what is left of a velocity after each tick. delivered: the share of a velocity that becomes movement (1 = all).
+    physics: { drag: 1, delivered: 1 },
+    maxImpulse: Infinity,
     makePlayer, makeEntity, makeItemStack,
     dimension(id) { const key = id.replace(/^minecraft:/, ""); return (fake.dimensions[key] ??= makeDimension(`minecraft:${key}`)); },
     addObjective(id) { return world.scoreboard.addObjective(id); },
@@ -274,6 +324,20 @@ export const fake = {
                 if (job.every) job.due += job.every; else jobs.splice(jobs.indexOf(job), 1);
                 job.fn();
             }
+            // Bodies move by their velocity once a tick, after the scripts have run; drag scales what is left.
+            for (const body of [...fake.entities, ...fake.players]) {
+                const v = body.velocity;
+                if (!body.isValid || !v || (v.x === 0 && v.y === 0 && v.z === 0)) continue;
+                const d = fake.physics.delivered;
+                body._location = { x: body._location.x + v.x * d, y: body._location.y + v.y * d, z: body._location.z + v.z * d };
+                body.velocity = { x: v.x * fake.physics.drag, y: v.y * fake.physics.drag, z: v.z * fake.physics.drag };
+            }
+            // Riders sit on their vehicle (a little above its origin), wherever it went this tick.
+            for (const vehicle of fake.entities) {
+                for (const rider of vehicle.riders ?? []) {
+                    if (rider.isValid) rider._location = { x: vehicle._location.x, y: vehicle._location.y + 0.4, z: vehicle._location.z };
+                }
+            }
         }
     },
     advanceTo(tick) { fake.advance(Math.max(0, tick - fake.tick)); },
@@ -283,6 +347,7 @@ export const fake = {
         fake.players.length = 0; fake.entities.length = 0; fake.chat.length = 0;
         fake.dynamic.clear(); fake.structures.clear(); fake.dynamicStringLimit = null;
         objectives.clear(); fake.calls = freshCalls();
-        for (const d of Object.values(fake.dimensions)) { d.commands.length = 0; d.played.length = 0; d.spawned.length = 0; d.explosions.length = 0; d.filled.length = 0; }
+        fake.physics.drag = 1; fake.physics.delivered = 1; fake.maxImpulse = Infinity;
+        for (const d of Object.values(fake.dimensions)) { d.commands.length = 0; d.played.length = 0; d.spawned.length = 0; d.explosions.length = 0; d.filled.length = 0; d.particles.length = 0; }
     }
 };

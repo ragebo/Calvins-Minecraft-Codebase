@@ -111,7 +111,11 @@ function reportHandlerError(kind: string, name: string, error: unknown): void {
  * Script events, registered by id instead of one subscriber per file.
  */
 
-export type ScriptEventHandler = (player: Player | undefined) => void;
+/**
+ * `message` is the text after the id (`/scriptevent rae:train_station Depot` passes "Depot"),
+ * or "" when there is none. Handlers that do not need it can ignore the second argument.
+ */
+export type ScriptEventHandler = (player: Player | undefined, message: string) => void;
 
 const scriptEvents = new Map<string, ScriptEventHandler>();
 
@@ -132,7 +136,7 @@ system.afterEvents.scriptEventReceive.subscribe((event) => {
         : undefined;
 
     try {
-        handler(player);
+        handler(player, event.message ?? "");
     } catch (error) {
         reportHandlerError("EVENT", event.id, error);
     }

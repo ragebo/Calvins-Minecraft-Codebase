@@ -110,6 +110,56 @@ export const TRAIN = {
     guardRewardMax: 19
 };
 
+/**
+ * The scripted train (systems/transit.ts). Speeds are blocks per tick, so 20 ticks is one second and a
+ * speed of 0.5 is 10 blocks a second. The route itself is recorded in the world (rae:train_mark), not here.
+ */
+export const TRANSIT = {
+    /** Top speed. */
+    cruiseSpeed: 0.5,
+    /** Speed gained per tick pulling away. */
+    acceleration: 0.01,
+    /** Speed lost per tick slowing for a stop. */
+    braking: 0.02,
+    /** Slowest speed while a stop is still ahead, so the train never stalls short of the platform. */
+    crawlSpeed: 0.05,
+    /**
+     * How much of the gap to the next point a car closes each tick when it is driven by momentum (1 = all of it).
+     * Lower only if the spike shows the car swinging around the route.
+     */
+    correctionGain: 1,
+    /**
+     * What one unit of velocity delivers in one tick (1 = no drag). The spike (`rae:train_spike drag`)
+     * measures the real value; set it here from the content log.
+     */
+    velocityScale: 1,
+    /** The largest velocity a car is given in one tick. */
+    maxStep: 2,
+    /** A car this far from where it should be is placed there, not driven (after a stall, a reload, or on spawn). */
+    resyncDistance: 6,
+    /** How finely the smoothed route is measured. */
+    samplesPerBlock: 2,
+    /** The most points a route may have, and the most characters its saved form may take (a world property holds 32767). */
+    maxWaypoints: 200,
+    maxSavedChars: 12000,
+    /** `rae:train_show`: how long the route is drawn, how often it is redrawn, and how far from the player it is drawn. */
+    showTicks: 200,
+    showEveryTicks: 10,
+    showRadius: 64,
+    /** Particles drawn every this many blocks along the route. */
+    showSpacing: 2,
+    /** The spike car waits this long after someone sits before it sets off. */
+    spikeDepartDelayTicks: 60,
+    /** The spike: how often a summary line goes to the content log, in ticks. */
+    spikeLogEveryTicks: 20,
+    /** The spike: impulse sizes tried by `rae:train_spike drag` (blocks per tick) and by `limits`. */
+    dragTestSpeeds: [0.05, 0.2, 0.5, 1, 2],
+    impulseLimitTests: [1, 2, 5, 10, 20, 50, 100, 1000],
+    /** The spike: cows put on the car by `rae:train_spike seats`, at most, and how long they stay. */
+    seatTestMaxCows: 8,
+    seatTestTicks: 600
+};
+
 export const HORSE = {
     speed: 0.2,
     /** Not currently applied anywhere — carried over from V1 as-is. */

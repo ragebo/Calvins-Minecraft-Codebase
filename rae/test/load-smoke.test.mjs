@@ -11,7 +11,8 @@ const { listScriptEvents } = await load("core/events.js");
 // a refactor may add ids but must never rename or drop one without approval.
 const PUBLIC_SCRIPT_EVENTS = [
     "bounty:escape", "bounty:fort", "bounty:lockpick", "bounty:ranch", "bounty:start_round",
-    "bounty:teleport", "bounty:test_capture", "bounty:train", "rae:adopt", "rae:debug", "rae:probe_damage", "rae:reset"
+    "bounty:teleport", "bounty:test_capture", "bounty:train", "rae:adopt", "rae:debug", "rae:probe_damage", "rae:reset",
+    "rae:train_clear", "rae:train_info", "rae:train_loop", "rae:train_mark", "rae:train_show", "rae:train_spike", "rae:train_station", "rae:train_undo"
 ];
 
 test("main.js loads under the fake game API and registers every system", () => {
@@ -20,7 +21,7 @@ test("main.js loads under the fake game API and registers every system", () => {
     const names = systems.map((s) => s.name);
     check("system names are unique", new Set(names).size === names.length, names.join(","));
     check("every system can reset", systems.every((s) => typeof s.reset === "function"));
-    check("core systems are registered", ["roles", "jail", "jailbreak", "raids", "train", "boat", "guns", "compass", "endgame"].every((n) => names.includes(n)), names.join(","));
+    check("core systems are registered", ["roles", "jail", "jailbreak", "raids", "train", "transit", "boat", "guns", "compass", "endgame"].every((n) => names.includes(n)), names.join(","));
     done();
 });
 
