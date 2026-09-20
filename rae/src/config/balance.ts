@@ -142,6 +142,29 @@ export const COMPASS = {
     alignToleranceDegrees: 10
 };
 
+/**
+ * `/scriptevent rae:probe_damage` measures how the engine treats repeated hits, on a cow it spawns and
+ * removes again. It is a measurement tool, not part of the game.
+ */
+export const DAMAGE_PROBE = {
+    /** A mob that certainly exists, is harmless and has 10 health. */
+    targetType: "minecraft:cow",
+    /** Damage of one probe hit. Small, so the target never dies: the ratios are what is measured. */
+    unitDamage: 1,
+    /** Hits in the pellet scenarios (the pump fires 8 pellets). Even, so the double tap can halve it. */
+    hits: 8,
+    /** Ticks between hits that are meant to fall outside any post-hit invulnerability window. */
+    spacedTicks: 12,
+    /** Ticks between the two shots of a double tap (the double-barrel's fire rate is 4). */
+    doubleTapTicks: 4,
+    /** How far in front of the player the target is put, in blocks. */
+    distanceInFront: 3,
+    /** Ticks after the last hit before the target's health is read. */
+    settleTicks: 2,
+    /** Ticks between one scenario and the next, so nothing carries over. */
+    gapTicks: 30
+};
+
 export const STATE_SYNC = {
     /**
      * Ticks between checks of every player's role and status tags. A tag typed by hand

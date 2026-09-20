@@ -255,6 +255,13 @@ function fireHitscan(player: Player, gun: Extract<GunConfig, { kind: "hitscan" }
     const origin = player.getHeadLocation();
     const baseDirection = player.getViewDirection();
 
+    // Pellets that land on the same target are added up and dealt as ONE hit. Several applyDamage
+    // calls on one target in the same tick can be swallowed by its post-hit invulnerability (vanilla
+    // ignores a repeat hit that is not bigger than the last, so every pellet after the first would
+    // count for nothing). One summed hit deals the full damage whether or not that applies in this
+    // build; systems/probe.ts (rae:probe_damage) measures it.
+    const landed = new Map<string, { entity: Entity; pellets: number }>();
+
     for (let i = 0; i < gun.pelletCount; i++) {
 
         const direction = jitterDirection(baseDirection, gun.spreadDegrees);
@@ -278,14 +285,25 @@ function fireHitscan(player: Player, gun: Extract<GunConfig, { kind: "hitscan" }
         }
 
         if (closest) {
-            // No physical projectile exists for hitscan pellets, so
-            // the "projectile" cause (which requires a real
-            // damagingProjectile entity) isn't available here.
-            closest.applyDamage(gun.pelletDamage, {
-                cause: EntityDamageCause.entityAttack,
-                damagingEntity: player
-            });
+            const entry = landed.get(closest.id);
+
+            if (entry) entry.pellets++;
+            else landed.set(closest.id, { entity: closest, pellets: 1 });
         }
+    }
+
+    for (const { entity, pellets } of landed.values()) {
+
+        // Killed or removed since the ray found it, by something that ran in between.
+        if (!entity.isValid) continue;
+
+        // No physical projectile exists for hitscan pellets, so
+        // the "projectile" cause (which requires a real
+        // damagingProjectile entity) isn't available here.
+        entity.applyDamage(gun.pelletDamage * pellets, {
+            cause: EntityDamageCause.entityAttack,
+            damagingEntity: player
+        });
     }
 }
 

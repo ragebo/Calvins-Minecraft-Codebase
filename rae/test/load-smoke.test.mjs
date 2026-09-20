@@ -11,7 +11,7 @@ const { listScriptEvents } = await load("core/events.js");
 // a refactor may add ids but must never rename or drop one without approval.
 const PUBLIC_SCRIPT_EVENTS = [
     "bounty:escape", "bounty:fort", "bounty:lockpick", "bounty:ranch", "bounty:start_round",
-    "bounty:teleport", "bounty:test_capture", "bounty:train", "rae:adopt", "rae:debug", "rae:reset"
+    "bounty:teleport", "bounty:test_capture", "bounty:train", "rae:adopt", "rae:debug", "rae:probe_damage", "rae:reset"
 ];
 
 test("main.js loads under the fake game API and registers every system", () => {

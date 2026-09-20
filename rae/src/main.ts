@@ -20,6 +20,7 @@ import "./systems/gold.js";
 import "./systems/guns.js";
 import "./systems/compass.js";
 import "./systems/endgame.js";
+import "./systems/probe.js";
 
 // ---------------------------------------------------
 // DEBUG COMMANDS

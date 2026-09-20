@@ -10,7 +10,7 @@
 // If a permanent addition is needed, tell the orchestrator.
 
 export const EquipmentSlot = { Mainhand: "Mainhand", Offhand: "Offhand", Head: "Head", Chest: "Chest", Legs: "Legs", Feet: "Feet" };
-export const EntityDamageCause = { entityAttack: "entityAttack", projectile: "projectile", fall: "fall" };
+export const EntityDamageCause = { entityAttack: "entityAttack", projectile: "projectile", fall: "fall", override: "override" };
 export const PlayerPermissionLevel = { Visitor: 0, Member: 1, Operator: 2, Custom: 3 };
 export const StructureSaveMode = { Memory: "Memory", World: "World" };
 export class BlockVolume { constructor(from, to) { this.from = from; this.to = to; } }
