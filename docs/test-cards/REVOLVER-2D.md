@@ -2,13 +2,13 @@
 
 Not an ARCH task: added on request. The revolver was a 3D model (an attachable with geometry and a 32x32 texture) whose held look was never finished, and its inventory icon was a scaled-down picture on a solid white background. It is now a flat 16x16 sprite, taken from a crossbow texture pack the user supplied (`revolver.mcpack`, made with createtextures.com, which replaced `crossbow_pulling_0.png`).
 
-What changed, all in the resource pack: `textures/items/revolver.png` is the new sprite (byte for byte the mcpack's PNG, with a transparent background); `attachables/revolver.json`, `models/entity/revolver.geo.json` and `textures/items/revolver_3d.png` are gone; the pack is 1.0.12. The behavior pack and the scripts are untouched, so the gun fires, reloads and sounds exactly as before.
+What changed, all in the resource pack: `textures/items/revolver.png` is the mcpack's sprite turned to aim forward when held (see Orientation), on a transparent background; `attachables/revolver.json`, `models/entity/revolver.geo.json` and `textures/items/revolver_3d.png` are gone; the pack is 1.0.14. The behavior pack and the scripts are untouched, so the gun fires, reloads and sounds exactly as before.
 
 `npm test` checks the files (`assets.test.mjs`: the texture path resolves, the sprite is a 16x16 PNG with alpha, no attachable or geometry is left over for the revolver, each pack's versions agree). It cannot show how the sprite looks in the game. This card does.
 
 ## Steps
 
-Deploy the resource pack (its own version and its own world pins, separate from the behavior pack), then restart the world.
+Deploy the resource pack (its own version and its own world pins, separate from the behavior pack) with Minecraft **closed**, then launch it fresh. The game reads a resource pack when it launches, so a pack changed while it is running is not picked up, and the next world load writes the old version back into the world's pin.
 
 | # | Do | Expect |
 |---|---|---|
@@ -17,20 +17,24 @@ Deploy the resource pack (its own version and its own world pins, separate from 
 | 3 | Hold it, third person (F5), and look at another player holding one. | The same flat sprite. |
 | 4 | Fire it, reload it (sneak + use), and shoot a mob. | Unchanged: same sounds, ammo count and damage as before. |
 
-## Orientation (resource pack 1.0.13)
+## Orientation (resource pack 1.0.14)
 
-A flat item held like a tool has its icon turned roughly 45 to 90 degrees counterclockwise on screen. The sprite as supplied has the barrel pointing left, and in the hand that pointed **down**. It is now turned 90 degrees clockwise (checked pixel for pixel: turning it back gives the supplied sprite exactly), so the barrel points **up** in the icon and should point up and to the left, toward the crosshair, when held. The inventory icon therefore shows the gun standing upright.
+How it got here, from what the user saw in the game:
 
-What to check: in first person the barrel points up-left or left, not down. If it is still wrong, tell me where it points (up, left, toward you) and I can turn it to match. The other options, in order of effort:
+1. The sprite as supplied (barrel pointing left) was reported as pointing down. The game had not yet reloaded the resource pack, so this was most likely the old 3D model.
+2. Turned 90 degrees clockwise (barrel straight up, checked pixel for pixel), the user reported it looked like the gun was **pointing up**.
+3. Now turned **45 degrees clockwise**: the barrel points up and to the left in the icon. Held, that should aim toward the crosshair. The blur the earlier 45 degree try had came from averaging colours; this one uses a pixel-art rotation (scale up with edge smoothing, rotate, take the most common colour per block), which keeps every colour of the sprite (0 new colours) and 84 of its 92 opaque pixels.
 
-- The mirrored sprite (barrel right): one file, but it would point up and away rather than into the screen.
+What to check: in first person the barrel points up-left, toward the crosshair, rather than straight up or down. If it is off, say which way (a bit more up, a bit more left) and I can turn it a step. The other options:
+
+- 135 degrees (barrel up-right) is already made, in case the aim is the wrong way round.
 - Set `minecraft:hand_equipped` to `false` in `your_pack_name_BP/items/revolver.json`: held flat and upright instead of like a tool (a behavior pack change and version bump).
 - An attachable with a pose animation: the supported way to set an exact hand rotation while keeping the inventory icon horizontal. The item component that used to do it, `minecraft:render_offsets`, is documented as deprecated and no longer in use.
 
 ## Content log
 
 - Must not appear: `[Textures]` errors, or a line naming `revolver`.
-- The resource pack version in the log should read 1.0.13.
+- The resource pack version in the world's pin (`world_resource_packs.json`) should still read 1.0.14 after the world has loaded. If the game wrote an older one back, it was running when the pack was deployed.
 
 ## Not checked
 
