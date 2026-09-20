@@ -1,4 +1,4 @@
-import { world, EquipmentSlot, type Entity, type Player } from "@minecraft/server";
+import { system, world, EquipmentSlot, type Entity, type Player } from "@minecraft/server";
 import { AIM_SPIKE as A } from "../config/balance.js";
 import { onScriptEvent } from "../core/events.js";
 import { registerSystem } from "../core/registry.js";
@@ -150,12 +150,24 @@ function setFov(player: Player, argument: string): void {
     tell(player, format("ok", reset ? "Field of view put back." : `Field of view ${fov}.`));
 }
 
+/**
+ * Switches the overlay off. The overlay shows while the HUD's title text equals the switch text, and the HUD
+ * keeps the last text it was given: clearing the title alone left the overlay up in the first real-game run. So
+ * the text is overwritten with one that draws nothing, and the title is cleared once that has had time to arrive.
+ */
+function hideScope(player: Player): void {
+    showTitle(player, A.scopeOffTitle, { fadeInTicks: 0, stayTicks: 1, fadeOutTicks: 0 });
+    system.runTimeout(() => {
+        if (player.isValid) clearTitle(player);
+    }, A.scopeClearDelayTicks);
+}
+
 function setScope(player: Player, on: boolean): void {
     if (on) {
         showTitle(player, A.scopeTitle, { fadeInTicks: 0, stayTicks: A.scopeStayTicks, fadeOutTicks: 0 });
         touched.add(player);
     } else {
-        clearTitle(player);
+        hideScope(player);
     }
     log(`scope ${on ? "on" : "off"}`);
     tell(player, format("ok", on ? "Scope title sent: the overlay should be showing." : "Scope title cleared."));
@@ -189,7 +201,7 @@ registerSystem({
         for (const player of touched) {
             if (!player.isValid) continue;
             try { player.camera.setFov(); } catch { /* nothing to undo */ }
-            clearTitle(player);
+            hideScope(player);
         }
         touched.clear();
     }

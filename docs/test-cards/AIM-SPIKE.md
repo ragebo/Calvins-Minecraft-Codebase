@@ -9,7 +9,7 @@ What is new:
 - `/scriptevent rae:aim_spike scope on|off` shows or hides a scope overlay: a black screen with a clear round lens and a crosshair.
 - Three test items: `bountysys:aim_probe_plain`, `_bow` and `_spyglass`. All are hold-to-use items that slow you a little; they differ only in their use animation, so the log and your eyes show whether the bow or spyglass animation zooms by itself.
 
-Packs: behavior pack **0.1.10** (the items) and resource pack **1.0.17** (the HUD overlay: `ui/` and `textures/ui/rae_scope.png`). Deploy the resource pack with Minecraft **closed** and launch fresh.
+Packs: behavior pack **0.1.10** (the items; 0.1.11 fixes `scope off`) and resource pack **1.0.17** (the HUD overlay: `ui/` and `textures/ui/rae_scope.png`). Deploy the resource pack with Minecraft **closed** and launch fresh.
 
 `npm test` checks that the spike records what it is given, stays silent unless asked, and cleans up; that the overlay's files agree with each other and with the script; and that the image is what its generator makes. It cannot say what the game reports, or whether the HUD accepts the overlay. This card does.
 
@@ -36,6 +36,18 @@ Give yourself the items and switch logging on:
 | 7 | Hold the revolver and press **Q** (drop), then pick it up again. | The revolver drops. The log gets `itemDrop` and, when you pick it up, `inventory` lines. |
 | 8 | Get on a horse. Repeat steps 1, 2, 6 and 7 while riding. | The same lines, with `riding=true`. Sneak dismounts you, so do not test it. Tell me if any of these did something to the horse or the ride. |
 | 9 | `/scriptevent rae:aim_spike log off` when you are done. | Logging stops. |
+
+## Results so far (2026-09-20, BP 0.1.10, resource pack 1.0.17)
+
+From the owner's run and the content log (the log flushes late, so the off-hand, drop and horse lines were not on disk yet):
+
+- **Left-click at the sky reports a swing with `source=Attack`.** So left-click can fire a gun with no target. On a **block** it reports `source=Mine` instead, and on a mob a `hit` line plus `source=Attack`. To fire at a block too, both `Attack` and `Mine` have to count.
+- **Holding right-click gives events, in this order:** `itemUse` (at the moment of the press), then `itemStartUse` (`useDuration` is in ticks: 24000 is the 1200 seconds set on the item), and on release `itemReleaseUse` and `itemStopUse` in the same tick. `itemCompleteUse` never fired. So a held aim can start on `itemStartUse` and end on `itemStopUse`, and a gun must **ignore** `itemUse`, or every aim would also fire a shot.
+- **None of the three probe items zooms or draws anything by itself** (the plain one, the bow animation and the spyglass animation). The zoom has to be scripted.
+- **`fov` and `scope on` work.** The zoom is smooth and the overlay shows.
+- **`scope off` did not switch the overlay off.** Cause: the overlay shows while the HUD's title text equals the switch text, and the HUD keeps the last text it was given even after the title is cleared. Fixed in BP 0.1.11: `scope off` first overwrites the text with an invisible different one, then clears the title 5 ticks later. **To re-check: `scope on`, then `scope off`.**
+  If the overlay is stuck on right now, `/title @s title .` replaces the switch text (a dot shows briefly) and should turn it off, which also tests the diagnosis. Leaving the world does too.
+- **Still to see:** the `fov`/`scope` log lines, F (off-hand swap) and Q (drop), and everything on a horse.
 
 ## What to tell me
 

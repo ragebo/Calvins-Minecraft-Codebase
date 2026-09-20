@@ -172,6 +172,14 @@ export const AIM_SPIKE = {
      * It must equal the string in BountySys_RP/ui/rae_scope.json (assets.test.mjs checks that they do).
      */
     scopeTitle: "§r§q§v§h",
+    /**
+     * What the title is replaced with to switch the overlay off. Clearing the title hides it, but the HUD keeps
+     * the last text it was given (the first real-game run could not turn the overlay off with an empty title), so
+     * the switch text is overwritten with this one, which draws nothing, and the title is cleared a moment later.
+     */
+    scopeOffTitle: "§r",
+    /** How long after the overwrite the title is cleared (ticks), so the overwrite reaches the HUD first. */
+    scopeClearDelayTicks: 5,
     /** How long the scope title is held (ticks); it is cleared by `rae:aim_spike scope off` well before this. */
     scopeStayTicks: 72000,
     /** `rae:aim_spike fov`: how long the camera takes to move to the new field of view, in seconds. */

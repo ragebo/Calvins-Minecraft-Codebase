@@ -157,8 +157,17 @@ test("scope on sends the title that switches the overlay, held for a long time w
     check("held long, with no fade in or out", p.titleOptions.at(-1)?.stayDuration === A.scopeStayTicks && p.titleOptions.at(-1)?.fadeInDuration === 0 && p.titleOptions.at(-1)?.fadeOutDuration === 0, JSON.stringify(p.titleOptions.at(-1)));
     check("the title draws nothing itself (formatting codes only)", strip(A.scopeTitle) === "", JSON.stringify(strip(A.scopeTitle)));
 
+    // The first real-game run could not switch the overlay off by clearing the title: the HUD keeps the last text it
+    // was given. So off overwrites the switch text with a different one that draws nothing, and clears afterwards.
     say(p, "scope off");
-    check("off sends an empty title", p.titles.at(-1) === "", JSON.stringify(p.titles));
+    check("off first overwrites the switch text with a different, invisible one", p.titles.at(-1) === A.scopeOffTitle && A.scopeOffTitle !== A.scopeTitle && strip(A.scopeOffTitle) === "", JSON.stringify(p.titles));
+    check("briefly, with no fades", p.titleOptions.at(-1)?.stayDuration === 1 && p.titleOptions.at(-1)?.fadeInDuration === 0 && p.titleOptions.at(-1)?.fadeOutDuration === 0, JSON.stringify(p.titleOptions.at(-1)));
+    check("and does not clear yet, so the overwrite reaches the HUD first", p.titles.at(-1) !== "", JSON.stringify(p.titles));
+    fake.advance(A.scopeClearDelayTicks - 1);
+    check("still not cleared just before the delay", p.titles.at(-1) === A.scopeOffTitle, JSON.stringify(p.titles));
+    fake.advance(1);
+    check("then clears the title", p.titles.at(-1) === "", JSON.stringify(p.titles));
+    check("in that order: switch, overwrite, clear", JSON.stringify(p.titles) === JSON.stringify([A.scopeTitle, A.scopeOffTitle, ""]), JSON.stringify(p.titles));
     check("both are logged", lines().includes("scope on") && lines().includes("scope off"), lines().join("\n"));
     done();
 });
@@ -174,7 +183,9 @@ test("a reset puts everything back: logging off, the field of view, the scope", 
 
     resetAllSystems();
     check("a player who only zoomed gets the field of view put back", p.camera.fovCalls.length === calls + 1 && p.camera.fovCalls.at(-1) === undefined, JSON.stringify(p.camera.fovCalls));
-    check("a player who only put on the scope has it cleared", q.titles.at(-1) === "", JSON.stringify(q.titles));
+    check("a player who only put on the scope has the overlay switched off the same way (overwrite, then clear)", q.titles.at(-1) === A.scopeOffTitle, JSON.stringify(q.titles));
+    fake.advance(A.scopeClearDelayTicks);
+    check("and the title cleared after the delay", q.titles.at(-1) === "" && JSON.stringify(q.titles) === JSON.stringify([A.scopeTitle, A.scopeOffTitle, ""]), JSON.stringify(q.titles));
 
     logs.length = 0;
     emitEverything(p);
@@ -192,10 +203,19 @@ test("a reset after a player who used the spike has left reports no error", () =
     fake.chat.length = 0;
 
     let threw = false;
-    try { resetAllSystems(); } catch { threw = true; }
-    check("it does not throw", !threw);
+    try { resetAllSystems(); fake.advance(A.scopeClearDelayTicks + 2); } catch { threw = true; }
+    check("it does not throw, not even when the delayed clear comes due after the player left", !threw);
     check("and the reset reports no error (the registry sends one to chat when a system fails)", !fake.chat.some((m) => /RESET ERROR/.test(m)), fake.chat.join("|"));
     check("the player who is still here is unaffected", p.isValid);
+
+    // A player who switches the scope off and leaves before the delayed clear comes due.
+    const r = fake.makePlayer("Cy");
+    say(r, "scope on");
+    say(r, "scope off");
+    r.remove();
+    let threwLater = false;
+    try { fake.advance(A.scopeClearDelayTicks + 2); } catch { threwLater = true; }
+    check("a delayed clear for a player who left is skipped, not thrown", !threwLater);
     done();
 });
 
