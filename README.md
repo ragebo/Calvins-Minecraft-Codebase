@@ -7,8 +7,9 @@ that compiles into the behavior pack.
 ## Credits
 
 The revolver's flat 16x16 sprite (`BountySys_RP/textures/items/revolver.png`) comes from a
-texture pack named "revolver" made with createtextures.com. The pack states no license, so
-its terms are unconfirmed.
+texture pack named "revolver" made with createtextures.com, turned 90 degrees clockwise so
+the barrel points forward when the item is held. The pack states no license, so its terms
+are unconfirmed.
 
 Until commit `6661ecb` the revolver was a 3D model, "Minecraft Revolver [Block Bench]"
 (https://skfb.ly/prxvz) by Jgcsketch, licensed under Creative Commons Attribution

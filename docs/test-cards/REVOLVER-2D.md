@@ -13,18 +13,24 @@ Deploy the resource pack (its own version and its own world pins, separate from 
 | # | Do | Expect |
 |---|---|---|
 | 1 | `/give @s bountysys:revolver`. Look at it in the hotbar and in the inventory. | The dark grey revolver sprite on a transparent background: no white box around it. Not a missing-texture (purple and black) square. |
-| 2 | Hold it, first person. | A flat sprite held like a tool. It is **not** the old 3D model. |
+| 2 | Hold it, first person. | A flat sprite held like a tool, barrel pointing up-left or left and **not down**. It is not the old 3D model. |
 | 3 | Hold it, third person (F5), and look at another player holding one. | The same flat sprite. |
 | 4 | Fire it, reload it (sneak + use), and shoot a mob. | Unchanged: same sounds, ammo count and damage as before. |
 
-## The one thing to look at
+## Orientation (resource pack 1.0.13)
 
-The sprite is drawn with the barrel pointing **left**. A tool-style hold points the icon's top-right forward, so the gun may look turned the wrong way or held by the barrel. That is a matter of the picture, not the code. If it does, there are two quick options: flip the sprite horizontally, or redraw it diagonally with the barrel at the top right (the way sword icons are drawn). If you would rather it be held flat and upright, set `minecraft:hand_equipped` to `false` in `your_pack_name_BP/items/revolver.json` (a behavior pack change and version bump).
+A flat item held like a tool has its icon turned roughly 45 to 90 degrees counterclockwise on screen. The sprite as supplied has the barrel pointing left, and in the hand that pointed **down**. It is now turned 90 degrees clockwise (checked pixel for pixel: turning it back gives the supplied sprite exactly), so the barrel points **up** in the icon and should point up and to the left, toward the crosshair, when held. The inventory icon therefore shows the gun standing upright.
+
+What to check: in first person the barrel points up-left or left, not down. If it is still wrong, tell me where it points (up, left, toward you) and I can turn it to match. The other options, in order of effort:
+
+- The mirrored sprite (barrel right): one file, but it would point up and away rather than into the screen.
+- Set `minecraft:hand_equipped` to `false` in `your_pack_name_BP/items/revolver.json`: held flat and upright instead of like a tool (a behavior pack change and version bump).
+- An attachable with a pose animation: the supported way to set an exact hand rotation while keeping the inventory icon horizontal. The item component that used to do it, `minecraft:render_offsets`, is documented as deprecated and no longer in use.
 
 ## Content log
 
 - Must not appear: `[Textures]` errors, or a line naming `revolver`.
-- The resource pack version in the log should read 1.0.12.
+- The resource pack version in the log should read 1.0.13.
 
 ## Not checked
 
