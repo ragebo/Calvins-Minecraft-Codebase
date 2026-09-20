@@ -6,8 +6,14 @@ that compiles into the behavior pack.
 
 ## Credits
 
-"Minecraft Revolver [Block Bench]" (https://skfb.ly/prxvz) by Jgcsketch is licensed
-under Creative Commons Attribution (http://creativecommons.org/licenses/by/4.0/).
+The revolver's flat 16x16 sprite (`BountySys_RP/textures/items/revolver.png`) comes from a
+texture pack named "revolver" made with createtextures.com. The pack states no license, so
+its terms are unconfirmed.
+
+Until commit `6661ecb` the revolver was a 3D model, "Minecraft Revolver [Block Bench]"
+(https://skfb.ly/prxvz) by Jgcsketch, licensed under Creative Commons Attribution
+(http://creativecommons.org/licenses/by/4.0/). It is no longer in the pack but is still in
+the git history, so the credit stays.
 
 ## Layout
 
@@ -45,8 +51,8 @@ your_pack_name_BP/      The behavior pack. scripts/ is BUILD OUTPUT — never ed
   entities/             bountysys:bullet (the shared projectile all projectile guns spawn)
   loot_tables/, manifest.json
 
-BountySys_RP/           Resource pack: gun/ammo/compass icons, the revolver's 3D attachable
-                         geometry + texture, the bullet's client entity definition.
+BountySys_RP/           Resource pack: the revolver and law-compass icons, and the bullet's
+                         client entity definition.
                          sounds/ (music) is gitignored — not included here, licensing unconfirmed.
 
 docs/test-cards/        One manual in-game test card per architecture task.
@@ -106,11 +112,13 @@ apply damage on hit via script (not the entity's own vanilla damage) so each gun
 number is independent. Shotguns jitter several rays per trigger pull via
 `Dimension.getEntitiesFromRay` for real per-pellet spread.
 
-Only the revolver currently has a 3D held model (`BountySys_RP/attachables/revolver.json`
-+ `models/entity/revolver.geo.json`); the other five still use flat inventory icons only.
-First-person rendering for the revolver isn't wired up yet — that needs its own
-`hold_first_person` animation authored in Blockbench (custom attachable geometry doesn't
-get first-person rendering for free the way simple icon items do).
+Every gun is a flat 2D item held like a tool (`minecraft:hand_equipped`). Only the revolver
+has its own texture (`BountySys_RP/textures/items/revolver.png`, 16x16, mapped in
+`textures/item_texture.json`); the other five borrow a vanilla item's icon as a placeholder
+(a wooden hoe for the pistol, a crossbow for the bolt rifle, and so on). The revolver used
+to be a 3D model with an attachable; that is still in git history
+(`git show 6661ecb:BountySys_RP/attachables/revolver.json`) if it is ever wanted back.
+`npm test` checks that the two packs agree with each other (`assets.test.mjs`).
 
 Every gun has its own fire sound and a timed reload sequence, all vanilla sound events,
 defined per gun in `src/config/guns.ts` (`sounds.fire` / `sounds.reload`, each a list of
