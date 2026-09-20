@@ -80,6 +80,7 @@ and fails if a count goes up.
 | `jailbreak.ts` | Lockpick minigame, escort-vulnerability after a rescue |
 | `raids.ts` | Fort raid (via the shared `raid.ts` engine) + ranch raid (hand-rolled — its dynamic reinforcement timer and per-mob rules don't fit the shared engine without changing behavior) |
 | `train.ts` | Train robbery: movement, bridge demolition/rebuild, vault, guards |
+| `aimprobe.ts` | Measurements for the planned gun controls (left-click fire, held right-click aim with zoom and a scope overlay, off-hand-swap reload): logs what the game reports, drives the zoom and the overlay; changes no gun |
 | `transit.ts` | The scripted train: route recorder and a rideable car driven along the route (slice 1, a spike; the robbery moves onto it in a later slice) |
 | `boat.ts` | Outlaw win condition (gang escapes by boat) |
 | `economy-rules.ts` | Death coin loss/inventory drop, villager robbery |

@@ -215,13 +215,20 @@ function makePlayer(name, options = {}) {
         isSneaking: options.isSneaking ?? false,
         isInWater: false,
         holding: options.holding ?? null,
+        // What is in the off-hand slot (a type id) or null. Tests set it to act out an off-hand swap.
+        offhand: options.offhand ?? null,
+        // player.camera: setFov records what it was given, or throws fake.cameraError.
+        camera: {
+            fovCalls: [],
+            setFov(o) { guard(player); if (fake.cameraError) throw new Error(fake.cameraError); player.camera.fovCalls.push(o); }
+        },
         container,
         permission: options.permission ?? PlayerPermissionLevel.Member,
-        messages: [], actionBar: [], titles: [], privateSounds: [], commands: [],
+        messages: [], actionBar: [], titles: [], titleOptions: [], privateSounds: [], commands: [],
         scoreboardIdentity: { displayName: name, id: name },
         onScreenDisplay: {
             setActionBar(text) { guard(player); player.actionBar.push(text); },
-            setTitle(text) { guard(player); player.titles.push(text); }
+            setTitle(text, options) { guard(player); player.titles.push(text); player.titleOptions.push(options); }
         },
         sendMessage(text) { guard(player); player.messages.push(text); },
         playSound(id, opts) { guard(player); player.privateSounds.push({ id, ...opts }); },
@@ -229,7 +236,12 @@ function makePlayer(name, options = {}) {
         getComponent(id) {
             guard(player);
             if (id === "minecraft:equippable") {
-                return { getEquipmentSlot() { return { getItem() { return player.holding ? makeItemStack(player.holding) : undefined; } }; } };
+                return {
+                    getEquipmentSlot(slot) {
+                        const type = slot === "Offhand" ? player.offhand : player.holding;
+                        return { getItem() { return type ? makeItemStack(type) : undefined; } };
+                    }
+                };
             }
             if (id === "minecraft:inventory") return { container };
             if (id === "minecraft:health") return { currentValue: 20, effectiveMax: 20, resetToMaxValue() {} };
@@ -311,6 +323,8 @@ export const fake = {
     // drag: what is left of a velocity after each tick. delivered: the share of a velocity that becomes movement (1 = all).
     physics: { drag: 1, delivered: 1 },
     maxImpulse: Infinity,
+    // When set, player.camera.setFov throws this message.
+    cameraError: null,
     makePlayer, makeEntity, makeItemStack,
     dimension(id) { const key = id.replace(/^minecraft:/, ""); return (fake.dimensions[key] ??= makeDimension(`minecraft:${key}`)); },
     addObjective(id) { return world.scoreboard.addObjective(id); },
@@ -347,7 +361,7 @@ export const fake = {
         fake.players.length = 0; fake.entities.length = 0; fake.chat.length = 0;
         fake.dynamic.clear(); fake.structures.clear(); fake.dynamicStringLimit = null;
         objectives.clear(); fake.calls = freshCalls();
-        fake.physics.drag = 1; fake.physics.delivered = 1; fake.maxImpulse = Infinity;
+        fake.physics.drag = 1; fake.physics.delivered = 1; fake.maxImpulse = Infinity; fake.cameraError = null;
         for (const d of Object.values(fake.dimensions)) { d.commands.length = 0; d.played.length = 0; d.spawned.length = 0; d.explosions.length = 0; d.filled.length = 0; d.particles.length = 0; }
     }
 };

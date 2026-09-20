@@ -1,0 +1,19 @@
+{
+    "namespace": "rae_scope",
+
+    "scope_root": {
+        "type": "image",
+        "texture": "textures/ui/rae_scope",
+        "layer": 30,
+        "size": ["100%", "100%"],
+        "visible": false,
+        "bindings": [
+            { "binding_name": "#hud_title_text_string" },
+            {
+                "binding_type": "view",
+                "source_property_name": "(#hud_title_text_string = '§r§q§v§h')",
+                "target_property_name": "#visible"
+            }
+        ]
+    }
+}

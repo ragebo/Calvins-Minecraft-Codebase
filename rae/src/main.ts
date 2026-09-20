@@ -22,6 +22,7 @@ import "./systems/compass.js";
 import "./systems/endgame.js";
 import "./systems/probe.js";
 import "./systems/transit.js";
+import "./systems/aimprobe.js";
 
 // ---------------------------------------------------
 // DEBUG COMMANDS

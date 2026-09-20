@@ -162,6 +162,24 @@ export const TRANSIT = {
     seatTestTicks: 600
 };
 
+/**
+ * The aim and input spike (systems/aimprobe.ts): measurements for left-click firing, hold-to-aim, zoom, an
+ * off-hand-swap reload and a scope overlay. Nothing here changes a gun.
+ */
+export const AIM_SPIKE = {
+    /**
+     * The title text that switches the scope overlay on. It is only formatting codes, so it draws nothing itself.
+     * It must equal the string in BountySys_RP/ui/rae_scope.json (assets.test.mjs checks that they do).
+     */
+    scopeTitle: "§r§q§v§h",
+    /** How long the scope title is held (ticks); it is cleared by `rae:aim_spike scope off` well before this. */
+    scopeStayTicks: 72000,
+    /** `rae:aim_spike fov`: how long the camera takes to move to the new field of view, in seconds. */
+    fovEaseSeconds: 0.2,
+    /** How often the off-hand slot of every player is read while logging is on (ticks). */
+    offhandPollTicks: 2
+};
+
 export const HORSE = {
     speed: 0.2,
     /** Not currently applied anywhere — carried over from V1 as-is. */

@@ -3,7 +3,7 @@ import { readFileSync, readdirSync, existsSync } from "node:fs";
 import { inflateSync } from "node:zlib";
 import { pathToFileURL } from "node:url";
 import path from "node:path";
-import { checks } from "./helpers.mjs";
+import { checks, load } from "./helpers.mjs";
 
 // The resource pack (BountySys_RP) and the behavior pack (your_pack_name_BP) are separate folders that
 // have to agree with each other, and the game says nothing when they don't: a texture path that does not
@@ -273,5 +273,80 @@ test("the train model and texture in the pack are exactly what scripts/gen-train
     const palette = Object.values(generator.PALETTE).map((c) => c.join(","));
     check("every palette colour is different", new Set(palette).size === palette.length);
     check("the palette fits in one row of the texture", palette.length <= generator.TEXTURE_SIZE, String(palette.length));
+    done();
+});
+
+// ---------------------------------------------------------------------------------------------------------
+// The scope overlay: a HUD image (ui/), the texture it shows, and the title text that switches it on
+// ---------------------------------------------------------------------------------------------------------
+
+const UI = path.join(RP, "ui");
+const SCOPE_TEXTURE = "textures/ui/rae_scope";
+
+test("the scope overlay's HUD files hang together: defs list an existing file, the hook names a real element, its texture exists", () => {
+    const { check, done } = checks();
+    const defs = readJson(path.join(UI, "_ui_defs.json"));
+    check("_ui_defs.json lists the scope file", defs.ui_defs?.includes("ui/rae_scope.json"), JSON.stringify(defs));
+    for (const file of defs.ui_defs ?? []) check(`${file} exists`, existsSync(path.join(RP, file)));
+
+    const scope = readJson(path.join(UI, "rae_scope.json"));
+    const namespace = scope.namespace;
+    check("the scope file has a namespace", typeof namespace === "string" && namespace.length > 0);
+    check("it defines scope_root", scope.scope_root !== undefined);
+    check("the element shows the scope texture", scope.scope_root?.texture === SCOPE_TEXTURE, String(scope.scope_root?.texture));
+    check("and is hidden until a binding shows it", scope.scope_root?.visible === false);
+    check("the texture file exists", existsSync(path.join(RP, `${SCOPE_TEXTURE}.png`)));
+
+    const hud = readJson(path.join(UI, "hud_screen.json"));
+    const modification = hud.root_panel?.modifications?.[0];
+    check("hud_screen.json adds a control to the root panel", modification?.array_name === "controls" && Array.isArray(modification?.value), JSON.stringify(hud));
+    const added = Object.keys(modification?.value?.[0] ?? {})[0] ?? "";
+    check("the control points at namespace.scope_root", added.endsWith(`@${namespace}.scope_root`), added);
+    done();
+});
+
+test("the title text in the overlay's binding is the one the script sends", async () => {
+    const { check, done } = checks();
+    const { AIM_SPIKE } = await load("config/balance.js");
+    const scope = readJson(path.join(UI, "rae_scope.json"));
+
+    const binding = (scope.scope_root?.bindings ?? []).find((b) => b.target_property_name === "#visible");
+    check("a binding sets #visible", binding !== undefined, JSON.stringify(scope.scope_root?.bindings));
+    check("it compares the title text with the configured switch", binding?.source_property_name === `(#hud_title_text_string = '${AIM_SPIKE.scopeTitle}')`, `${binding?.source_property_name} vs ${AIM_SPIKE.scopeTitle}`);
+    check("the switch draws nothing by itself (formatting codes only)", AIM_SPIKE.scopeTitle.replace(/§./g, "") === "", JSON.stringify(AIM_SPIKE.scopeTitle));
+    done();
+});
+
+test("the scope overlay image in the pack is exactly what scripts/gen-scope-overlay.mjs makes", async () => {
+    const { check, done } = checks();
+    const generator = await import(pathToFileURL(path.join(import.meta.dirname, "..", "scripts", "gen-scope-overlay.mjs")).href);
+    const file = path.join(RP, `${SCOPE_TEXTURE}.png`);
+    check("the file exists", existsSync(file));
+    if (!existsSync(file)) return done();
+
+    const info = pngInfo(file);
+    check("it is a PNG of the generator's size, with an alpha channel", info?.width === generator.WIDTH && info?.height === generator.HEIGHT && ALPHA_COLOR_TYPES.has(info?.colorType), JSON.stringify(info));
+    const pixels = pngPixels(file);
+    check("its pixels are the generator's (run: node scripts/gen-scope-overlay.mjs)", pixels !== null && pixels.equals(generator.buildScopePixels()));
+
+    const at = (x, y) => pixels?.[(y * generator.WIDTH + x) * 4 + 3];
+    check("the middle of the lens is clear except for the crosshair gap", at(Math.floor(generator.WIDTH / 2) + 5, Math.floor(generator.HEIGHT / 2) + 5) === 0);
+    check("a corner is solid black", at(2, 2) === 255 && at(generator.WIDTH - 3, generator.HEIGHT - 3) === 255);
+    done();
+});
+
+test("the aim probe items are hold-to-use items that differ only in their use animation", () => {
+    const { check, done } = checks();
+    const probes = items.filter((item) => item.id.startsWith("bountysys:aim_probe_"));
+    check("three of them", probes.length === 3, probes.map((p) => p.id).join(", "));
+
+    const animations = {};
+    for (const probe of probes) {
+        const components = readJson(probe.file)["minecraft:item"].components;
+        animations[probe.id] = components["minecraft:use_animation"] ?? "none";
+        check(`${probe.id}: hold to use (a use duration and a movement modifier)`, components["minecraft:use_modifiers"]?.use_duration > 0 && components["minecraft:use_modifiers"]?.movement_modifier <= 1, JSON.stringify(components["minecraft:use_modifiers"]));
+        check(`${probe.id}: one at a time, held like a tool`, components["minecraft:max_stack_size"] === 1 && components["minecraft:hand_equipped"] === true);
+    }
+    check("plain, bow and spyglass", animations["bountysys:aim_probe_plain"] === "none" && animations["bountysys:aim_probe_bow"] === "bow" && animations["bountysys:aim_probe_spyglass"] === "spyglass", JSON.stringify(animations));
     done();
 });
