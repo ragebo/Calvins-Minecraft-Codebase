@@ -236,6 +236,12 @@ Discovered the hard way this session — current as of when this was written, ma
   "found in the input, but is not present in the Schema" and the whole entity fails to load
   (seen on `bountysys:train_car` in BP 0.1.7, and the older note here was right all along).
   Vanilla entity JSON is not a safe template for what a custom entity may contain.
+- **Vibrant Visuals needs `"capabilities": ["pbr"]` in the resource pack's manifest.** The
+  game's own text says the mode "requires a PBR-enabled resource pack", and one active
+  resource pack without the capability blocks it (the vanilla pack declares it; so does
+  `BountySys_RP` since 1.0.16). Its `min_engine_version` must be 1.21.120 or higher (ours is
+  1.26.50). Without texture sets our sprites and the train use the mode's default surface
+  values; `assets.test.mjs` fails if the capability goes missing.
 - `minecraft:rideable` seats can be an array of `{ position, min_rider_count, max_rider_count }`;
   the vanilla boat uses the counts to change its seat layout as riders board, and no vanilla
   entity has a fixed four-seat layout to copy. `bountysys:train_car`'s seats are a guess until

@@ -119,6 +119,20 @@ test("the pistol and the bolt rifle have their own sprites, and no gun borrows a
     done();
 });
 
+test("the resource pack declares the pbr capability, or Vibrant Visuals cannot be used while it is active", () => {
+    const { check, done } = checks();
+    const manifest = readJson(path.join(RP, "manifest.json"));
+    const [major, minor, patch] = manifest.header.min_engine_version;
+
+    // The game says Vibrant Visuals "requires a PBR-enabled resource pack", and the vanilla pack marks itself
+    // with this capability. One active pack without it is enough to block the mode, so every world's only
+    // resource pack (this one) must carry it. Microsoft's documented minimum engine version for it is 1.21.120.
+    check("capabilities include \"pbr\"", Array.isArray(manifest.capabilities) && manifest.capabilities.includes("pbr"), JSON.stringify(manifest.capabilities));
+    check("min_engine_version is at least 1.21.120", major > 1 || (major === 1 && (minor > 21 || (minor === 21 && patch >= 120))), JSON.stringify(manifest.header.min_engine_version));
+    check("the capability is not one that limits the pack to ray tracing hardware", !(manifest.capabilities ?? []).includes("raytraced"), JSON.stringify(manifest.capabilities));
+    done();
+});
+
 test("each pack's manifest has one version, on the header and on every module", () => {
     const { check, done } = checks();
 

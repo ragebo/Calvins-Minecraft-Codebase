@@ -4,14 +4,15 @@
         "name": "BountySys Music",
         "description": "Custom music tracks for BountySys",
         "uuid": "d834fa56-3296-4625-97d6-f50876e2f561",
-        "version": [1, 0, 15],
+        "version": [1, 0, 16],
         "min_engine_version": [1, 26, 50]
     },
     "modules": [
         {
             "type": "resources",
             "uuid": "c1d327b0-3e1f-4265-bad7-a2b0a4593e02",
-            "version": [1, 0, 15]
+            "version": [1, 0, 16]
         }
-    ]
+    ],
+    "capabilities": ["pbr"]
 }
