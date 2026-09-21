@@ -11,7 +11,8 @@ texture pack named "revolver" made with createtextures.com. The pack states no l
 its terms are unconfirmed. The sprite in the repo is the one the project owner put in the
 game folder on 2026-09-20 (the original, barrel pointing left; earlier commits held a version
 turned 45 degrees clockwise). The other five gun sprites (`pistol.png`, `bolt_rifle.png`,
-`semi_rifle.png`, `pump_shotgun.png`, `double_barrel_shotgun.png`) were supplied by the
+`semi_rifle.png`, `pump_shotgun.png`, `double_barrel_shotgun.png`) and the three ammo
+sprites (`handgun_ammo.png`, `rifle_ammo.png`, `shotgun_ammo.png`) were supplied by the
 project owner in the same way; their source and terms are not known.
 
 Until commit `6661ecb` the revolver was a 3D model, "Minecraft Revolver [Block Bench]"

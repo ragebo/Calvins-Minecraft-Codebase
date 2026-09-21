@@ -6,7 +6,7 @@
             "menu_category": { "category": "items" }
         },
         "components": {
-            "minecraft:icon": "arrow",
+            "minecraft:icon": "rifle_ammo",
             "minecraft:display_name": { "value": "Rifle Rounds" },
             "minecraft:max_stack_size": 64
         }

@@ -7,6 +7,9 @@
         "semi_rifle": { "textures": "textures/items/semi_rifle" },
         "pump_shotgun": { "textures": "textures/items/pump_shotgun" },
         "double_barrel_shotgun": { "textures": "textures/items/double_barrel_shotgun" },
+        "handgun_ammo": { "textures": "textures/items/handgun_ammo" },
+        "rifle_ammo": { "textures": "textures/items/rifle_ammo" },
+        "shotgun_ammo": { "textures": "textures/items/shotgun_ammo" },
         "law_compass": { "textures": "textures/items/law_compass" }
     }
 }

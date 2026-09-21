@@ -6,7 +6,7 @@
             "menu_category": { "category": "items" }
         },
         "components": {
-            "minecraft:icon": "gunpowder",
+            "minecraft:icon": "handgun_ammo",
             "minecraft:display_name": { "value": "Handgun Rounds" },
             "minecraft:max_stack_size": 64
         }

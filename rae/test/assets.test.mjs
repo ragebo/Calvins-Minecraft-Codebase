@@ -106,10 +106,10 @@ test("the revolver is a flat item: its icon is the 16x16 sprite, and nothing ove
     done();
 });
 
-test("every gun has its own sprite: an icon that is mapped to a texture in this pack, not a vanilla item's", () => {
+test("every gun and every kind of ammo has its own sprite: an icon that is mapped to a texture in this pack, not a vanilla item's", () => {
     const { check, done } = checks();
 
-    for (const icon of ["revolver", "pistol", "bolt_rifle", "semi_rifle", "pump_shotgun", "double_barrel_shotgun"]) {
+    for (const icon of ["revolver", "pistol", "bolt_rifle", "semi_rifle", "pump_shotgun", "double_barrel_shotgun", "handgun_ammo", "rifle_ammo", "shotgun_ammo"]) {
         const id = `bountysys:${icon}`;
         const item = items.find((candidate) => candidate.id === id);
         check(`${id}: the item exists`, item !== undefined);

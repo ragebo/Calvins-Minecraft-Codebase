@@ -6,7 +6,7 @@
             "menu_category": { "category": "items" }
         },
         "components": {
-            "minecraft:icon": "flint",
+            "minecraft:icon": "shotgun_ammo",
             "minecraft:display_name": { "value": "Shotgun Shells" },
             "minecraft:max_stack_size": 64
         }
