@@ -335,6 +335,26 @@ test("the scope overlay image in the pack is exactly what scripts/gen-scope-over
     done();
 });
 
+test("every gun and probe item may be placed in the off-hand, or an off-hand swap silently does nothing", async () => {
+    const { check, done } = checks();
+    const { GUNS } = await load("config/guns.js");
+
+    // The game refuses to put an item in the off-hand slot unless it says it may (minecraft:allow_off_hand), so a
+    // swap-to-off-hand reload never reaches a script for an item without it. The first real-game run showed exactly
+    // that: F did nothing and no off-hand change was ever reported.
+    const gunIds = Object.values(GUNS).map((gun) => gun.itemId);
+    const wanted = [...gunIds, ...items.filter((item) => item.id.startsWith("bountysys:aim_probe_")).map((item) => item.id)];
+    check("there are guns to check", gunIds.length === 6, gunIds.join(", "));
+
+    for (const id of wanted) {
+        const item = items.find((candidate) => candidate.id === id);
+        check(`${id}: the item exists`, item !== undefined);
+        if (!item) continue;
+        check(`${id}: allow_off_hand is true`, readJson(item.file)["minecraft:item"].components["minecraft:allow_off_hand"] === true);
+    }
+    done();
+});
+
 test("the aim probe items are hold-to-use items that differ only in their use animation", () => {
     const { check, done } = checks();
     const probes = items.filter((item) => item.id.startsWith("bountysys:aim_probe_"));

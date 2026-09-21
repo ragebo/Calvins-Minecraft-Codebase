@@ -9,7 +9,7 @@ What is new:
 - `/scriptevent rae:aim_spike scope on|off` shows or hides a scope overlay: a black screen with a clear round lens and a crosshair.
 - Three test items: `bountysys:aim_probe_plain`, `_bow` and `_spyglass`. All are hold-to-use items that slow you a little; they differ only in their use animation, so the log and your eyes show whether the bow or spyglass animation zooms by itself.
 
-Packs: behavior pack **0.1.10** (the items; 0.1.11 fixes `scope off`) and resource pack **1.0.17** (the HUD overlay: `ui/` and `textures/ui/rae_scope.png`). Deploy the resource pack with Minecraft **closed** and launch fresh.
+Packs: behavior pack **0.1.10** (the items; 0.1.11 fixes `scope off` and lets guns go in the off-hand) and resource pack **1.0.17** (the HUD overlay: `ui/` and `textures/ui/rae_scope.png`). Deploy the resource pack with Minecraft **closed** and launch fresh.
 
 `npm test` checks that the spike records what it is given, stays silent unless asked, and cleans up; that the overlay's files agree with each other and with the script; and that the image is what its generator makes. It cannot say what the game reports, or whether the HUD accepts the overlay. This card does.
 
@@ -47,7 +47,9 @@ From the owner's run and the content log (the log flushes late, so the off-hand,
 - **`fov` and `scope on` work.** The zoom is smooth and the overlay shows.
 - **`scope off` did not switch the overlay off.** Cause: the overlay shows while the HUD's title text equals the switch text, and the HUD keeps the last text it was given even after the title is cleared. Fixed in BP 0.1.11: `scope off` first overwrites the text with an invisible different one, then clears the title 5 ticks later. **To re-check: `scope on`, then `scope off`.**
   If the overlay is stuck on right now, `/title @s title .` replaces the switch text (a dot shows briefly) and should turn it off, which also tests the diagnosis. Leaving the world does too.
-- **Still to see:** the `fov`/`scope` log lines, F (off-hand swap) and Q (drop), and everything on a horse.
+- **The F key did nothing, and no off-hand change was ever reported.** Cause: the game only lets an item into the off-hand slot if it says so with `minecraft:allow_off_hand`, and none of ours did (the docs: not set means not allowed). Fixed in BP 0.1.11: all six guns and the three probe items now have it, and a test fails if one loses it. **Redo step 6 with the revolver.**
+- **On a horse**, the log only shows the mount itself (`swing source=Interact ... riding=true` when you got on). No left-click, hold or swap was done while riding yet: redo step 8.
+- **Not tested yet:** Q (drop). The `fov` line shows `fov 30 ok` and `fov reset ok`; `scope off` was tried twice (the bug above).
 
 ## What to tell me
 
