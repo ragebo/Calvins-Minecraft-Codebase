@@ -4,6 +4,9 @@
         "revolver": { "textures": "textures/items/revolver" },
         "pistol": { "textures": "textures/items/pistol" },
         "bolt_rifle": { "textures": "textures/items/bolt_rifle" },
+        "semi_rifle": { "textures": "textures/items/semi_rifle" },
+        "pump_shotgun": { "textures": "textures/items/pump_shotgun" },
+        "double_barrel_shotgun": { "textures": "textures/items/double_barrel_shotgun" },
         "law_compass": { "textures": "textures/items/law_compass" }
     }
 }

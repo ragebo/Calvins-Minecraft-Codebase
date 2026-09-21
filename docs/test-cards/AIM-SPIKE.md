@@ -9,7 +9,7 @@ What is new:
 - `/scriptevent rae:aim_spike scope on|off` shows or hides a scope overlay: a black screen with a clear round lens and a crosshair.
 - Three test items: `bountysys:aim_probe_plain`, `_bow` and `_spyglass`. All are hold-to-use items that slow you a little; they differ only in their use animation, so the log and your eyes show whether the bow or spyglass animation zooms by itself.
 
-Packs: behavior pack **0.1.10** (the items; 0.1.11 fixes `scope off` and lets guns go in the off-hand) and resource pack **1.0.17** (the HUD overlay: `ui/` and `textures/ui/rae_scope.png`). Deploy the resource pack with Minecraft **closed** and launch fresh.
+Packs: behavior pack **0.1.10** (the items; 0.1.11 fixes `scope off`; 0.1.12 gives every gun its own sprite) and resource pack **1.0.17** (the HUD overlay: `ui/` and `textures/ui/rae_scope.png`). Deploy the resource pack with Minecraft **closed** and launch fresh.
 
 `npm test` checks that the spike records what it is given, stays silent unless asked, and cleans up; that the overlay's files agree with each other and with the script; and that the image is what its generator makes. It cannot say what the game reports, or whether the HUD accepts the overlay. This card does.
 
@@ -47,9 +47,10 @@ From the owner's run and the content log (the log flushes late, so the off-hand,
 - **`fov` and `scope on` work.** The zoom is smooth and the overlay shows.
 - **`scope off` did not switch the overlay off.** Cause: the overlay shows while the HUD's title text equals the switch text, and the HUD keeps the last text it was given even after the title is cleared. Fixed in BP 0.1.11: `scope off` first overwrites the text with an invisible different one, then clears the title 5 ticks later. **To re-check: `scope on`, then `scope off`.**
   If the overlay is stuck on right now, `/title @s title .` replaces the switch text (a dot shows briefly) and should turn it off, which also tests the diagnosis. Leaving the world does too.
-- **The F key did nothing, and no off-hand change was ever reported.** Cause: the game only lets an item into the off-hand slot if it says so with `minecraft:allow_off_hand`, and none of ours did (the docs: not set means not allowed). Fixed in BP 0.1.11: all six guns and the three probe items now have it, and a test fails if one loses it. **Redo step 6 with the revolver.**
-- **On a horse**, the log only shows the mount itself (`swing source=Interact ... riding=true` when you got on). No left-click, hold or swap was done while riding yet: redo step 8.
-- **Not tested yet:** Q (drop). The `fov` line shows `fov 30 ok` and `fov reset ok`; `scope off` was tried twice (the bug above).
+- **There is no swap-to-off-hand key on Bedrock (the owner confirmed it), so an off-hand swap cannot be the reload.** The first run saw no off-hand change; I suspected `minecraft:allow_off_hand` and added it in BP 0.1.11, and the second run saw none either. The component was removed again in 0.1.12 (it only let players park a gun in the off-hand).
+- **Q (drop) works and a script can see it.** One press logs, in the same tick: `itemDrop [bountysys:revolver]`, `inventory slot=0 bountysys:revolver -> none` and `swing source=DropItem held=bountysys:revolver`. Picking the item up again logs `inventory slot=0 none -> bountysys:revolver`. So Q is a candidate reload key: react to it by taking the dropped item back and starting a reload. It has not been tried on a horse yet.
+- **Left-click works on a horse.** While riding: `swing source=Attack held=bountysys:revolver riding=true` (twice, at mobs or the air) and `source=Mine`; getting on logs `source=Interact held=none`. Nothing was blocked.
+- **Not tested yet:** Q on a horse, and a held right-click on a horse. `fov 30 ok` and `fov reset ok` were logged; `scope off` was tried in the first run (the bug above) and not yet re-checked with 0.1.11.
 
 ## What to tell me
 
@@ -81,5 +82,5 @@ Must not appear: `[Scripting][error]` lines, or an item, texture or `[UI]` error
 ## Not checked
 
 - Answered by the run (see Results): a left-click in the air is a swing, `setFov` works on the normal view, and the HUD accepts the overlay.
-- Still unmeasured: the off-hand swap, the drop, everything on a horse, and whether `scope off` now works (fixed in 0.1.11, not yet run).
+- Still unmeasured: Q and a held right-click on a horse, and whether `scope off` now works (fixed in 0.1.11, not yet re-checked).
 - Controller and touch controls were not considered; the off-hand swap and drop are keyboard keys here.

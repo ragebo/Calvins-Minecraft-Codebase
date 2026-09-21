@@ -106,10 +106,11 @@ test("the revolver is a flat item: its icon is the 16x16 sprite, and nothing ove
     done();
 });
 
-test("the pistol and the bolt rifle have their own sprites, and no gun borrows a vanilla icon that is also mapped", () => {
+test("every gun has its own sprite: an icon that is mapped to a texture in this pack, not a vanilla item's", () => {
     const { check, done } = checks();
 
-    for (const [id, icon] of [["bountysys:pistol", "pistol"], ["bountysys:bolt_rifle", "bolt_rifle"]]) {
+    for (const icon of ["revolver", "pistol", "bolt_rifle", "semi_rifle", "pump_shotgun", "double_barrel_shotgun"]) {
+        const id = `bountysys:${icon}`;
         const item = items.find((candidate) => candidate.id === id);
         check(`${id}: the item exists`, item !== undefined);
         check(`${id}: its icon is "${icon}"`, item?.icon === icon, String(item?.icon));
@@ -332,26 +333,6 @@ test("the scope overlay image in the pack is exactly what scripts/gen-scope-over
     const at = (x, y) => pixels?.[(y * generator.WIDTH + x) * 4 + 3];
     check("the middle of the lens is clear except for the crosshair gap", at(Math.floor(generator.WIDTH / 2) + 5, Math.floor(generator.HEIGHT / 2) + 5) === 0);
     check("a corner is solid black", at(2, 2) === 255 && at(generator.WIDTH - 3, generator.HEIGHT - 3) === 255);
-    done();
-});
-
-test("every gun and probe item may be placed in the off-hand, or an off-hand swap silently does nothing", async () => {
-    const { check, done } = checks();
-    const { GUNS } = await load("config/guns.js");
-
-    // The game refuses to put an item in the off-hand slot unless it says it may (minecraft:allow_off_hand), so a
-    // swap-to-off-hand reload never reaches a script for an item without it. The first real-game run showed exactly
-    // that: F did nothing and no off-hand change was ever reported.
-    const gunIds = Object.values(GUNS).map((gun) => gun.itemId);
-    const wanted = [...gunIds, ...items.filter((item) => item.id.startsWith("bountysys:aim_probe_")).map((item) => item.id)];
-    check("there are guns to check", gunIds.length === 6, gunIds.join(", "));
-
-    for (const id of wanted) {
-        const item = items.find((candidate) => candidate.id === id);
-        check(`${id}: the item exists`, item !== undefined);
-        if (!item) continue;
-        check(`${id}: allow_off_hand is true`, readJson(item.file)["minecraft:item"].components["minecraft:allow_off_hand"] === true);
-    }
     done();
 });
 
