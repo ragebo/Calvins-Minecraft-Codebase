@@ -5,7 +5,7 @@ import { fake, system, world, load, checks, strip } from "./helpers.mjs";
 // drives the zoom and the scope overlay. These tests cannot say what the real game reports. They check that the
 // spike RECORDS what it is told correctly, stays silent when logging is off, and cleans up.
 
-const { AIM_SPIKE: A } = await load("config/balance.js");
+const { AIM: A } = await load("config/balance.js");
 await load("systems/aimprobe.js");
 const { resetAllSystems } = await load("core/registry.js");
 

@@ -17,7 +17,7 @@ Deploy the resource pack (its own version and its own world pins, separate from 
 | 1 | `/give @s bountysys:revolver`. Look at it in the hotbar and in the inventory. | The dark grey revolver sprite on a transparent background: no white box around it. Not a missing-texture (purple and black) square. |
 | 2 | Hold it, first person. | A flat sprite held like a tool, barrel pointing up-left or left and **not down**. It is not the old 3D model. |
 | 3 | Hold it, third person (F5), and look at another player holding one. | The same flat sprite. |
-| 4 | Fire it, reload it (sneak + use), and shoot a mob. | Unchanged: same sounds, ammo count and damage as before. |
+| 4 | Fire it (left-click), reload it (Q; see GUN-CONTROLS.md, which replaced sneak + right-click), and shoot a mob. | The same sounds, ammo count and damage as before the sprite change. |
 
 ## Orientation (resource pack 1.0.14)
 

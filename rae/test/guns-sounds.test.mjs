@@ -1,5 +1,5 @@
 import { test } from "node:test";
-import { fake, world, load, checks, knownGameSounds } from "./helpers.mjs";
+import { fake, world, load, checks, knownGameSounds, leftClick, pressQ } from "./helpers.mjs";
 
 const { GUNS, AMMO } = await load("config/guns.js");
 await load("systems/guns.js");
@@ -8,7 +8,7 @@ const { listSystems } = await load("core/registry.js");
 const guns = Object.values(GUNS);
 const overworld = () => fake.dimension("overworld");
 const resetGuns = () => listSystems().find((s) => s.name === "guns").reset();
-const use = (p) => world.afterEvents.itemUse.emit({ itemStack: { typeId: p.holding }, source: p });
+const use = (p) => leftClick(p);
 
 function armed(gun, name = "Deputy") {
     fake.reset();
@@ -71,14 +71,20 @@ test("firing plays each gun's cues on schedule, at the shooter, with the configu
     done();
 });
 
-test("an empty gun clicks privately and plays nothing to the world", () => {
+test("an empty gun clicks privately, then reloads itself: the shot is not heard, the reload is", () => {
     const gun = GUNS.revolver;
     const p = armed(gun);
     emptyMagazine(p, gun);
+    const t0 = fake.tick;
     use(p);
     const { check, done } = checks();
     check("private click", p.privateSounds.some((s) => s.id === "random.click"));
-    check("no world sound", overworld().played.length === 0);
+    const fireIds = new Set(gun.sounds.fire.map((c) => c.id));
+    check("no shot is heard (none of the gun's fire cues plays)", !overworld().played.some((pl) => fireIds.has(pl.id)), JSON.stringify(overworld().played));
+    check("it starts the reload on its own", p.messages.some((m) => m.includes("Reloading")), JSON.stringify(p.messages));
+    check("and the reload's first cue plays", overworld().played.some((pl) => pl.id === gun.sounds.reload[0].id && pl.tick === t0), JSON.stringify(overworld().played));
+    fake.advance(gun.reloadTicks + 5);
+    check("the magazine is full again without a key", p.messages.some((m) => m.includes("reloaded") && m.includes(`${gun.magazineSize}/${gun.magazineSize}`)), JSON.stringify(p.messages));
     done();
 });
 
@@ -89,10 +95,8 @@ test("reloading plays each gun's sequence on schedule and still refills the maga
         emptyMagazine(p, gun);
 
         const t0 = fake.tick;
-        p.isSneaking = true;
-        use(p);
+        pressQ(p);
         fake.advance(gun.reloadTicks + 5);
-        p.isSneaking = false;
 
         const played = overworld().played;
         const onSchedule = gun.sounds.reload.every((c) => played.some((pl) =>
@@ -110,21 +114,21 @@ test("reload edge cases", () => {
     const gun = GUNS.pump_shotgun;
 
     let p = armed(gun, "full");
-    p.isSneaking = true; use(p);
+    pressQ(p);
     fake.advance(100);
     check("reloading an already-full gun plays nothing", overworld().played.length === 0 && p.messages.some((m) => m.includes("Already fully loaded")));
 
     p = armed(gun, "noammo");
     use(p); fake.advance(gun.fireRateTicks);
     p.container.setItem(0, undefined); overworld().played.length = 0;
-    p.isSneaking = true; use(p);
+    pressQ(p);
     fake.advance(100);
     check("reloading with no ammo plays nothing", overworld().played.length === 0 && p.messages.some((m) => m.includes("left")));
 
     p = armed(gun, "midswap");
     emptyMagazine(p, gun);
     let t0 = fake.tick;
-    p.isSneaking = true; use(p); p.isSneaking = false;
+    pressQ(p);
     fake.advance(20);                                      // cues at 0, 8, 15 have played
     const before = overworld().played.length;
     p.holding = "minecraft:stick";                         // swap away mid-reload
@@ -134,7 +138,7 @@ test("reload edge cases", () => {
     p = armed(gun, "disconnect");
     emptyMagazine(p, gun);
     t0 = fake.tick;
-    p.isSneaking = true; use(p); p.isSneaking = false;
+    pressQ(p);
     fake.advance(10);
     const beforeDisconnect = overworld().played.length;
     p.isValid = false;                                     // the player disconnects mid-reload
@@ -145,7 +149,7 @@ test("reload edge cases", () => {
     p = armed(gun, "blocked");
     for (let i = 0; i < gun.magazineSize - 1; i++) { use(p); fake.advance(gun.fireRateTicks); }
     fake.advance(80);
-    p.isSneaking = true; use(p); p.isSneaking = false;
+    pressQ(p);
     const midReload = overworld().played.length;
     use(p);                                                // try to shoot while reloading
     check("firing during a reload does nothing", overworld().played.length === midReload);

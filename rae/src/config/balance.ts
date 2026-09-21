@@ -163,10 +163,10 @@ export const TRANSIT = {
 };
 
 /**
- * The aim and input spike (systems/aimprobe.ts): measurements for left-click firing, hold-to-aim, zoom, an
- * off-hand-swap reload and a scope overlay. Nothing here changes a gun.
+ * Aiming: the zoom and the scope overlay (core/aim.ts, used by the guns and by the measurement spike in
+ * systems/aimprobe.ts). How far each gun zooms is in config/guns.ts.
  */
-export const AIM_SPIKE = {
+export const AIM = {
     /**
      * The title text that switches the scope overlay on. It is only formatting codes, so it draws nothing itself.
      * It must equal the string in BountySys_RP/ui/rae_scope.json (assets.test.mjs checks that they do).

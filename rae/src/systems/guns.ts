@@ -1,10 +1,12 @@
 import {
     world, system,
-    type Player, type Entity, type Vector3,
-    EquipmentSlot, EntityDamageCause
+    type ItemStack, type Player, type Entity, type Vector3,
+    EquipmentSlot, EntityDamageCause, EntitySwingSource
 } from "@minecraft/server";
 import { AMMO, GUNS, BULLET_ENTITY_ID, BULLET_LIFETIME_TICKS, type GunConfig, type GunId, type SoundCue } from "../config/guns.js";
+import { hideScope, showScope, zoomReset, zoomTo } from "../core/aim.js";
 import { registerSystem } from "../core/registry.js";
+import { onTick } from "../core/tick.js";
 
 /**
  * One shared engine for all 6 guns, parameterized entirely by
@@ -203,8 +205,9 @@ function tryFire(player: Player, gun: GunConfig): void {
     const loaded = getLoadedRounds(player, gun);
 
     if (loaded <= 0) {
+        // Clicking an empty gun reloads it: on a horse there is no key to spare for it.
         player.playSound("random.click", { volume: 0.5 });
-        player.sendMessage("§7*click* — empty. Sneak + use to reload.");
+        startReload(player, gun);
         return;
     }
 
@@ -364,17 +367,199 @@ function normalize(v: Vector3): Vector3 {
     return { x: v.x / length, y: v.y / length, z: v.z / length };
 }
 
-world.afterEvents.itemUse.subscribe((event) => {
+// ---------------------------------------------------------------------------------------------------------
+// Controls. Measured in the real game (docs/test-cards/AIM-SPIKE.md), because a script sees very little of the
+// player's input and a horse takes the usual keys (sneak dismounts, and reports nothing):
+//
+//   left-click   fires. The swing has source Attack at the air or a mob and Mine at a block, riding or not.
+//   hold right-click   aims: itemUse fires at the press (and is ignored), itemStartUse begins the aim, and
+//                itemStopUse ends it. The guns are hold-to-use items so those events exist.
+//   Q            reloads. A drop is an itemDrop of the gun, the slot emptying and a swing with source DropItem,
+//                all in one tick; the gun is taken back into its slot and a reload starts.
+//   an empty click   reloads too (tryFire).
+//
+// There is no sneak or off-hand key involved: sneak cannot be used on a horse and Bedrock has no swap key.
+// ---------------------------------------------------------------------------------------------------------
 
+world.afterEvents.playerSwingStart.subscribe((event) => {
+
+    if (event.swingSource === EntitySwingSource.DropItem) {
+        noteDropSwing(event.player);
+        return;
+    }
+
+    if (event.swingSource !== EntitySwingSource.Attack && event.swingSource !== EntitySwingSource.Mine) return;
+
+    const gun = gunsByItemId.get(event.heldItemStack?.typeId ?? "");
+    if (gun) tryFire(event.player, gun);
+});
+
+// ---- Aim -----------------------------------------------------------------------------------------------
+
+interface Aiming {
+    readonly player: Player;
+    readonly gun: GunConfig;
+}
+
+const aiming = new Map<string, Aiming>();
+let stopAimWatch: (() => void) | undefined;
+
+/** How often an aim is checked against what the player is still doing, in ticks. */
+const AIM_WATCH_TICKS = 4;
+
+function startAim(player: Player, gun: GunConfig): void {
+
+    if (aiming.has(player.id)) return;
+
+    aiming.set(player.id, { player, gun });
+    zoomTo(player, gun.aim.fov);
+    if (gun.aim.scope) showScope(player);
+
+    // Letting go normally ends an aim by itself (itemStopUse). This catches the rest: switching slots, dying, leaving.
+    stopAimWatch ??= onTick("guns:aim", () => {
+        for (const [id, state] of [...aiming]) {
+            if (!state.player.isValid || getMainhandItemTypeId(state.player) !== state.gun.itemId) stopAim(id);
+        }
+    }, { everyTicks: AIM_WATCH_TICKS });
+}
+
+function stopAim(playerId: string): void {
+
+    const state = aiming.get(playerId);
+    if (!state) return;
+
+    aiming.delete(playerId);
+
+    if (state.player.isValid) {
+        zoomReset(state.player);
+        if (state.gun.aim.scope) hideScope(state.player);
+    }
+
+    if (aiming.size === 0) {
+        stopAimWatch?.();
+        stopAimWatch = undefined;
+    }
+}
+
+world.afterEvents.itemStartUse.subscribe((event) => {
     const gun = gunsByItemId.get(event.itemStack.typeId);
-    if (!gun) return;
+    if (gun) startAim(event.source, gun);
+});
 
-    const player = event.source;
+// Both fire when right-click is let go, in the same tick; stopping twice is harmless.
+world.afterEvents.itemStopUse.subscribe((event) => {
+    if (gunsByItemId.has(event.itemStack?.typeId ?? "")) stopAim(event.source.id);
+});
+world.afterEvents.itemReleaseUse.subscribe((event) => {
+    if (gunsByItemId.has(event.itemStack?.typeId ?? "")) stopAim(event.source.id);
+});
 
-    if (player.isSneaking) {
-        startReload(player, gun);
-    } else {
-        tryFire(player, gun);
+// ---- Reload key (Q) --------------------------------------------------------------------------------------
+
+interface DroppedGun {
+    readonly entity: Entity;
+    readonly stack: ItemStack;
+    readonly gun: GunConfig;
+}
+
+/** What one player's drop looked like this tick. The pieces arrive as separate events, in a known order, and only the whole means "Q". */
+interface DropState {
+    readonly tick: number;
+    drops: DroppedGun[] | undefined;
+    /** The slot a gun was just taken out of, from the inventory change. */
+    slot: number | undefined;
+    swung: boolean;
+    resolved: boolean;
+}
+
+const dropStates = new Map<string, DropState>();
+
+function dropStateOf(player: Player): DropState {
+
+    const now = system.currentTick;
+    let state = dropStates.get(player.id);
+
+    if (!state || state.tick !== now) {
+        state = { tick: now, drops: undefined, slot: undefined, swung: false, resolved: false };
+        dropStates.set(player.id, state);
+    }
+
+    return state;
+}
+
+/** Puts the stack back: in the slot it came from if that is empty, otherwise anywhere. False when it does not fit. */
+function giveBack(player: Player, stack: ItemStack, slot: number | undefined): boolean {
+
+    const container = player.getComponent("minecraft:inventory")?.container;
+    if (!container) return false;
+
+    if (slot !== undefined && slot >= 0 && slot < container.size && container.getItem(slot) === undefined) {
+        container.setItem(slot, stack);
+        return true;
+    }
+
+    return container.addItem(stack) === undefined;
+}
+
+/**
+ * Q was pressed with a gun in hand once the drop and the DropItem swing have both arrived. A drop with no swing
+ * (dying, or dragging the item out of the inventory screen) is a real drop and is left alone.
+ */
+function resolveDrop(player: Player): void {
+
+    const state = dropStateOf(player);
+    if (state.resolved || !state.swung || !state.drops || state.drops.length === 0) return;
+    state.resolved = true;
+
+    let reloaded = false;
+
+    for (const drop of state.drops) {
+
+        if (!giveBack(player, drop.stack, state.slot)) {
+            player.sendMessage("§cNo room in your inventory: pick the gun up off the ground.");
+            continue;
+        }
+
+        try {
+            drop.entity.remove();
+        } catch {
+            // Already gone.
+        }
+
+        if (!reloaded) {
+            reloaded = true;
+            startReload(player, drop.gun);
+        }
+    }
+}
+
+function noteDropSwing(player: Player): void {
+    dropStateOf(player).swung = true;
+    resolveDrop(player);
+}
+
+world.afterEvents.entityItemDrop.subscribe((event) => {
+
+    if (event.entity.typeId !== "minecraft:player") return;
+
+    const drops: DroppedGun[] = [];
+
+    for (const item of event.items) {
+        const stack = item.getComponent("minecraft:item")?.itemStack;
+        const gun = stack ? gunsByItemId.get(stack.typeId) : undefined;
+        if (stack && gun) drops.push({ entity: item, stack, gun });
+    }
+
+    if (drops.length === 0) return;
+
+    const player = event.entity as Player;
+    dropStateOf(player).drops = drops;
+    resolveDrop(player);
+});
+
+world.afterEvents.playerInventoryItemChange.subscribe((event) => {
+    if (event.itemStack === undefined && event.beforeItemStack && gunsByItemId.has(event.beforeItemStack.typeId)) {
+        dropStateOf(event.player).slot = event.slot;
     }
 });
 
@@ -421,5 +606,7 @@ registerSystem({
         lastFiredTick.clear();
         reloadingKeys.clear();
         loadedRounds.clear();
+        dropStates.clear();
+        for (const id of [...aiming.keys()]) stopAim(id);
     }
 });

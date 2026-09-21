@@ -117,7 +117,21 @@ a change of its own still waiting to be written is left alone until it is writte
 - **Shotguns** (true hitscan, not projectile): pump, double-barrel
 
 Ammo is per weapon category (handgun/rifle/shotgun rounds), real inventory items.
-Reload is sneak + use. Projectile guns spawn a shared `bountysys:bullet` entity and
+
+**Controls** (built for riding: a horse takes sneak, which dismounts and reports nothing):
+
+| Action | How |
+|---|---|
+| Fire | Left-click (at the air, a mob or a block) |
+| Aim | Hold right-click: a bow-like zoom, and a scope overlay for the bolt rifle. You walk slower while aiming |
+| Reload | Q. The game drops the gun; a script takes it back into its slot and starts the reload |
+| Reload (automatic) | Clicking an empty gun clicks and reloads it |
+
+How each of these works, and what the game really reports for them, is in
+`docs/test-cards/AIM-SPIKE.md` (measured) and `docs/test-cards/GUN-CONTROLS.md`. Aiming lives in
+`core/aim.ts` (the zoom and the scope overlay); the zoom per gun is `aim.fov` in `config/guns.ts`.
+
+Projectile guns spawn a shared `bountysys:bullet` entity and
 apply damage on hit via script (not the entity's own vanilla damage) so each gun's
 number is independent. Shotguns jitter several rays per trigger pull via
 `Dimension.getEntitiesFromRay` for real per-pellet spread.

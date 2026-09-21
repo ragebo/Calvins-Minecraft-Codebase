@@ -308,13 +308,13 @@ test("the scope overlay's HUD files hang together: defs list an existing file, t
 
 test("the title text in the overlay's binding is the one the script sends", async () => {
     const { check, done } = checks();
-    const { AIM_SPIKE } = await load("config/balance.js");
+    const { AIM } = await load("config/balance.js");
     const scope = readJson(path.join(UI, "rae_scope.json"));
 
     const binding = (scope.scope_root?.bindings ?? []).find((b) => b.target_property_name === "#visible");
     check("a binding sets #visible", binding !== undefined, JSON.stringify(scope.scope_root?.bindings));
-    check("it compares the title text with the configured switch", binding?.source_property_name === `(#hud_title_text_string = '${AIM_SPIKE.scopeTitle}')`, `${binding?.source_property_name} vs ${AIM_SPIKE.scopeTitle}`);
-    check("the switch draws nothing by itself (formatting codes only)", AIM_SPIKE.scopeTitle.replace(/§./g, "") === "", JSON.stringify(AIM_SPIKE.scopeTitle));
+    check("it compares the title text with the configured switch", binding?.source_property_name === `(#hud_title_text_string = '${AIM.scopeTitle}')`, `${binding?.source_property_name} vs ${AIM.scopeTitle}`);
+    check("the switch draws nothing by itself (formatting codes only)", AIM.scopeTitle.replace(/§./g, "") === "", JSON.stringify(AIM.scopeTitle));
     done();
 });
 
@@ -333,6 +333,33 @@ test("the scope overlay image in the pack is exactly what scripts/gen-scope-over
     const at = (x, y) => pixels?.[(y * generator.WIDTH + x) * 4 + 3];
     check("the middle of the lens is clear except for the crosshair gap", at(Math.floor(generator.WIDTH / 2) + 5, Math.floor(generator.HEIGHT / 2) + 5) === 0);
     check("a corner is solid black", at(2, 2) === 255 && at(generator.WIDTH - 3, generator.HEIGHT - 3) === 255);
+    done();
+});
+
+test("every gun is a hold-to-use item (or aiming sends no events) with no cooldown (or it would block aiming again)", async () => {
+    const { check, done } = checks();
+    const { GUNS } = await load("config/guns.js");
+    const modifiers = {};
+
+    for (const gun of Object.values(GUNS)) {
+        const item = items.find((candidate) => candidate.id === gun.itemId);
+        check(`${gun.id}: the item exists`, item !== undefined);
+        if (!item) continue;
+        const components = readJson(item.file)["minecraft:item"].components;
+        const use = components["minecraft:use_modifiers"];
+
+        // itemStartUse and itemStopUse only exist for an item with a use duration: the guns' aim depends on them, and
+        // the first real-game run showed a plain right-click sends only itemUse.
+        check(`${gun.id}: has a use duration`, use?.use_duration > 0, JSON.stringify(use));
+        check(`${gun.id}: slows the player a little while aiming, never speeds them up`, use?.movement_modifier > 0 && use?.movement_modifier <= 1, JSON.stringify(use));
+        check(`${gun.id}: no minecraft:cooldown (fire rate is the script's; a cooldown would delay aiming again after a shot)`, components["minecraft:cooldown"] === undefined);
+        check(`${gun.id}: held like a tool`, components["minecraft:hand_equipped"] === true);
+        check(`${gun.id}: has a zoom in its config`, gun.aim?.fov > 0);
+        modifiers[gun.id] = use?.movement_modifier;
+    }
+
+    const others = Object.entries(modifiers).filter(([id]) => id !== "bolt_rifle").map(([, m]) => m);
+    check("the scoped rifle slows the player most", others.every((m) => modifiers.bolt_rifle < m), JSON.stringify(modifiers));
     done();
 });
 

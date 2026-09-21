@@ -56,6 +56,13 @@ export interface SoundCue {
     readonly delayTicks?: number;
 }
 
+export interface AimConfig {
+    /** The field of view while aiming, in degrees. The normal view is about 70, so smaller zooms in further. */
+    readonly fov: number;
+    /** Also draw the scope overlay (a black screen with a clear lens and a crosshair). */
+    readonly scope?: boolean;
+}
+
 export interface GunSounds {
     /** Played as the shot goes off. Delayed cues can add a pump or bolt cycle. */
     readonly fire: readonly SoundCue[];
@@ -71,8 +78,10 @@ interface BaseGunConfig {
     readonly magazineSize: number;
     /** Ticks that must pass between shots. */
     readonly fireRateTicks: number;
-    /** Ticks a reload takes once started (sneak + use to trigger). */
+    /** Ticks a reload takes once started (Q, or clicking an empty gun). */
     readonly reloadTicks: number;
+    /** What holding right-click does. */
+    readonly aim: AimConfig;
     readonly sounds: GunSounds;
 }
 
@@ -104,6 +113,7 @@ export const GUNS: Record<GunId, GunConfig> = {
         magazineSize: 6,
         fireRateTicks: 8,
         reloadTicks: 40,
+        aim: { fov: 60 },
         sounds: {
             fire: [
                 { id: "firework.blast", volume: 2.0, pitch: 0.9 },
@@ -129,6 +139,7 @@ export const GUNS: Record<GunId, GunConfig> = {
         magazineSize: 8,
         fireRateTicks: 10,
         reloadTicks: 30,
+        aim: { fov: 60 },
         sounds: {
             fire: [
                 { id: "firework.blast", volume: 1.6, pitch: 1.2 }
@@ -152,6 +163,7 @@ export const GUNS: Record<GunId, GunConfig> = {
         magazineSize: 1,
         fireRateTicks: 10,
         reloadTicks: 70,
+        aim: { fov: 24, scope: true },
         sounds: {
             fire: [
                 { id: "firework.large_blast", volume: 3.0, pitch: 0.85 },
@@ -177,6 +189,7 @@ export const GUNS: Record<GunId, GunConfig> = {
         magazineSize: 15,
         fireRateTicks: 6,
         reloadTicks: 35,
+        aim: { fov: 52 },
         sounds: {
             fire: [
                 { id: "firework.large_blast", volume: 2.2, pitch: 1.25 }
@@ -200,6 +213,7 @@ export const GUNS: Record<GunId, GunConfig> = {
         magazineSize: 5,
         fireRateTicks: 15,
         reloadTicks: 45,
+        aim: { fov: 62 },
         sounds: {
             fire: [
                 { id: "random.explode", volume: 2.5, pitch: 1.1 },
@@ -231,6 +245,7 @@ export const GUNS: Record<GunId, GunConfig> = {
         magazineSize: 2,
         fireRateTicks: 4,
         reloadTicks: 50,
+        aim: { fov: 62 },
         sounds: {
             fire: [
                 { id: "random.explode", volume: 3.0, pitch: 0.85 },

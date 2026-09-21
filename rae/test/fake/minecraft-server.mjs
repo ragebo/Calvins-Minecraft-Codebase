@@ -10,6 +10,7 @@
 // If a permanent addition is needed, tell the orchestrator.
 
 export const EquipmentSlot = { Mainhand: "Mainhand", Offhand: "Offhand", Head: "Head", Chest: "Chest", Legs: "Legs", Feet: "Feet" };
+export const EntitySwingSource = { Attack: "Attack", Build: "Build", DropItem: "DropItem", Event: "Event", Interact: "Interact", Mine: "Mine", None: "None", Place: "Place", Throw: "Throw", Use: "Use" };
 export const EntityDamageCause = { entityAttack: "entityAttack", projectile: "projectile", fall: "fall", override: "override" };
 export const PlayerPermissionLevel = { Visitor: 0, Member: 1, Operator: 2, Custom: 3 };
 export const StructureSaveMode = { Memory: "Memory", World: "World" };
@@ -185,6 +186,7 @@ function makeEntity(options = {}) {
                 };
             }
             if (id === "minecraft:riding" && entity.ridingOn?.isValid) return { entityRidingOn: entity.ridingOn };
+            if (id === "minecraft:item" && options.itemStack) return { itemStack: options.itemStack };
             return undefined;
         },
         kill() { entity.remove(); return true; },
@@ -215,6 +217,8 @@ function makePlayer(name, options = {}) {
         isSneaking: options.isSneaking ?? false,
         isInWater: false,
         holding: options.holding ?? null,
+        // The hotbar slot the player has selected.
+        selectedSlotIndex: options.selectedSlotIndex ?? 0,
         // What is in the off-hand slot (a type id) or null. Tests set it to act out an off-hand swap.
         offhand: options.offhand ?? null,
         // player.camera: setFov records what it was given, or throws fake.cameraError.

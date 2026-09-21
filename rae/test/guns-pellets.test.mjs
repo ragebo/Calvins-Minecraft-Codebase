@@ -1,5 +1,5 @@
 import { test } from "node:test";
-import { fake, world, load, checks } from "./helpers.mjs";
+import { fake, world, load, checks, leftClick, pressQ } from "./helpers.mjs";
 
 // The shotguns fire a ray per pellet. Pellets that land on the same target are now added up and dealt as
 // ONE hit: several applyDamage calls on one target in one tick can be swallowed by its post-hit
@@ -13,7 +13,7 @@ const { listSystems } = await load("core/registry.js");
 const shotguns = [GUNS.pump_shotgun, GUNS.double_barrel_shotgun];
 const overworld = () => fake.dimension("overworld");
 const resetGuns = () => listSystems().find((s) => s.name === "guns").reset();
-const use = (p) => world.afterEvents.itemUse.emit({ itemStack: { typeId: p.holding }, source: p });
+const use = (p) => leftClick(p);
 
 function armed(gun) {
     fake.reset();

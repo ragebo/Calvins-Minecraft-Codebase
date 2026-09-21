@@ -1,5 +1,5 @@
 import { test } from "node:test";
-import { fake, world, system, fakeUi, load, checks, strip } from "./helpers.mjs";
+import { fake, world, system, fakeUi, load, checks, strip, leftClick, pressQ } from "./helpers.mjs";
 
 // Per-player state is keyed on player.id, never player.name. Two players can share a display
 // name, while Entity.id is unique and stable (see Entity.id in
@@ -21,7 +21,7 @@ await load("systems/guns.js");
 
 const gun = GUNS.revolver;                          // 6 rounds, fireRateTicks 8, reloadTicks 40
 const overworld = () => fake.dimension("overworld");
-const useItem = (p) => world.afterEvents.itemUse.emit({ itemStack: { typeId: p.holding }, source: p });
+const useItem = (p) => leftClick(p);
 const shotsHeard = () => overworld().played.filter((s) => s.id === gun.sounds.fire[0].id).length;
 const clicksHeard = (p) => p.privateSounds.filter((s) => s.id === "random.click").length;
 
@@ -76,10 +76,10 @@ for (const [label, nameA, nameB] of PAIRS) {
         fake.advance(gun.fireRateTicks);
         check("both can shoot in the same tick", shotsHeard() === before + 2, `(${shotsHeard() - before} shots heard)`);
 
-        a.isSneaking = true; useItem(a); a.isSneaking = false;      // A starts a reload
+        pressQ(a);      // A starts a reload
         check("(setup) A is reloading", a.messages.some((m) => m.includes("Reloading")), JSON.stringify(a.messages));
         check("A's reload doesn't stop B firing", pull(b) === "shot");
-        b.isSneaking = true; useItem(b); b.isSneaking = false;
+        pressQ(b);
         check("...or B starting a reload of their own", b.messages.some((m) => m.includes("Reloading")), JSON.stringify(b.messages));
 
         fake.advance(gun.reloadTicks + 5);
@@ -106,12 +106,10 @@ test("guns: reset returns every player to a full magazine, an open trigger and n
     fake.advance(gun.fireRateTicks);
     check("the fire-rate window is forgotten", shotsHeard() === before + 2, `(${shotsHeard() - before} shots heard)`);
 
-    a.isSneaking = true;
-    useItem(a);                                     // A is short of rounds by now, so this starts a reload
+    pressQ(a);                                     // A is short of rounds by now, so this starts a reload
     const reloading = a.messages.some((m) => m.includes("Reloading"));
     resetSystem("guns");
-    useItem(a);                                     // a reload still in progress would swallow this silently
-    a.isSneaking = false;
+    pressQ(a);                                      // a reload still in progress would swallow this silently
     check("(setup) a reload was in progress", reloading);
     check("the reload lock is forgotten", a.messages.some((m) => m.includes("Already fully loaded")), JSON.stringify(a.messages));
     fake.advance(gun.reloadTicks + 5);

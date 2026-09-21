@@ -57,3 +57,43 @@ export function knownGameSounds() {
     }
     return found;
 }
+
+// ---------------------------------------------------------------------------------------------------------
+// Player input, as the real game reported it (content log, 2026-09-20). Each helper emits the events in the
+// order the game sent them, so a test exercises the same sequence a player causes.
+// ---------------------------------------------------------------------------------------------------------
+
+const heldStack = (player) => (player.holding ? { typeId: player.holding } : undefined);
+
+/** A left-click. `source` is what the game reports: Attack (at the air or a mob), Mine (at a block). */
+export function leftClick(player, source = "Attack") {
+    world.afterEvents.playerSwingStart.emit({ swingSource: source, heldItemStack: heldStack(player), player });
+}
+
+/** Presses and holds right-click with the held item: itemUse, then itemStartUse. */
+export function aimStart(player, useDuration = 24000) {
+    const itemStack = heldStack(player);
+    world.afterEvents.itemUse.emit({ itemStack, source: player });
+    world.afterEvents.itemStartUse.emit({ itemStack, source: player, useDuration });
+}
+
+/** Lets go of right-click: itemReleaseUse and itemStopUse, in the same tick. */
+export function aimStop(player, useDuration = 23980) {
+    const itemStack = heldStack(player);
+    world.afterEvents.itemReleaseUse.emit({ itemStack, source: player, useDuration });
+    world.afterEvents.itemStopUse.emit({ itemStack, source: player, useDuration });
+}
+
+/**
+ * Presses Q with the held item: it drops as an item entity, its slot empties, and the arm swings with source
+ * DropItem, in that order and in one tick. Returns the dropped item entity.
+ */
+export function pressQ(player, typeId = player.holding) {
+    const stack = fake.makeItemStack(typeId);
+    const slot = player.selectedSlotIndex ?? 0;
+    const dropped = fake.makeEntity({ typeId: "minecraft:item", itemStack: stack, location: player.location });
+    world.afterEvents.entityItemDrop.emit({ entity: player, items: [dropped] });
+    world.afterEvents.playerInventoryItemChange.emit({ player, slot, itemStack: undefined, beforeItemStack: stack });
+    world.afterEvents.playerSwingStart.emit({ swingSource: "DropItem", heldItemStack: stack, player });
+    return dropped;
+}
