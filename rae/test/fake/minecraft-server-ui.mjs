@@ -7,6 +7,9 @@ function makeForm(kind) {
     const form = {
         kind, calls: [],
         title(t) { form.calls.push(["title", t]); return form; },
+        label(t) { form.calls.push(["label", t]); return form; },
+        header(t) { form.calls.push(["header", t]); return form; },
+        divider() { form.calls.push(["divider"]); return form; },
         body(t) { form.calls.push(["body", t]); return form; },
         button(...a) { form.calls.push(["button", ...a]); return form; },
         slider(...a) { form.calls.push(["slider", ...a]); return form; },
@@ -25,3 +28,6 @@ function makeForm(kind) {
 export class ModalFormData { constructor() { return makeForm("modal"); } }
 export class ActionFormData { constructor() { return makeForm("action"); } }
 export class MessageFormData { constructor() { return makeForm("message"); } }
+
+// What a form answers with when the player did not use it (the values the engine reports).
+export const FormCancelationReason = { UserBusy: "UserBusy", UserClosed: "UserClosed" };

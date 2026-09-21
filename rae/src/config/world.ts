@@ -114,3 +114,29 @@ export const BRIDGE_AREA = {
 
 export const BOAT_NPC: Vector3 = { x: 10, y: 65, z: 154 };
 export const BOAT_WIN_TELEPORT: Vector3 = { x: 369.17, y: 63.06, z: -370.01 };
+
+// ---------------------------------------------------
+// TELEPORT TARGETS (the in-game menu)
+// ---------------------------------------------------
+
+export interface TeleportTarget {
+    readonly name: string;
+    readonly at: Vector3;
+}
+
+/**
+ * The places the menu can send you, in the order it lists them. Every position is DERIVED from a coordinate
+ * above, so there is still exactly one copy of each. The train, the vault and the boat spots are the ones to
+ * check in game (stand on them and adjust y here if needed): they were spawn or structure positions, not standing spots.
+ */
+export const TELEPORT_TARGETS: readonly TeleportTarget[] = [
+    ...LAW_SPAWNS.map((at, i) => ({ name: `Law spawn ${i + 1}`, at })),
+    ...OUTLAW_SPAWNS.map((at, i) => ({ name: `Outlaw spawn ${i + 1}`, at })),
+    ...JAIL_SITES.map((site, i) => ({ name: `Jail ${i + 1}`, at: site.jail })),
+    { name: "Ranch", at: RANCH_LOWER_SPAWNS[0]! },
+    { name: "Fort", at: FORT_SPAWNS[0]! },
+    { name: "Train (start of the track)", at: { x: TRAIN_START.x, y: TRAIN_START.y + 1, z: TRAIN_START.z } },
+    { name: "Train vault", at: { x: TRAIN_VAULT_CHEST.x, y: TRAIN_VAULT_CHEST.y + 1, z: TRAIN_VAULT_CHEST.z } },
+    { name: "Boat escape NPC", at: BOAT_NPC },
+    { name: "Boat win spot", at: BOAT_WIN_TELEPORT }
+];

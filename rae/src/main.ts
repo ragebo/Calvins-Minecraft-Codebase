@@ -2,7 +2,8 @@ import { world, system } from "@minecraft/server";
 import { LAW_SPAWNS, OUTLAW_SPAWNS } from "./config/world.js";
 import { verifyScoreboards } from "./core/economy.js";
 import { onScriptEvent, onSpawn, listScriptEvents } from "./core/events.js";
-import { listSystems, resetAllSystems } from "./core/registry.js";
+import { resetGame } from "./core/game.js";
+import { listSystems } from "./core/registry.js";
 import { onTick } from "./core/tick.js";
 import { pickRandom } from "./systems/roles.js";
 
@@ -23,6 +24,7 @@ import "./systems/endgame.js";
 import "./systems/probe.js";
 import "./systems/transit.js";
 import "./systems/aimprobe.js";
+import "./systems/menu.js";
 
 // ---------------------------------------------------
 // DEBUG COMMANDS
@@ -35,10 +37,7 @@ onScriptEvent("rae:debug", () => {
     verifyScoreboards();
 });
 
-onScriptEvent("rae:reset", () => {
-    resetAllSystems();
-    world.sendMessage("§7All systems reset.");
-});
+onScriptEvent("rae:reset", () => resetGame());
 
 system.run(() => {
     world.sendMessage("§aRAE loaded.");

@@ -109,7 +109,7 @@ test("the revolver is a flat item: its icon is the 16x16 sprite, and nothing ove
 test("every gun and every kind of ammo has its own sprite: an icon that is mapped to a texture in this pack, not a vanilla item's", () => {
     const { check, done } = checks();
 
-    for (const icon of ["revolver", "pistol", "bolt_rifle", "semi_rifle", "pump_shotgun", "double_barrel_shotgun", "handgun_ammo", "rifle_ammo", "shotgun_ammo"]) {
+    for (const icon of ["revolver", "pistol", "bolt_rifle", "semi_rifle", "pump_shotgun", "double_barrel_shotgun", "handgun_ammo", "rifle_ammo", "shotgun_ammo", "game_menu"]) {
         const id = `bountysys:${icon}`;
         const item = items.find((candidate) => candidate.id === id);
         check(`${id}: the item exists`, item !== undefined);
@@ -370,5 +370,22 @@ test("the aim probe items are hold-to-use items that differ only in their use an
         check(`${probe.id}: one at a time, held like a tool`, components["minecraft:max_stack_size"] === 1 && components["minecraft:hand_equipped"] === true);
     }
     check("plain, bow and spyglass", animations["bountysys:aim_probe_plain"] === "none" && animations["bountysys:aim_probe_bow"] === "bow" && animations["bountysys:aim_probe_spyglass"] === "spyglass", JSON.stringify(animations));
+    done();
+});
+
+test("the menu item's icon in the pack is exactly what scripts/gen-menu-icon.mjs makes", async () => {
+    const { check, done } = checks();
+    const generator = await import(pathToFileURL(path.join(import.meta.dirname, "..", "scripts", "gen-menu-icon.mjs")).href);
+    const file = path.join(RP, "textures", "items", "game_menu.png");
+    check("the file exists", existsSync(file));
+    if (!existsSync(file)) return done();
+
+    const info = pngInfo(file);
+    check("it is a 16x16 PNG with an alpha channel, like the other item sprites", info?.width === 16 && info?.height === 16 && ALPHA_COLOR_TYPES.has(info?.colorType), JSON.stringify(info));
+    const pixels = pngPixels(file);
+    check("its pixels are the generator's (run: node scripts/gen-menu-icon.mjs)", pixels !== null && pixels.equals(generator.buildMenuIconPixels()));
+
+    const alpha = (x, y) => pixels?.[(y * 16 + x) * 4 + 3];
+    check("the corners are transparent and the middle is solid: a badge, not a filled square", alpha(0, 0) === 0 && alpha(15, 15) === 0 && alpha(7, 8) === 255);
     done();
 });

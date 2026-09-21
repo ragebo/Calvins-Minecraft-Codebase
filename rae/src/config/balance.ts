@@ -196,6 +196,16 @@ export const AIM = {
     offhandPollTicks: 2
 };
 
+/**
+ * The in-game menu (systems/menu.ts) and the forms helper it uses (core/forms.ts).
+ */
+export const MENU = {
+    /** A form the game refuses because the player is still busy is tried again this often (ticks)... */
+    busyRetryTicks: 10,
+    /** ...and this many times at most, so a menu opened from an item still appears once the item use is over. */
+    busyRetries: 20
+};
+
 export const HORSE = {
     speed: 0.2,
     /** Not currently applied anywhere — carried over from V1 as-is. */

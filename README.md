@@ -39,6 +39,8 @@ rae/                    TypeScript source. This is what you edit.
                          state.ts      one record per player (role, jail, elimination, ammo) that
                                        game logic reads; role tags are written from it, for command blocks
                          players.ts    cached "who is law / a free outlaw / a prisoner" queries
+                         game.ts       start a round (random or chosen roles), reset, send everyone to spawns
+                         forms.ts      show a form, retrying while the game says the player is busy
                          ui.ts         titles, the action bar (with priorities) and chat; the compass
                                        posts through it
                          director.ts   the one slot fort raid / ranch raid / train robbery share
@@ -76,7 +78,8 @@ and fails if a count goes up.
 
 | File | Owns |
 |---|---|
-| `roles.ts` | Round-start law/outlaw assignment, role spawn teleport |
+| `roles.ts` | Registers the round script events; the actions themselves are in `core/game.ts` |
+| `menu.ts` | The in-game menu (start with random or chosen roles, reset, teleport) — see below |
 | `jail.ts` | Jail site tracking, capture → bounty payout → jail → elimination |
 | `jailbreak.ts` | Lockpick minigame, escort-vulnerability after a rescue |
 | `raids.ts` | Fort raid (via the shared `raid.ts` engine) + ranch raid (hand-rolled — its dynamic reinforcement timer and per-mob rules don't fit the shared engine without changing behavior) |
@@ -154,6 +157,28 @@ defined per gun in `src/config/guns.ts` (`sounds.fire` / `sounds.reload`, each a
 `{ id, volume, pitch, delayTicks? }` layers). They play positionally so nearby players hear
 them. Every id was checked against the sound names the game's own `sounds.json` files
 reference. To audition a change first: `/playsound <id> @s ~ ~ ~ <volume> <pitch>`.
+
+### Game menu
+
+`bountysys:game_menu` (the "RAE Menu", a gold sheriff star) opens a menu when it is used, and so
+does `/scriptevent rae:menu` (it needs a player, so a command block cannot run it on its own).
+Get the item with `/give @s bountysys:game_menu`. Anyone holding it can use every control; there
+is no permission check.
+
+- **Start game** asks for random roles or chosen roles, then confirms. Random is the old rule
+  (at least two players, a quarter of them, at least one, are law). Chosen shows one dropdown per
+  player (Law, Outlaw, Sit out; it starts on their current role, else Outlaw): it refuses when
+  nobody is playing and only warns when a side is empty, so testing alone works.
+- **Reset game** confirms, then does what `/scriptevent rae:reset` does.
+- **Teleport** lists the places in `TELEPORT_TARGETS` (`config/world.ts`, built from the spawn,
+  jail, ranch, fort, train and boat coordinates already there) and moves the person who opened it.
+- **Send everyone to their spawns** is `bounty:teleport`.
+
+The old script events (`bounty:start_round`, `rae:reset`, `bounty:teleport`) are unchanged, so a
+physical button still works. The game's own actions live in `core/game.ts`, shared by both, and
+`core/forms.ts` shows a form and retries while the game says the player is busy (opening a form
+straight from a right-click hits that). The icon is made by `scripts/gen-menu-icon.mjs`; replace the
+PNG with your own art whenever you like.
 
 ### Law compass
 
