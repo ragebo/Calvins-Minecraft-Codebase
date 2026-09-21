@@ -4,20 +4,20 @@
         "name": "BountySys",
         "description": "pack.description",
         "uuid": "b8f707c3-9ce5-470d-8cad-081de86c10ac",
-        "version": [0, 1, 13],
+        "version": [0, 1, 14],
         "min_engine_version": [1, 26, 50]
     },
     "modules": [
         {
             "type": "data",
             "uuid": "27483e9f-cf17-4486-a394-b25d7451a3d2",
-            "version": [0, 1, 13]
+            "version": [0, 1, 14]
         },
         {
             "type": "script",
             "language": "javascript",
             "uuid": "65d59a18-b7c1-4f9b-96c5-5c6483df2a41",
-            "version": [0, 1, 13],
+            "version": [0, 1, 14],
             "entry": "scripts/main.js"
         }
     ],

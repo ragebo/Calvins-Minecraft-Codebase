@@ -94,6 +94,23 @@ export interface ProjectileGunConfig extends BaseGunConfig {
     readonly projectileSpeed: number;
 }
 
+/**
+ * What a hitscan shot looks like. A shotgun has no bullet to watch, so it draws one: a flash and smoke at the muzzle, a
+ * trail of particles along each pellet's path, and a puff where a pellet ends. Every id is a vanilla particle; a wrong one
+ * is reported once and the shot still fires.
+ */
+export interface GunEffects {
+    /** Spawned at the muzzle as the shot goes off (a flash and a puff of smoke). */
+    readonly muzzle: readonly string[];
+    /** How far in front of the eyes the muzzle is, in blocks. */
+    readonly muzzleDistance: number;
+    /** One of these every trailSpacing blocks along each pellet's path, so the spread can be seen. */
+    readonly trail: string;
+    readonly trailSpacing: number;
+    /** Where a pellet ends on a block or a target (not where it just runs out of range). */
+    readonly impact: string;
+}
+
 export interface HitscanGunConfig extends BaseGunConfig {
     readonly kind: "hitscan";
     /** Damage dealt by EACH pellet that connects. */
@@ -102,6 +119,7 @@ export interface HitscanGunConfig extends BaseGunConfig {
     /** Half-angle of the spread cone, in degrees. */
     readonly spreadDegrees: number;
     readonly range: number;
+    readonly effects: GunEffects;
 }
 
 export type GunConfig = ProjectileGunConfig | HitscanGunConfig;
@@ -237,7 +255,17 @@ export const GUNS: Record<GunId, GunConfig> = {
         pelletDamage: 2,
         pelletCount: 8,
         spreadDegrees: 8,
-        range: 12
+        range: 12,
+        effects: {
+            muzzle: [
+                "minecraft:basic_flame_particle", "minecraft:basic_flame_particle",
+                "minecraft:basic_smoke_particle", "minecraft:basic_smoke_particle", "minecraft:basic_smoke_particle"
+            ],
+            muzzleDistance: 1.2,
+            trail: "minecraft:basic_crit_particle",
+            trailSpacing: 2,
+            impact: "minecraft:basic_smoke_particle"
+        }
     },
     double_barrel_shotgun: {
         id: "double_barrel_shotgun",
@@ -266,7 +294,17 @@ export const GUNS: Record<GunId, GunConfig> = {
         pelletDamage: 2.5,
         pelletCount: 10,
         spreadDegrees: 12,
-        range: 8
+        range: 8,
+        effects: {
+            muzzle: [
+                "minecraft:basic_flame_particle", "minecraft:basic_flame_particle",
+                "minecraft:basic_smoke_particle", "minecraft:basic_smoke_particle", "minecraft:basic_smoke_particle"
+            ],
+            muzzleDistance: 1.2,
+            trail: "minecraft:basic_crit_particle",
+            trailSpacing: 2,
+            impact: "minecraft:basic_smoke_particle"
+        }
     }
 };
 

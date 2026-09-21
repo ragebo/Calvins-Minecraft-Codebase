@@ -1,6 +1,6 @@
 import {
     world, system,
-    type ItemStack, type Player, type Entity, type Vector3,
+    type Dimension, type ItemStack, type Player, type Entity, type Vector3,
     EquipmentSlot, EntityDamageCause, EntitySwingSource
 } from "@minecraft/server";
 import { AMMO, GUNS, BULLET_ENTITY_ID, BULLET_LIFETIME_TICKS, type GunConfig, type GunId, type SoundCue } from "../config/guns.js";
@@ -254,6 +254,60 @@ function fireProjectile(player: Player, gun: Extract<GunConfig, { kind: "project
     }, BULLET_LIFETIME_TICKS);
 }
 
+/** One pellet's flight: which way it went, how far, and whether it ended on something (a block or a target) rather than at its range. */
+interface PelletPath {
+    readonly direction: Vector3;
+    readonly length: number;
+    readonly ended: boolean;
+}
+
+/** A trail closer than this is not drawn: a spacing of zero (or less) in the config would otherwise never end. */
+const MIN_TRAIL_SPACING = 0.25;
+
+const reportedEffectErrors = new Set<string>();
+
+function spawnEffect(dimension: Dimension, id: string, location: Vector3): void {
+
+    try {
+        dimension.spawnParticle(id, location);
+    } catch (error) {
+        // A wrong particle id must never break a shot, and it would repeat on every pellet, so each is reported once.
+        if (reportedEffectErrors.has(id)) return;
+        reportedEffectErrors.add(id);
+        console.warn(`[gun effects] ${id} failed: ${error}`);
+    }
+}
+
+function pointAlong(origin: Vector3, direction: Vector3, distance: number): Vector3 {
+    return { x: origin.x + direction.x * distance, y: origin.y + direction.y * distance, z: origin.z + direction.z * distance };
+}
+
+/**
+ * A shotgun has no bullet to watch, so the shot is drawn: a flash and smoke at the muzzle, a trail along every pellet's
+ * path (which shows the spread), and a puff where a pellet ends on something. All of it is config/guns.ts effects.
+ */
+function showShot(player: Player, gun: Extract<GunConfig, { kind: "hitscan" }>, origin: Vector3, direction: Vector3, paths: readonly PelletPath[]): void {
+
+    const fx = gun.effects;
+    const dimension = player.dimension;
+
+    // A little below the eyes, where the barrel is.
+    const muzzle = pointAlong(origin, direction, fx.muzzleDistance);
+    const at = { x: muzzle.x, y: muzzle.y - 0.2, z: muzzle.z };
+    for (const id of fx.muzzle) spawnEffect(dimension, id, at);
+
+    const spacing = Number.isFinite(fx.trailSpacing) ? Math.max(MIN_TRAIL_SPACING, fx.trailSpacing) : MIN_TRAIL_SPACING;
+
+    for (const path of paths) {
+
+        for (let distance = spacing; distance < path.length; distance += spacing) {
+            spawnEffect(dimension, fx.trail, pointAlong(origin, path.direction, distance));
+        }
+
+        if (path.ended) spawnEffect(dimension, fx.impact, pointAlong(origin, path.direction, path.length));
+    }
+}
+
 function fireHitscan(player: Player, gun: Extract<GunConfig, { kind: "hitscan" }>): void {
 
     const origin = player.getHeadLocation();
@@ -265,6 +319,9 @@ function fireHitscan(player: Player, gun: Extract<GunConfig, { kind: "hitscan" }
     // count for nothing). One summed hit deals the full damage whether or not that applies in this
     // build; systems/probe.ts (rae:probe_damage) measures it.
     const landed = new Map<string, { entity: Entity; pellets: number }>();
+
+    // Where each pellet went, for drawing the shot.
+    const paths: PelletPath[] = [];
 
     for (let i = 0; i < gun.pelletCount; i++) {
 
@@ -294,7 +351,11 @@ function fireHitscan(player: Player, gun: Extract<GunConfig, { kind: "hitscan" }
             if (entry) entry.pellets++;
             else landed.set(closest.id, { entity: closest, pellets: 1 });
         }
+
+        paths.push({ direction, length: closest ? closestDistance : maxDistance, ended: closest !== undefined || blockHit !== undefined });
     }
+
+    showShot(player, gun, origin, baseDirection, paths);
 
     for (const { entity, pellets } of landed.values()) {
 
