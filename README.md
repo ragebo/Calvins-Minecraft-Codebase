@@ -135,10 +135,12 @@ How each of these works, and what the game really reports for them, is in
 Projectile guns spawn a shared `bountysys:bullet` entity and
 apply damage on hit via script (not the entity's own vanilla damage) so each gun's
 number is independent. Shotguns jitter several rays per trigger pull via
-`Dimension.getEntitiesFromRay` for real per-pellet spread. Having no bullet to watch, a
-shotgun shot is drawn with vanilla particles (a muzzle flash and smoke, a spark trail along
-every pellet, a puff where one ends): `effects` per shotgun in `config/guns.ts`,
-`docs/test-cards/SHOTGUN-EFFECTS.md`.
+`Dimension.getEntitiesFromRay` for real per-pellet spread. Every gun shows muzzle smoke
+when it fires, and, having no bullet to watch, a shotgun shot is also drawn with vanilla
+particles (a muzzle flash, an ember trail along every pellet, a puff where one ends):
+`effects` per gun in `config/guns.ts`, `docs/test-cards/SHOTGUN-EFFECTS.md`. Use only
+particles that work when spawned bare (`basic_crit_particle` needs a `direction` and floods
+the log).
 
 Every gun is a flat 2D item held like a tool (`minecraft:hand_equipped`) with its own
 texture (`BountySys_RP/textures/items/<gun>.png`, 16x16, mapped in

@@ -3,7 +3,7 @@ import {
     type Dimension, type ItemStack, type Player, type Entity, type Vector3,
     EquipmentSlot, EntityDamageCause, EntitySwingSource
 } from "@minecraft/server";
-import { AMMO, GUNS, BULLET_ENTITY_ID, BULLET_LIFETIME_TICKS, type GunConfig, type GunId, type SoundCue } from "../config/guns.js";
+import { AMMO, GUNS, BULLET_ENTITY_ID, BULLET_LIFETIME_TICKS, type GunConfig, type GunId, type MuzzleEffects, type SoundCue } from "../config/guns.js";
 import { AIM } from "../config/balance.js";
 import { hideScope, showScope, zoomReset, zoomTo } from "../core/aim.js";
 import { registerSystem } from "../core/registry.js";
@@ -215,6 +215,8 @@ function tryFire(player: Player, gun: GunConfig): void {
     lastFiredTick.set(key, system.currentTick);
     setLoadedRounds(player, gun, loaded - 1);
 
+    showMuzzle(player, gun.effects);
+
     if (gun.kind === "projectile") {
         fireProjectile(player, gun);
     } else {
@@ -282,19 +284,26 @@ function pointAlong(origin: Vector3, direction: Vector3, distance: number): Vect
     return { x: origin.x + direction.x * distance, y: origin.y + direction.y * distance, z: origin.z + direction.z * distance };
 }
 
+/** What every gun shows at the muzzle as it fires: smoke, and a flash where the gun has one (config/guns.ts effects). */
+function showMuzzle(player: Player, fx: MuzzleEffects): void {
+
+    const origin = player.getHeadLocation();
+    const muzzle = pointAlong(origin, player.getViewDirection(), fx.muzzleDistance);
+
+    // A little below the eyes, where the barrel is.
+    const at = { x: muzzle.x, y: muzzle.y - 0.2, z: muzzle.z };
+
+    for (const id of fx.muzzle) spawnEffect(player.dimension, id, at);
+}
+
 /**
- * A shotgun has no bullet to watch, so the shot is drawn: a flash and smoke at the muzzle, a trail along every pellet's
- * path (which shows the spread), and a puff where a pellet ends on something. All of it is config/guns.ts effects.
+ * A shotgun has no bullet to watch, so the shot is drawn: a trail along every pellet's path (which shows the spread), and
+ * a puff where a pellet ends on something. All of it is config/guns.ts effects; the muzzle is showMuzzle.
  */
-function showShot(player: Player, gun: Extract<GunConfig, { kind: "hitscan" }>, origin: Vector3, direction: Vector3, paths: readonly PelletPath[]): void {
+function showShot(player: Player, gun: Extract<GunConfig, { kind: "hitscan" }>, origin: Vector3, paths: readonly PelletPath[]): void {
 
     const fx = gun.effects;
     const dimension = player.dimension;
-
-    // A little below the eyes, where the barrel is.
-    const muzzle = pointAlong(origin, direction, fx.muzzleDistance);
-    const at = { x: muzzle.x, y: muzzle.y - 0.2, z: muzzle.z };
-    for (const id of fx.muzzle) spawnEffect(dimension, id, at);
 
     const spacing = Number.isFinite(fx.trailSpacing) ? Math.max(MIN_TRAIL_SPACING, fx.trailSpacing) : MIN_TRAIL_SPACING;
 
@@ -355,7 +364,7 @@ function fireHitscan(player: Player, gun: Extract<GunConfig, { kind: "hitscan" }
         paths.push({ direction, length: closest ? closestDistance : maxDistance, ended: closest !== undefined || blockHit !== undefined });
     }
 
-    showShot(player, gun, origin, baseDirection, paths);
+    showShot(player, gun, origin, paths);
 
     for (const { entity, pellets } of landed.values()) {
 

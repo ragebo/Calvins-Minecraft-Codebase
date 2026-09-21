@@ -50,6 +50,8 @@ function shoot(gun, { entityAt, block } = {}) {
 }
 
 const byId = (particles, id) => particles.filter((q) => q.id === id);
+/** The trail and impact puffs: everything after the muzzle particles, which are drawn first (and may share an id with the trail). */
+const afterMuzzle = (particles, gun) => particles.slice(gun.effects.muzzle.length);
 const near = (a, b, e = 1e-9) => Math.abs(a - b) < e;
 
 test("a shot draws the muzzle flash and smoke just in front of the barrel", () => {
@@ -72,7 +74,7 @@ test("every pellet leaves a trail along its path, one particle every trailSpacin
     for (const gun of shotguns) {
         const { particles } = shoot(gun);
         const fx = gun.effects;
-        const trail = byId(particles, fx.trail).filter((q) => !fx.muzzle.includes(q.id) || true);
+        const trail = byId(afterMuzzle(particles, gun), fx.trail);
 
         // Distances spacing, 2 * spacing, ... below the range.
         const distances = [];
@@ -83,7 +85,7 @@ test("every pellet leaves a trail along its path, one particle every trailSpacin
         check(`${gun.id}: at ${distances.join(", ")} blocks along the aim`, zs.join() === distances.join(), zs.join());
         check(`${gun.id}: on the line of the aim (spread is zero here)`, trail.every((q) => near(q.location.x, HEAD.x) && near(q.location.y, HEAD.y)));
         check(`${gun.id}: nothing beyond the range`, trail.every((q) => q.location.z - HEAD.z < gun.range));
-        check(`${gun.id}: a pellet that ran out of range with nothing in the way leaves no impact puff`, byId(particles, fx.impact).length === fx.muzzle.filter((id) => id === fx.impact).length, JSON.stringify(byId(particles, fx.impact).length));
+        check(`${gun.id}: a pellet that ran out of range with nothing in the way leaves no impact puff`, byId(afterMuzzle(particles, gun), fx.impact).length === 0, JSON.stringify(byId(afterMuzzle(particles, gun), fx.impact).length));
     }
     done();
 });
@@ -93,7 +95,7 @@ test("a spread shot draws different paths: the trails fan out with the pellets",
     const gun = GUNS.pump_shotgun;
     const p = armed(gun);
     leftClick(p);
-    const trail = byId(overworld().particles, gun.effects.trail);
+    const trail = byId(afterMuzzle(overworld().particles, gun), gun.effects.trail);
     const xs = new Set(trail.map((q) => Math.round(q.location.x * 100)));
     check("more than one path (not all on one line)", xs.size > gun.pelletCount, `${xs.size} different x positions`);
     const widest = Math.max(...trail.map((q) => Math.abs(q.location.x - HEAD.x)));
@@ -106,8 +108,8 @@ test("a pellet that hits a target ends there: the trail stops and a puff appears
     for (const gun of shotguns) {
         const { particles } = shoot(gun, { entityAt: 5 });
         const fx = gun.effects;
-        const trail = byId(particles, fx.trail);
-        const impacts = byId(particles, fx.impact).filter((q) => near(q.location.z, HEAD.z + 5));
+        const trail = byId(afterMuzzle(particles, gun), fx.trail);
+        const impacts = byId(afterMuzzle(particles, gun), fx.impact).filter((q) => near(q.location.z, HEAD.z + 5));
 
         const expectedTrail = [];
         for (let d = fx.trailSpacing; d < 5; d += fx.trailSpacing) expectedTrail.push(d);
@@ -128,18 +130,46 @@ test("a pellet that hits a block ends at the block", () => {
 
     const expected = [];
     for (let d = fx.trailSpacing; d < length; d += fx.trailSpacing) expected.push(d);
-    check("the trail stops at the block", byId(particles, fx.trail).length === expected.length * gun.pelletCount, `${byId(particles, fx.trail).length} vs ${expected.length * gun.pelletCount}`);
-    const puffs = byId(particles, fx.impact).filter((q) => near(q.location.z, HEAD.z + length, 1e-6));
+    const trailAfterMuzzle = byId(afterMuzzle(particles, gun), fx.trail);
+    check("the trail stops at the block", trailAfterMuzzle.length === expected.length * gun.pelletCount, `${trailAfterMuzzle.length} vs ${expected.length * gun.pelletCount}`);
+    const puffs = byId(afterMuzzle(particles, gun), fx.impact).filter((q) => near(q.location.z, HEAD.z + length, 1e-6));
     check("and a puff there for every pellet", puffs.length === gun.pelletCount, `${puffs.length}`);
     done();
 });
 
-test("the other guns draw no particles", () => {
+test("every other gun shows its muzzle smoke and nothing else: no trail and no impact puffs", () => {
     const { check, done } = checks();
     for (const gun of others) {
         const p = armed(gun);
         leftClick(p);
-        check(`${gun.id}: none`, overworld().particles.length === 0, String(overworld().particles.length));
+        const particles = overworld().particles;
+        const fx = gun.effects;
+        const expected = { x: HEAD.x, y: HEAD.y - 0.2, z: HEAD.z + fx.muzzleDistance };
+
+        check(`${gun.id}: exactly its configured muzzle particles`, particles.map((q) => q.id).join() === fx.muzzle.join(), particles.map((q) => q.id).join());
+        check(`${gun.id}: at the barrel`, particles.every((q) => near(q.location.x, expected.x) && near(q.location.y, expected.y) && near(q.location.z, expected.z)), JSON.stringify(particles.map((q) => q.location)));
+        check(`${gun.id}: smoke, and only smoke`, particles.length > 0 && particles.every((q) => q.id === "minecraft:basic_smoke_particle"), particles.map((q) => q.id).join());
+    }
+    done();
+});
+
+test("every gun, the shotguns included, has muzzle smoke", () => {
+    const { check, done } = checks();
+    for (const gun of Object.values(GUNS)) {
+        check(`${gun.id}: at least one smoke particle at the muzzle`, gun.effects.muzzle.some((id) => id.includes("smoke")), gun.effects.muzzle.join());
+        check(`${gun.id}: the muzzle is in front of the player, not inside them`, gun.effects.muzzleDistance > 0.3 && gun.effects.muzzleDistance < 3, String(gun.effects.muzzleDistance));
+    }
+    done();
+});
+
+test("no gun uses a particle that needs a value from its spawner (the first playtest logged 16,836 Molang errors for basic_crit)", () => {
+    const { check, done } = checks();
+    // basic_crit_particle wants variable.direction, which only whatever spawns it can supply; a script cannot. Particles known to
+    // work bare (and logged no error in the playtest): basic_flame_particle and basic_smoke_particle.
+    const needsVariables = ["minecraft:basic_crit_particle", "minecraft:critical_hit_emitter"];
+    for (const gun of Object.values(GUNS)) {
+        const ids = [...gun.effects.muzzle, ...(gun.kind === "hitscan" ? [gun.effects.trail, gun.effects.impact] : [])];
+        for (const id of ids) check(`${gun.id}: ${id} works without variables`, !needsVariables.includes(id) && /^minecraft:[a-z_]+$/.test(id));
     }
     done();
 });

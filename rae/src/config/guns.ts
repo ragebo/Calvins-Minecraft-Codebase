@@ -84,6 +84,8 @@ interface BaseGunConfig {
     readonly reloadTicks: number;
     /** What holding right-click does. */
     readonly aim: AimConfig;
+    /** Smoke (and flame) at the muzzle. Hitscan guns add a trail and impact puffs on top (GunEffects). */
+    readonly effects: MuzzleEffects;
     readonly sounds: GunSounds;
 }
 
@@ -94,16 +96,24 @@ export interface ProjectileGunConfig extends BaseGunConfig {
     readonly projectileSpeed: number;
 }
 
+/** What every gun shows at the muzzle when it fires. */
+export interface MuzzleEffects {
+    /** Spawned at the muzzle as the shot goes off (a flash, a puff of smoke). */
+    readonly muzzle: readonly string[];
+    /** How far in front of the eyes the muzzle is, in blocks. */
+    readonly muzzleDistance: number;
+}
+
 /**
  * What a hitscan shot looks like. A shotgun has no bullet to watch, so it draws one: a flash and smoke at the muzzle, a
  * trail of particles along each pellet's path, and a puff where a pellet ends. Every id is a vanilla particle; a wrong one
  * is reported once and the shot still fires.
+ *
+ * Use only particles that work when spawned bare. Some need a value from whatever spawns them: basic_crit_particle wants a
+ * variable.direction, and the first playtest logged 16,836 Molang errors for it. basic_flame_particle and
+ * basic_smoke_particle logged none.
  */
-export interface GunEffects {
-    /** Spawned at the muzzle as the shot goes off (a flash and a puff of smoke). */
-    readonly muzzle: readonly string[];
-    /** How far in front of the eyes the muzzle is, in blocks. */
-    readonly muzzleDistance: number;
+export interface GunEffects extends MuzzleEffects {
     /** One of these every trailSpacing blocks along each pellet's path, so the spread can be seen. */
     readonly trail: string;
     readonly trailSpacing: number;
@@ -149,7 +159,11 @@ export const GUNS: Record<GunId, GunConfig> = {
         },
         kind: "projectile",
         damage: 4,
-        projectileSpeed: 3.5
+        projectileSpeed: 3.5,
+        effects: {
+            muzzle: ["minecraft:basic_smoke_particle", "minecraft:basic_smoke_particle", "minecraft:basic_smoke_particle"],
+            muzzleDistance: 1
+        }
     },
     pistol: {
         id: "pistol",
@@ -173,7 +187,11 @@ export const GUNS: Record<GunId, GunConfig> = {
         },
         kind: "projectile",
         damage: 6,
-        projectileSpeed: 3.5
+        projectileSpeed: 3.5,
+        effects: {
+            muzzle: ["minecraft:basic_smoke_particle", "minecraft:basic_smoke_particle"],
+            muzzleDistance: 1
+        }
     },
     bolt_rifle: {
         id: "bolt_rifle",
@@ -199,7 +217,11 @@ export const GUNS: Record<GunId, GunConfig> = {
         },
         kind: "projectile",
         damage: 14,
-        projectileSpeed: 6
+        projectileSpeed: 6,
+        effects: {
+            muzzle: ["minecraft:basic_smoke_particle", "minecraft:basic_smoke_particle", "minecraft:basic_smoke_particle", "minecraft:basic_smoke_particle"],
+            muzzleDistance: 1.2
+        }
     },
     semi_rifle: {
         id: "semi_rifle",
@@ -223,7 +245,11 @@ export const GUNS: Record<GunId, GunConfig> = {
         },
         kind: "projectile",
         damage: 5,
-        projectileSpeed: 4.5
+        projectileSpeed: 4.5,
+        effects: {
+            muzzle: ["minecraft:basic_smoke_particle", "minecraft:basic_smoke_particle", "minecraft:basic_smoke_particle"],
+            muzzleDistance: 1.2
+        }
     },
     pump_shotgun: {
         id: "pump_shotgun",
@@ -262,7 +288,7 @@ export const GUNS: Record<GunId, GunConfig> = {
                 "minecraft:basic_smoke_particle", "minecraft:basic_smoke_particle", "minecraft:basic_smoke_particle"
             ],
             muzzleDistance: 1.2,
-            trail: "minecraft:basic_crit_particle",
+            trail: "minecraft:basic_flame_particle",
             trailSpacing: 2,
             impact: "minecraft:basic_smoke_particle"
         }
@@ -301,7 +327,7 @@ export const GUNS: Record<GunId, GunConfig> = {
                 "minecraft:basic_smoke_particle", "minecraft:basic_smoke_particle", "minecraft:basic_smoke_particle"
             ],
             muzzleDistance: 1.2,
-            trail: "minecraft:basic_crit_particle",
+            trail: "minecraft:basic_flame_particle",
             trailSpacing: 2,
             impact: "minecraft:basic_smoke_particle"
         }
