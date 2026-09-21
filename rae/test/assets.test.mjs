@@ -336,30 +336,24 @@ test("the scope overlay image in the pack is exactly what scripts/gen-scope-over
     done();
 });
 
-test("every gun is a hold-to-use item (or aiming sends no events) with no cooldown (or it would block aiming again)", async () => {
+test("every gun is a plain item: not hold-to-use (a used item blocks left-click) and with no cooldown", async () => {
     const { check, done } = checks();
     const { GUNS } = await load("config/guns.js");
-    const modifiers = {};
 
     for (const gun of Object.values(GUNS)) {
         const item = items.find((candidate) => candidate.id === gun.itemId);
         check(`${gun.id}: the item exists`, item !== undefined);
         if (!item) continue;
         const components = readJson(item.file)["minecraft:item"].components;
-        const use = components["minecraft:use_modifiers"];
 
-        // itemStartUse and itemStopUse only exist for an item with a use duration: the guns' aim depends on them, and
-        // the first real-game run showed a plain right-click sends only itemUse.
-        check(`${gun.id}: has a use duration`, use?.use_duration > 0, JSON.stringify(use));
-        check(`${gun.id}: slows the player a little while aiming, never speeds them up`, use?.movement_modifier > 0 && use?.movement_modifier <= 1, JSON.stringify(use));
-        check(`${gun.id}: no minecraft:cooldown (fire rate is the script's; a cooldown would delay aiming again after a shot)`, components["minecraft:cooldown"] === undefined);
+        // While an item is in use (a held right-click on an item with a use duration) the game sends no attack input, so a
+        // hold-to-use gun could never fire while aimed: the owner hit exactly this with the bolt rifle. Aim is a toggle.
+        check(`${gun.id}: no minecraft:use_modifiers (it would make right-click a hold and block the left-click)`, components["minecraft:use_modifiers"] === undefined, JSON.stringify(components["minecraft:use_modifiers"]));
+        check(`${gun.id}: no minecraft:cooldown (fire rate is the script's)`, components["minecraft:cooldown"] === undefined);
         check(`${gun.id}: held like a tool`, components["minecraft:hand_equipped"] === true);
+        check(`${gun.id}: no allow_off_hand (Bedrock has no swap key, so it would only let a gun be parked there)`, components["minecraft:allow_off_hand"] === undefined);
         check(`${gun.id}: has a zoom in its config`, gun.aim?.fov > 0);
-        modifiers[gun.id] = use?.movement_modifier;
     }
-
-    const others = Object.entries(modifiers).filter(([id]) => id !== "bolt_rifle").map(([, m]) => m);
-    check("the scoped rifle slows the player most", others.every((m) => modifiers.bolt_rifle < m), JSON.stringify(modifiers));
     done();
 });
 

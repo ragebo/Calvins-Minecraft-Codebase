@@ -70,18 +70,12 @@ export function leftClick(player, source = "Attack") {
     world.afterEvents.playerSwingStart.emit({ swingSource: source, heldItemStack: heldStack(player), player });
 }
 
-/** Presses and holds right-click with the held item: itemUse, then itemStartUse. */
-export function aimStart(player, useDuration = 24000) {
-    const itemStack = heldStack(player);
-    world.afterEvents.itemUse.emit({ itemStack, source: player });
-    world.afterEvents.itemStartUse.emit({ itemStack, source: player, useDuration });
-}
-
-/** Lets go of right-click: itemReleaseUse and itemStopUse, in the same tick. */
-export function aimStop(player, useDuration = 23980) {
-    const itemStack = heldStack(player);
-    world.afterEvents.itemReleaseUse.emit({ itemStack, source: player, useDuration });
-    world.afterEvents.itemStopUse.emit({ itemStack, source: player, useDuration });
+/**
+ * A right-click tap with the held item: one itemUse. (A gun that is not hold-to-use sends nothing else: the events a held
+ * right-click adds, itemStartUse and itemStopUse, only exist for an item with a use duration.)
+ */
+export function rightClick(player) {
+    world.afterEvents.itemUse.emit({ itemStack: heldStack(player), source: player });
 }
 
 /**

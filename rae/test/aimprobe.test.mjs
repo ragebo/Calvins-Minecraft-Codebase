@@ -129,10 +129,10 @@ test("fov sets the camera's field of view with an ease, and reset puts it back",
     say(p, "fov reset");
     check("reset calls setFov with nothing", p.camera.fovCalls.length === 2 && p.camera.fovCalls[1] === undefined, JSON.stringify(p.camera.fovCalls));
 
-    for (const bad of ["fov", "fov abc", "fov 0", "fov -5", "fov 180", "fov 400"]) {
+    for (const bad of ["fov", "fov abc", "fov 0", "fov -5", "fov 29", "fov 111", "fov 180", "fov 400"]) {
         p.messages.length = 0;
         say(p, bad);
-        check(`"${bad}" is refused with a hint`, /between 1 and 179/.test(text(p)), text(p));
+        check(`"${bad}" is refused with a hint`, /between 30 and 110/.test(text(p)), text(p));
     }
     check("a refused value never reaches the camera", p.camera.fovCalls.length === 2, String(p.camera.fovCalls.length));
     done();

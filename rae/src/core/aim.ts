@@ -20,10 +20,14 @@ function report(what: string, error: unknown): void {
     console.warn(`[aim] ${what} failed: ${error}`);
 }
 
-/** Eases the camera to `fov` degrees (the normal view is about 70; smaller is closer). */
+/**
+ * Eases the camera to `fov` degrees (the normal view is about 70; smaller is closer). The engine refuses a value
+ * outside AIM.fovMin..fovMax, so the request is clamped into it.
+ */
 export function zoomTo(player: Player, fov: number): void {
     try {
-        player.camera.setFov({ fov, easeOptions: { easeTime: AIM.fovEaseSeconds } });
+        const clamped = Math.min(AIM.fovMax, Math.max(AIM.fovMin, fov));
+        player.camera.setFov({ fov: clamped, easeOptions: { easeTime: AIM.fovEaseSeconds } });
     } catch (error) {
         report("zoom", error);
     }

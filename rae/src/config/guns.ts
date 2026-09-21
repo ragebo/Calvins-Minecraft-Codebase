@@ -61,6 +61,8 @@ export interface AimConfig {
     readonly fov: number;
     /** Also draw the scope overlay (a black screen with a clear lens and a crosshair). */
     readonly scope?: boolean;
+    /** Slowness amplifier while aimed (0 is 15% slower, 1 is 30%, 2 is 45%, 3 is 60%). Omit for no slowdown. */
+    readonly slowness?: number;
 }
 
 export interface GunSounds {
@@ -163,7 +165,7 @@ export const GUNS: Record<GunId, GunConfig> = {
         magazineSize: 1,
         fireRateTicks: 10,
         reloadTicks: 70,
-        aim: { fov: 24, scope: true },
+        aim: { fov: 30, scope: true, slowness: 3 },
         sounds: {
             fire: [
                 { id: "firework.large_blast", volume: 3.0, pitch: 0.85 },
@@ -189,7 +191,7 @@ export const GUNS: Record<GunId, GunConfig> = {
         magazineSize: 15,
         fireRateTicks: 6,
         reloadTicks: 35,
-        aim: { fov: 52 },
+        aim: { fov: 52, slowness: 1 },
         sounds: {
             fire: [
                 { id: "firework.large_blast", volume: 2.2, pitch: 1.25 }
@@ -213,7 +215,7 @@ export const GUNS: Record<GunId, GunConfig> = {
         magazineSize: 5,
         fireRateTicks: 15,
         reloadTicks: 45,
-        aim: { fov: 62 },
+        aim: { fov: 62, slowness: 1 },
         sounds: {
             fire: [
                 { id: "random.explode", volume: 2.5, pitch: 1.1 },
@@ -245,7 +247,7 @@ export const GUNS: Record<GunId, GunConfig> = {
         magazineSize: 2,
         fireRateTicks: 4,
         reloadTicks: 50,
-        aim: { fov: 62 },
+        aim: { fov: 62, slowness: 1 },
         sounds: {
             fire: [
                 { id: "random.explode", volume: 3.0, pitch: 0.85 },

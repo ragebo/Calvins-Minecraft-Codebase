@@ -132,8 +132,8 @@ function setFov(player: Player, argument: string): void {
     const reset = argument === "reset";
     const fov = Number.parseFloat(argument);
 
-    if (!reset && !(fov > 0 && fov < 180)) {
-        tell(player, format("warn", "Give a field of view between 1 and 179, or `reset`: /scriptevent rae:aim_spike fov 30"));
+    if (!reset && !(fov >= A.fovMin && fov <= A.fovMax)) {
+        tell(player, format("warn", `Give a field of view between ${A.fovMin} and ${A.fovMax} (the engine refuses anything else), or reset: /scriptevent rae:aim_spike fov 40`));
         return;
     }
 

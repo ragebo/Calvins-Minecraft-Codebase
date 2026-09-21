@@ -4,6 +4,7 @@ import {
     EquipmentSlot, EntityDamageCause, EntitySwingSource
 } from "@minecraft/server";
 import { AMMO, GUNS, BULLET_ENTITY_ID, BULLET_LIFETIME_TICKS, type GunConfig, type GunId, type SoundCue } from "../config/guns.js";
+import { AIM } from "../config/balance.js";
 import { hideScope, showScope, zoomReset, zoomTo } from "../core/aim.js";
 import { registerSystem } from "../core/registry.js";
 import { onTick } from "../core/tick.js";
@@ -372,8 +373,8 @@ function normalize(v: Vector3): Vector3 {
 // player's input and a horse takes the usual keys (sneak dismounts, and reports nothing):
 //
 //   left-click   fires. The swing has source Attack at the air or a mob and Mine at a block, riding or not.
-//   hold right-click   aims: itemUse fires at the press (and is ignored), itemStartUse begins the aim, and
-//                itemStopUse ends it. The guns are hold-to-use items so those events exist.
+//   right-click  toggles the aim (a tap: itemUse). It cannot be a hold, because the game sends no attack input while
+//                an item is in use, so a held aim could never fire.
 //   Q            reloads. A drop is an itemDrop of the gun, the slot emptying and a swing with source DropItem,
 //                all in one tick; the gun is taken back into its slot and a reload starts.
 //   an empty click   reloads too (tryFire).
@@ -395,6 +396,10 @@ world.afterEvents.playerSwingStart.subscribe((event) => {
 });
 
 // ---- Aim -----------------------------------------------------------------------------------------------
+//
+// Right-click TOGGLES the aim; it cannot be a hold. While an item is in use (a held right-click on a hold-to-use item) the
+// game sends no attack input at all, as with a drawn bow, so a held aim could never fire (the owner found this the first
+// time they tried to shoot through a scope). A tap has no use state, so a left-click still fires while aimed.
 
 interface Aiming {
     readonly player: Player;
@@ -404,8 +409,24 @@ interface Aiming {
 const aiming = new Map<string, Aiming>();
 let stopAimWatch: (() => void) | undefined;
 
-/** How often an aim is checked against what the player is still doing, in ticks. */
+/** How often an aim is checked against what the player is still doing, and the slowdown refreshed, in ticks. */
 const AIM_WATCH_TICKS = 4;
+
+let slowFailureReported = false;
+
+/** Aiming slows the player: an effect that lasts a few ticks and is refreshed for as long as the aim does. */
+function slowWhileAimed(player: Player, gun: GunConfig): void {
+
+    if (gun.aim.slowness === undefined) return;
+
+    try {
+        player.addEffect("slowness", AIM.slowEffectTicks, { amplifier: gun.aim.slowness, showParticles: false });
+    } catch (error) {
+        if (slowFailureReported) return;
+        slowFailureReported = true;
+        console.warn(`[aim] slowing the player failed: ${error}`);
+    }
+}
 
 function startAim(player: Player, gun: GunConfig): void {
 
@@ -414,11 +435,16 @@ function startAim(player: Player, gun: GunConfig): void {
     aiming.set(player.id, { player, gun });
     zoomTo(player, gun.aim.fov);
     if (gun.aim.scope) showScope(player);
+    slowWhileAimed(player, gun);
 
-    // Letting go normally ends an aim by itself (itemStopUse). This catches the rest: switching slots, dying, leaving.
+    // Nothing tells a script that a player switched slot, died or left, so the aim is checked.
     stopAimWatch ??= onTick("guns:aim", () => {
         for (const [id, state] of [...aiming]) {
-            if (!state.player.isValid || getMainhandItemTypeId(state.player) !== state.gun.itemId) stopAim(id);
+            if (!state.player.isValid || getMainhandItemTypeId(state.player) !== state.gun.itemId) {
+                stopAim(id);
+                continue;
+            }
+            slowWhileAimed(state.player, state.gun);
         }
     }, { everyTicks: AIM_WATCH_TICKS });
 }
@@ -441,17 +467,15 @@ function stopAim(playerId: string): void {
     }
 }
 
-world.afterEvents.itemStartUse.subscribe((event) => {
-    const gun = gunsByItemId.get(event.itemStack.typeId);
-    if (gun) startAim(event.source, gun);
-});
+world.afterEvents.itemUse.subscribe((event) => {
 
-// Both fire when right-click is let go, in the same tick; stopping twice is harmless.
-world.afterEvents.itemStopUse.subscribe((event) => {
-    if (gunsByItemId.has(event.itemStack?.typeId ?? "")) stopAim(event.source.id);
-});
-world.afterEvents.itemReleaseUse.subscribe((event) => {
-    if (gunsByItemId.has(event.itemStack?.typeId ?? "")) stopAim(event.source.id);
+    const gun = gunsByItemId.get(event.itemStack.typeId);
+    if (!gun) return;
+
+    const player = event.source;
+
+    if (aiming.has(player.id)) stopAim(player.id);
+    else startAim(player, gun);
 });
 
 // ---- Reload key (Q) --------------------------------------------------------------------------------------
@@ -544,10 +568,19 @@ world.afterEvents.entityItemDrop.subscribe((event) => {
 
     const drops: DroppedGun[] = [];
 
-    for (const item of event.items) {
-        const stack = item.getComponent("minecraft:item")?.itemStack;
-        const gun = stack ? gunsByItemId.get(stack.typeId) : undefined;
-        if (stack && gun) drops.push({ entity: item, stack, gun });
+    // Once, in the real game, event.items was not iterable ("value is not iterable" at this loop): read it defensively.
+    const items: Entity[] = event.items ? Array.from(event.items) : [];
+
+    for (const item of items) {
+
+        // An entity that is already gone throws when asked for its component.
+        try {
+            const stack = item.getComponent("minecraft:item")?.itemStack;
+            const gun = stack ? gunsByItemId.get(stack.typeId) : undefined;
+            if (stack && gun) drops.push({ entity: item, stack, gun });
+        } catch {
+            // Not a live item entity: nothing to take back.
+        }
     }
 
     if (drops.length === 0) return;

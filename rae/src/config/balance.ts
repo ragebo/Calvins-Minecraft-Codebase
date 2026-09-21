@@ -184,6 +184,14 @@ export const AIM = {
     scopeStayTicks: 72000,
     /** `rae:aim_spike fov`: how long the camera takes to move to the new field of view, in seconds. */
     fovEaseSeconds: 0.2,
+    /**
+     * The field of view the engine accepts. MEASURED: asking for 24 fails with "Custom FOV must be within [30.0, 110.0]"
+     * (the bolt rifle's zoom silently did nothing until this was found). core/aim.ts clamps to it.
+     */
+    fovMin: 30,
+    fovMax: 110,
+    /** How long the aim slowdown lasts each time it is applied (ticks). It is refreshed while aiming, so it must outlast the refresh. */
+    slowEffectTicks: 6,
     /** How often the off-hand slot of every player is read while logging is on (ticks). */
     offhandPollTicks: 2
 };

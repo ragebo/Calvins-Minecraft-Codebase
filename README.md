@@ -123,7 +123,7 @@ Ammo is per weapon category (handgun/rifle/shotgun rounds), real inventory items
 | Action | How |
 |---|---|
 | Fire | Left-click (at the air, a mob or a block) |
-| Aim | Hold right-click: a bow-like zoom, and a scope overlay for the bolt rifle. You walk slower while aiming |
+| Aim | Right-click toggles it (tap on, tap off): a bow-like zoom, and a scope overlay for the bolt rifle. You walk slower while aimed, and can fire while aimed. It ends by itself if you switch slot, die or leave |
 | Reload | Q. The game drops the gun; a script takes it back into its slot and starts the reload |
 | Reload (automatic) | Clicking an empty gun clicks and reloads it |
 

@@ -5,15 +5,19 @@ Not an ARCH task: added on request. A lot of the game is spent on horseback, and
 | Action | How |
 |---|---|
 | Fire | **Left-click**: at the air, a mob or a block. Riding or not |
-| Aim | **Hold right-click**. A bow-like zoom (about 62 to 52 degrees depending on the gun; the normal view is about 70). The **bolt rifle** zooms much further (24) and shows a **scope overlay** (black screen, clear round lens, crosshair). You walk slower while aiming |
+| Aim | **Right-click toggles it** (tap to aim, tap again to stop). A bow-like zoom (62 to 52 degrees depending on the gun; the normal view is about 70). The **bolt rifle** zooms furthest (30, the smallest the game allows) and shows a **scope overlay** (black screen, clear round lens, crosshair). You walk slower while aimed (the bolt rifle most), and you **can fire while aimed** |
 | Reload | **Q**. The game drops the gun, and a script takes it back into its slot and starts the reload. You see the reload messages and hear its sounds as before |
 | Reload (automatic) | **Clicking an empty gun** clicks and starts the reload by itself |
 
-Sneaking does nothing to a gun any more. Right-click by itself never fires (a press always sends a "use" event first, and it is ignored).
+Sneaking does nothing to a gun any more. Right-click never fires: it only aims.
+
+**Why aim is a toggle and not a hold.** The first version made it a hold. The game sends no attack input while an item is in use (the same rule that stops you hitting things while drawing a bow), so you could not left-click to fire while holding right-click. A tap has no "in use" state, so it does not block the click. The guns are therefore plain items again (no hold-to-use, no cooldown).
+
+Two other things the first real-game run of the controls showed, both fixed here: the game only accepts a field of view from 30 to 110 (the bolt rifle asked for 24, so its zoom silently did nothing while the scope overlay showed), and one drop event carried an item list that could not be iterated (a logged script error), which is now read defensively.
 
 Every one of these was measured in the game first (`AIM-SPIKE.md`): a left-click at the air is a swing with source Attack, at a block Mine, on a horse too; a held right-click sends a start and, when let go, a stop; Q sends a drop, the slot emptying and a DropItem swing in the same tick; Bedrock has no swap-to-off-hand key.
 
-Packs: behavior pack **0.1.12** (guns are hold-to-use items with no cooldown; the six gun sprites) and resource pack **1.0.18** (the sprites). Both are deployed together with Minecraft closed.
+Packs: behavior pack **0.1.13** (the controls, plain gun items) and resource pack **1.0.18** (the six gun sprites, unchanged since the last deploy).
 
 `npm test` checks each rule with the same event sequences the game sent (fire on Attack and Mine, nothing on the other swings, no shot from right-click, the zoom and its reset, the scope only for the bolt rifle, Q keeping the gun and starting the reload, a drop that is not Q left alone, two players at once). It cannot say how it feels or whether the game accepts every piece together. This card does.
 
@@ -24,12 +28,12 @@ Packs: behavior pack **0.1.12** (guns are hold-to-use items with no cooldown; th
 | # | Do | Expect |
 |---|---|---|
 | 1 | Hold the revolver. Left-click at the sky, then at a mob, then at a block. | A shot each time: the bang, and a bullet flying. Nothing is mined. |
-| 2 | Hold right-click for a moment, then let go. | The view zooms in a little while held and goes back to your normal view on release. No shot. You move slower while held. |
-| 3 | Hold the bolt rifle and hold right-click. | The view zooms a lot and a black scope overlay with a clear round lens and a crosshair appears; on release both go away. **The overlay must go away.** |
+| 2 | Tap right-click once, look around, walk, then tap it again. | The first tap zooms in a little and it **stays** zoomed; you walk slower. The second tap puts the view back to normal. No shot from either tap. |
+| 3 | Hold the bolt rifle and tap right-click. Fire a shot **through the scope** (left-click), then tap right-click again. | The view zooms a lot **and** the black scope overlay appears. The shot fires while the scope stays up. The second tap removes both the zoom and the overlay. |
 | 4 | Fire until the revolver clicks empty. Click once more. | A dry click, then "Reloading Revolver..." with the reload sounds, and it is full again after a couple of seconds. No key needed. |
 | 5 | Fire a few rounds and press **Q**. | The gun does not stay on the ground: it stays in your hand or hotbar slot, the reload starts, and the magazine is full afterwards. If it is already full you are told so. |
 | 6 | Get on a horse and repeat 1 to 5. | The same. Left-click, aim and Q all work while riding. **Q on a horse is the one thing not seen in the game yet.** |
-| 7 | Aim, then switch to another hotbar slot while still holding right-click. | The zoom (and the scope) end by themselves within a fraction of a second. |
+| 7 | Aim, then switch to another hotbar slot. | The zoom (and the scope) end by themselves within a fraction of a second. |
 | 8 | Drag a gun out of the inventory screen onto the ground. | It drops for real and stays dropped (only the Q key is a reload). |
 
 ## What to tell me
