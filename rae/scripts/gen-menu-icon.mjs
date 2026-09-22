@@ -2,9 +2,9 @@
 //
 //     node scripts/gen-menu-icon.mjs
 //
-// It exists so the menu item has an icon of its own without anyone drawing one. Replace the PNG with your own art
-// whenever you like and stop running this script (test/assets.test.mjs compares the file with buildMenuIconPixels(),
-// so delete that comparison with it).
+// It exists so the menu item had an icon of its own without anyone drawing one at first. Superseded 2026-09-21:
+// the owner drew their own icon for the item (now a globe, not this star), so nothing in the pack or the tests
+// runs this script's output anymore. Left here for reference, and in case anyone wants the generated look back.
 
 import { mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";

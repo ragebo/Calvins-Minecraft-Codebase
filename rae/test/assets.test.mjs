@@ -411,19 +411,17 @@ test("the aim probe items are hold-to-use items that differ only in their use an
     done();
 });
 
-test("the menu item's icon in the pack is exactly what scripts/gen-menu-icon.mjs makes", async () => {
+test("the menu item's icon in the pack is a proper 16x16 sprite", () => {
     const { check, done } = checks();
-    const generator = await import(pathToFileURL(path.join(import.meta.dirname, "..", "scripts", "gen-menu-icon.mjs")).href);
+
+    // scripts/gen-menu-icon.mjs made the original gold-star icon; the owner replaced it with their own
+    // art (2026-09-21), so this no longer checks the file against that generator's output, only that
+    // whatever image is here is a well-formed sprite like every other item icon.
     const file = path.join(RP, "textures", "items", "game_menu.png");
     check("the file exists", existsSync(file));
     if (!existsSync(file)) return done();
 
     const info = pngInfo(file);
     check("it is a 16x16 PNG with an alpha channel, like the other item sprites", info?.width === 16 && info?.height === 16 && ALPHA_COLOR_TYPES.has(info?.colorType), JSON.stringify(info));
-    const pixels = pngPixels(file);
-    check("its pixels are the generator's (run: node scripts/gen-menu-icon.mjs)", pixels !== null && pixels.equals(generator.buildMenuIconPixels()));
-
-    const alpha = (x, y) => pixels?.[(y * 16 + x) * 4 + 3];
-    check("the corners are transparent and the middle is solid: a badge, not a filled square", alpha(0, 0) === 0 && alpha(15, 15) === 0 && alpha(7, 8) === 255);
     done();
 });
