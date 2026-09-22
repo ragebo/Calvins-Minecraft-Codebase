@@ -4,7 +4,7 @@ import {
     EquipmentSlot, EntityDamageCause, EntitySwingSource
 } from "@minecraft/server";
 import { AMMO, GUNS, BULLET_ENTITY_ID, BULLET_LIFETIME_TICKS, type GunConfig, type GunId, type MuzzleEffects, type SoundCue } from "../config/guns.js";
-import { AIM } from "../config/balance.js";
+import { AIM, TUMBLEWEED_ENTITY_ID } from "../config/balance.js";
 import { hideScope, showScope, zoomReset, zoomTo } from "../core/aim.js";
 import { registerSystem } from "../core/registry.js";
 import { onTick } from "../core/tick.js";
@@ -341,7 +341,8 @@ function fireHitscan(player: Player, gun: Extract<GunConfig, { kind: "hitscan" }
             ? distanceBetween(origin, blockWorldHitPoint(blockHit.block.location, blockHit.faceLocation))
             : gun.range;
 
-        const entityHits = player.dimension.getEntitiesFromRay(origin, direction, { maxDistance });
+        // Tumbleweeds are decoration: they can never soak up a pellet or shield anyone standing behind one.
+        const entityHits = player.dimension.getEntitiesFromRay(origin, direction, { maxDistance, excludeTypes: [TUMBLEWEED_ENTITY_ID] });
 
         let closest: Entity | undefined;
         let closestDistance = Infinity;

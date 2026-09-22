@@ -41,6 +41,8 @@ rae/                    TypeScript source. This is what you edit.
                          players.ts    cached "who is law / a free outlaw / a prisoner" queries
                          game.ts       start a round (random or chosen roles), reset, send everyone to spawns
                          forms.ts      show a form, retrying while the game says the player is busy
+                         ambience.ts   on/off switches for cosmetic effects (the tumbleweed toggle), shared
+                                       between the system that acts on one and whatever flips it
                          ui.ts         titles, the action bar (with priorities) and chat; the compass
                                        posts through it
                          director.ts   the one slot fort raid / ranch raid / train robbery share
@@ -80,6 +82,7 @@ and fails if a count goes up.
 |---|---|
 | `roles.ts` | Registers the round script events; the actions themselves are in `core/game.ts` |
 | `menu.ts` | The in-game menu (start with random or chosen roles, reset, teleport) — see below |
+| `tumbleweed.ts` | Ambient tumbleweeds blown by a "world wind" — see below |
 | `jail.ts` | Jail site tracking, capture → bounty payout → jail → elimination |
 | `jailbreak.ts` | Lockpick minigame, escort-vulnerability after a rescue |
 | `raids.ts` | Fort raid (via the shared `raid.ts` engine) + ranch raid (hand-rolled — its dynamic reinforcement timer and per-mob rules don't fit the shared engine without changing behavior) |
@@ -179,6 +182,27 @@ physical button still works. The game's own actions live in `core/game.ts`, shar
 `core/forms.ts` shows a form and retries while the game says the player is busy (opening a form
 straight from a right-click hits that). The icon is made by `scripts/gen-menu-icon.mjs`; replace the
 PNG with your own art whenever you like.
+
+### Tumbleweeds
+
+Purely ambient: `bountysys:tumbleweed`s roll across the ground, blown by a steady "world wind"
+(`TUMBLEWEED` in `config/balance.ts`: direction, strength, jitter, occasional gusts, spin speed).
+They spawn near online players up to `TUMBLEWEED.maxActive` at once and despawn once too old or
+too far from everyone, all from one `onTick` handler in `systems/tumbleweed.ts`. They cannot hurt
+or be hurt by anything, and cannot even be hit: `minecraft:physics` is fully off (no gravity, no
+collision, the same trick as the train car), so nothing solid ever stops one or is stopped by one.
+Guns additionally exclude the type from their hitscan ray — belt and braces, so one standing
+between a shooter and a target can never soak up a hit or shield anyone.
+
+Spawning is on by default; the menu's last button and `/scriptevent rae:tumbleweed` (no player
+needed, so a command block can call it) toggle it. Turning it off only stops new ones — it doesn't
+remove the ones already rolling. The model is a tangle of thin "twig" boxes made by
+`scripts/gen-tumbleweed-model.mjs` (the same no-art-drawn approach as the train and the menu icon);
+swap in your own Blockbench model any time and stop running the script.
+
+Without collision it doesn't settle onto a slope on its own, so on hilly terrain one can end up
+floating or sinking in a little — acceptable for ambience, and the first thing to improve with a
+ground-height check if it looks wrong in your world.
 
 ### Law compass
 

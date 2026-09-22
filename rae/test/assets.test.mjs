@@ -188,7 +188,8 @@ test("geometry identifiers are unique, and every face of every box points inside
         const { texture_width: width, texture_height: height } = geometry.description;
         const where = `${rel(file)} ${geometry.description.identifier}`;
         for (const bone of geometry.bones) {
-            for (const [index, cube] of bone.cubes.entries()) {
+            // A bone may be a pure parent/pivot with no cubes of its own (the tumbleweed's "root").
+            for (const [index, cube] of (bone.cubes ?? []).entries()) {
                 if (Array.isArray(cube.uv)) {
                     check(`${where}: ${bone.name} cube ${index} starts inside the texture`, cube.uv[0] >= 0 && cube.uv[1] >= 0 && cube.uv[0] < width && cube.uv[1] < height, JSON.stringify(cube.uv));
                     continue;
@@ -199,6 +200,20 @@ test("geometry identifiers are unique, and every face of every box points inside
                 }
             }
         }
+    }
+    done();
+});
+
+test("no custom entity uses minecraft:pushable: the schema rejects it and the entity fails to load", () => {
+    const { check, done } = checks();
+
+    // Found the hard way on the train car (copied from the vanilla boat, which does have it): the game
+    // rejects this component for a custom entity ("found in the input, but is not present in the Schema"),
+    // and the whole entity then fails to load. Checked for every entity, not just the train, so the next
+    // one that reaches for it (a rolling tumbleweed is exactly the kind of entity that looks like it wants
+    // a "pushable" component) is caught before it ever reaches the game.
+    for (const { file, body } of behaviorEntities) {
+        check(`${rel(file)}: no minecraft:pushable`, !("minecraft:pushable" in body.components), Object.keys(body.components).join(", "));
     }
     done();
 });
@@ -224,9 +239,6 @@ test("the train car: its texture is the size its geometry says, and its seats an
     check("every seat is over the car's floor (inside its hit box, above the ground)", rideable?.seats.every((s) => Math.abs(s.position[0]) <= box.width / 2 && Math.abs(s.position[2]) <= box.width / 2 && s.position[1] >= 0 && s.position[1] < box.height), JSON.stringify(rideable?.seats.map((s) => s.position)));
     check("no two seats are in the same place", new Set(rideable?.seats.map((s) => s.position.join(","))).size === rideable?.seats.length);
     check("it does not fall or collide (a script drives it)", components["minecraft:physics"]?.has_gravity === false && components["minecraft:physics"]?.has_collision === false, JSON.stringify(components["minecraft:physics"]));
-    // The game rejects this component for a custom entity ("found in the input, but is not present in the Schema") and the whole
-    // entity then fails to load, so it must stay out. The vanilla boat has it, which is what makes it tempting.
-    check("it has no minecraft:pushable (the schema rejects it and the entity would not load)", !("minecraft:pushable" in components), Object.keys(components).join(", "));
     check("nothing can hurt it", components["minecraft:damage_sensor"]?.triggers?.cause === "all" && components["minecraft:damage_sensor"]?.triggers?.deals_damage === "no", JSON.stringify(components["minecraft:damage_sensor"]));
     check("only a script or a command spawns it", car.description.is_spawnable === false && car.description.is_summonable === true);
     done();
@@ -270,6 +282,32 @@ test("the train model and texture in the pack are exactly what scripts/gen-train
     const pixels = pngPixels(textureFile);
     check("the texture is a plain RGBA PNG", pixels !== null);
     check("and its pixels are the generator's palette (the compressed bytes may differ between Node versions, the pixels may not)", pixels !== null && pixels.equals(generator.buildPixels()));
+
+    const palette = Object.values(generator.PALETTE).map((c) => c.join(","));
+    check("every palette colour is different", new Set(palette).size === palette.length);
+    check("the palette fits in one row of the texture", palette.length <= generator.TEXTURE_SIZE, String(palette.length));
+    done();
+});
+
+test("the tumbleweed model and texture in the pack are exactly what scripts/gen-tumbleweed-model.mjs makes", async () => {
+    const { check, done } = checks();
+    const generator = await import(pathToFileURL(path.join(import.meta.dirname, "..", "scripts", "gen-tumbleweed-model.mjs")).href);
+
+    const geometryFile = path.join(RP, "models", "entity", "tumbleweed.geo.json");
+    const textureFile = path.join(RP, "textures", "entity", "tumbleweed.png");
+    check("the geometry file exists", existsSync(geometryFile));
+    check("the texture file exists", existsSync(textureFile));
+    if (!existsSync(geometryFile) || !existsSync(textureFile)) return done();
+
+    check("the geometry file is what the generator writes (run: node scripts/gen-tumbleweed-model.mjs)", readFileSync(geometryFile, "utf8").replace(/\r\n/g, "\n") === generator.renderGeometry());
+    const pixels = pngPixels(textureFile);
+    check("the texture is a plain RGBA PNG", pixels !== null);
+    check("and its pixels are the generator's palette", pixels !== null && pixels.equals(generator.buildPixels()));
+
+    const geometry = generator.buildGeometry()["minecraft:geometry"][0];
+    const twigs = geometry.bones.filter((b) => b.name !== "root");
+    check("every twig is a separate bone pivoting at the same point as the root, not a lone cube", twigs.every((b) => b.parent === "root" && b.pivot.join(",") === geometry.bones[0].pivot.join(",")));
+    check("more than one rotation is used, or it would look like a single stick, not a tangle", new Set(twigs.map((b) => b.rotation.join(","))).size > 1);
 
     const palette = Object.values(generator.PALETTE).map((c) => c.join(","));
     check("every palette colour is different", new Set(palette).size === palette.length);

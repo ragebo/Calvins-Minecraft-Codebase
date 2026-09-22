@@ -10,6 +10,7 @@ const { MENU } = await load("config/balance.js");
 await load("main.js");                                          // every system, as in the game (roles, menu, the rest)
 const { resetAllSystems } = await load("core/registry.js");
 const { getRecord } = await load("core/state.js");
+const { tumbleweedsEnabled, toggleTumbleweeds } = await load("core/ambience.js");
 
 const ITEM = "bountysys:game_menu";
 const warnings = [];
@@ -57,6 +58,7 @@ function world3(names = ["Ada", "Ben", "Cy"]) {
     queue.length = 0;
     uiFake.shown.length = 0;
     warnings.length = 0;
+    if (!tumbleweedsEnabled()) toggleTumbleweeds();  // resetAllSystems doesn't touch this cosmetic flag on purpose; the menu tests assume it starts on
     const list = names.map((name, i) => fake.makePlayer(name, { location: { x: i, y: 64, z: 0 }, holding: i === 0 ? ITEM : null }));
     fake.advance(1);
     return list;
@@ -66,7 +68,7 @@ function world3(names = ["Ada", "Ben", "Cy"]) {
 // Opening
 // ---------------------------------------------------------------------------------------------------------
 
-test("using the menu item opens the main menu with its four buttons; another item does not", async () => {
+test("using the menu item opens the main menu with its five buttons; another item does not", async () => {
     const { check, done } = checks();
     const [ada] = world3();
     answer(closed);
@@ -75,7 +77,7 @@ test("using the menu item opens the main menu with its four buttons; another ite
     await drain();
     check("one form was shown", uiFake.shown.length === 1, String(uiFake.shown.length));
     check("an action form for Ada", uiFake.shown[0]?.kind === "action" && uiFake.shown[0]?.player === ada);
-    check("with the four choices", buttons(uiFake.shown[0]).join("|") === "Start game|Reset game|Teleport|Send everyone to their spawns", buttons(uiFake.shown[0]).join("|"));
+    check("with the five choices", buttons(uiFake.shown[0]).join("|") === "Start game|Reset game|Teleport|Send everyone to their spawns|Turn tumbleweeds off", buttons(uiFake.shown[0]).join("|"));
 
     uiFake.shown.length = 0;
     world.afterEvents.itemUse.emit({ itemStack: { typeId: "minecraft:stick" }, source: ada });
@@ -435,6 +437,30 @@ test("send everyone to their spawns: only players with a role move", async () =>
     for (const p of [ada, ben, cy]) p.teleports.length = 0;
     scriptEvent("bounty:teleport", undefined);
     check("/scriptevent bounty:teleport still does it", ada.teleports.length === 1 && ben.teleports.length === 1 && cy.teleports.length === 0);
+    done();
+});
+
+test("the menu's tumbleweed button toggles the flag and its own label, and /scriptevent rae:tumbleweed does the same with no player", async () => {
+    const { check, done } = checks();
+    const [ada] = world3();
+    check("(setup) tumbleweeds start on", tumbleweedsEnabled());
+
+    answer(pick(4));
+    use(ada);
+    await drain();
+    check("now off", !tumbleweedsEnabled());
+    check("told", /Tumbleweeds are off/.test(text(ada)), text(ada));
+
+    uiFake.shown.length = 0;
+    queue.length = 0;
+    answer(closed);
+    use(ada);
+    await drain();
+    check("the button now reads the other way round", buttons(uiFake.shown[0]).includes("Turn tumbleweeds on"), buttons(uiFake.shown[0]).join("|"));
+
+    fake.chat.length = 0;
+    scriptEvent("rae:tumbleweed", undefined);
+    check("the script event flips it back on, with no player needed", tumbleweedsEnabled() && fake.chat.some((m) => /Tumbleweeds are on/.test(m)), JSON.stringify(fake.chat));
     done();
 });
 

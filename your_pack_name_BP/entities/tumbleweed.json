@@ -1,0 +1,19 @@
+{
+    "format_version": "1.26.50",
+    "minecraft:entity": {
+        "description": {
+            "identifier": "bountysys:tumbleweed",
+            "is_spawnable": false,
+            "is_summonable": true,
+            "is_experimental": false
+        },
+        "components": {
+            "minecraft:type_family": { "family": ["tumbleweed"] },
+            "minecraft:collision_box": { "width": 0.8, "height": 0.8 },
+            "minecraft:physics": { "has_gravity": false, "has_collision": false },
+            "minecraft:damage_sensor": {
+                "triggers": { "cause": "all", "deals_damage": "no" }
+            }
+        }
+    }
+}

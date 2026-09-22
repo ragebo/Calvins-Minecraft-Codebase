@@ -25,6 +25,7 @@ import "./systems/probe.js";
 import "./systems/transit.js";
 import "./systems/aimprobe.js";
 import "./systems/menu.js";
+import "./systems/tumbleweed.js";
 
 // ---------------------------------------------------
 // DEBUG COMMANDS

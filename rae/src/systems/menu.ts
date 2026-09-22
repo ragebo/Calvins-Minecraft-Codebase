@@ -1,6 +1,7 @@
 import { world, type Player } from "@minecraft/server";
 import { ActionFormData, ModalFormData } from "@minecraft/server-ui";
 import { TELEPORT_TARGETS } from "../config/world.js";
+import { toggleTumbleweeds, tumbleweedsEnabled } from "../core/ambience.js";
 import { onScriptEvent } from "../core/events.js";
 import { showForm } from "../core/forms.js";
 import { resetGame, sendEveryoneToSpawns, startChosenRound, startRandomRound, type Choice } from "../core/game.js";
@@ -158,7 +159,8 @@ async function mainMenu(player: Player): Promise<void> {
         .button("Start game")
         .button("Reset game")
         .button("Teleport")
-        .button("Send everyone to their spawns");
+        .button("Send everyone to their spawns")
+        .button(tumbleweedsEnabled() ? "Turn tumbleweeds off" : "Turn tumbleweeds on");
 
     const response = await showForm(player, form);
     if (!response || response.canceled) return;
@@ -171,6 +173,11 @@ async function mainMenu(player: Player): Promise<void> {
             sendEveryoneToSpawns();
             tell(player, format("ok", "Everyone with a role was sent to their spawns."));
             break;
+        case 4: {
+            const on = toggleTumbleweeds();
+            tell(player, format("ok", on ? "Tumbleweeds are on: new ones will roll in." : "Tumbleweeds are off: no new ones will spawn."));
+            break;
+        }
         default: break;
     }
 }

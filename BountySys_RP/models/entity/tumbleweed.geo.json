@@ -1,0 +1,761 @@
+{
+    "format_version": "1.16.0",
+    "minecraft:geometry": [
+        {
+            "description": {
+                "identifier": "geometry.tumbleweed",
+                "texture_width": 16,
+                "texture_height": 16,
+                "visible_bounds_width": 1,
+                "visible_bounds_height": 1,
+                "visible_bounds_offset": [0, 0.4, 0]
+            },
+            "bones": [
+                {
+                    "name": "root",
+                    "pivot": [0, 6.4, 0]
+                },
+                {
+                    "name": "twig0",
+                    "parent": "root",
+                    "pivot": [0, 6.4, 0],
+                    "rotation": [0, 0, 0],
+                    "cubes": [
+                        {
+                            "origin": [-6.4, 5.4, -1],
+                            "size": [12.8, 2, 2],
+                            "uv": {
+                                "north": {
+                                    "uv": [
+                                        0,
+                                        0
+                                    ],
+                                    "uv_size": [
+                                        1,
+                                        1
+                                    ]
+                                },
+                                "east": {
+                                    "uv": [
+                                        0,
+                                        0
+                                    ],
+                                    "uv_size": [
+                                        1,
+                                        1
+                                    ]
+                                },
+                                "south": {
+                                    "uv": [
+                                        0,
+                                        0
+                                    ],
+                                    "uv_size": [
+                                        1,
+                                        1
+                                    ]
+                                },
+                                "west": {
+                                    "uv": [
+                                        0,
+                                        0
+                                    ],
+                                    "uv_size": [
+                                        1,
+                                        1
+                                    ]
+                                },
+                                "up": {
+                                    "uv": [
+                                        0,
+                                        0
+                                    ],
+                                    "uv_size": [
+                                        1,
+                                        1
+                                    ]
+                                },
+                                "down": {
+                                    "uv": [
+                                        0,
+                                        0
+                                    ],
+                                    "uv_size": [
+                                        1,
+                                        1
+                                    ]
+                                }
+                            }
+                        }
+                    ]
+                },
+                {
+                    "name": "twig1",
+                    "parent": "root",
+                    "pivot": [0, 6.4, 0],
+                    "rotation": [0, 45, 0],
+                    "cubes": [
+                        {
+                            "origin": [-6.4, 5.4, -1],
+                            "size": [12.8, 2, 2],
+                            "uv": {
+                                "north": {
+                                    "uv": [
+                                        1,
+                                        0
+                                    ],
+                                    "uv_size": [
+                                        1,
+                                        1
+                                    ]
+                                },
+                                "east": {
+                                    "uv": [
+                                        1,
+                                        0
+                                    ],
+                                    "uv_size": [
+                                        1,
+                                        1
+                                    ]
+                                },
+                                "south": {
+                                    "uv": [
+                                        1,
+                                        0
+                                    ],
+                                    "uv_size": [
+                                        1,
+                                        1
+                                    ]
+                                },
+                                "west": {
+                                    "uv": [
+                                        1,
+                                        0
+                                    ],
+                                    "uv_size": [
+                                        1,
+                                        1
+                                    ]
+                                },
+                                "up": {
+                                    "uv": [
+                                        1,
+                                        0
+                                    ],
+                                    "uv_size": [
+                                        1,
+                                        1
+                                    ]
+                                },
+                                "down": {
+                                    "uv": [
+                                        1,
+                                        0
+                                    ],
+                                    "uv_size": [
+                                        1,
+                                        1
+                                    ]
+                                }
+                            }
+                        }
+                    ]
+                },
+                {
+                    "name": "twig2",
+                    "parent": "root",
+                    "pivot": [0, 6.4, 0],
+                    "rotation": [0, 90, 0],
+                    "cubes": [
+                        {
+                            "origin": [-6.4, 5.4, -1],
+                            "size": [12.8, 2, 2],
+                            "uv": {
+                                "north": {
+                                    "uv": [
+                                        2,
+                                        0
+                                    ],
+                                    "uv_size": [
+                                        1,
+                                        1
+                                    ]
+                                },
+                                "east": {
+                                    "uv": [
+                                        2,
+                                        0
+                                    ],
+                                    "uv_size": [
+                                        1,
+                                        1
+                                    ]
+                                },
+                                "south": {
+                                    "uv": [
+                                        2,
+                                        0
+                                    ],
+                                    "uv_size": [
+                                        1,
+                                        1
+                                    ]
+                                },
+                                "west": {
+                                    "uv": [
+                                        2,
+                                        0
+                                    ],
+                                    "uv_size": [
+                                        1,
+                                        1
+                                    ]
+                                },
+                                "up": {
+                                    "uv": [
+                                        2,
+                                        0
+                                    ],
+                                    "uv_size": [
+                                        1,
+                                        1
+                                    ]
+                                },
+                                "down": {
+                                    "uv": [
+                                        2,
+                                        0
+                                    ],
+                                    "uv_size": [
+                                        1,
+                                        1
+                                    ]
+                                }
+                            }
+                        }
+                    ]
+                },
+                {
+                    "name": "twig3",
+                    "parent": "root",
+                    "pivot": [0, 6.4, 0],
+                    "rotation": [0, 135, 0],
+                    "cubes": [
+                        {
+                            "origin": [-6.4, 5.4, -1],
+                            "size": [12.8, 2, 2],
+                            "uv": {
+                                "north": {
+                                    "uv": [
+                                        3,
+                                        0
+                                    ],
+                                    "uv_size": [
+                                        1,
+                                        1
+                                    ]
+                                },
+                                "east": {
+                                    "uv": [
+                                        3,
+                                        0
+                                    ],
+                                    "uv_size": [
+                                        1,
+                                        1
+                                    ]
+                                },
+                                "south": {
+                                    "uv": [
+                                        3,
+                                        0
+                                    ],
+                                    "uv_size": [
+                                        1,
+                                        1
+                                    ]
+                                },
+                                "west": {
+                                    "uv": [
+                                        3,
+                                        0
+                                    ],
+                                    "uv_size": [
+                                        1,
+                                        1
+                                    ]
+                                },
+                                "up": {
+                                    "uv": [
+                                        3,
+                                        0
+                                    ],
+                                    "uv_size": [
+                                        1,
+                                        1
+                                    ]
+                                },
+                                "down": {
+                                    "uv": [
+                                        3,
+                                        0
+                                    ],
+                                    "uv_size": [
+                                        1,
+                                        1
+                                    ]
+                                }
+                            }
+                        }
+                    ]
+                },
+                {
+                    "name": "twig4",
+                    "parent": "root",
+                    "pivot": [0, 6.4, 0],
+                    "rotation": [60, 0, 0],
+                    "cubes": [
+                        {
+                            "origin": [-6.4, 5.4, -1],
+                            "size": [12.8, 2, 2],
+                            "uv": {
+                                "north": {
+                                    "uv": [
+                                        1,
+                                        0
+                                    ],
+                                    "uv_size": [
+                                        1,
+                                        1
+                                    ]
+                                },
+                                "east": {
+                                    "uv": [
+                                        1,
+                                        0
+                                    ],
+                                    "uv_size": [
+                                        1,
+                                        1
+                                    ]
+                                },
+                                "south": {
+                                    "uv": [
+                                        1,
+                                        0
+                                    ],
+                                    "uv_size": [
+                                        1,
+                                        1
+                                    ]
+                                },
+                                "west": {
+                                    "uv": [
+                                        1,
+                                        0
+                                    ],
+                                    "uv_size": [
+                                        1,
+                                        1
+                                    ]
+                                },
+                                "up": {
+                                    "uv": [
+                                        1,
+                                        0
+                                    ],
+                                    "uv_size": [
+                                        1,
+                                        1
+                                    ]
+                                },
+                                "down": {
+                                    "uv": [
+                                        1,
+                                        0
+                                    ],
+                                    "uv_size": [
+                                        1,
+                                        1
+                                    ]
+                                }
+                            }
+                        }
+                    ]
+                },
+                {
+                    "name": "twig5",
+                    "parent": "root",
+                    "pivot": [0, 6.4, 0],
+                    "rotation": [60, 90, 0],
+                    "cubes": [
+                        {
+                            "origin": [-6.4, 5.4, -1],
+                            "size": [12.8, 2, 2],
+                            "uv": {
+                                "north": {
+                                    "uv": [
+                                        0,
+                                        0
+                                    ],
+                                    "uv_size": [
+                                        1,
+                                        1
+                                    ]
+                                },
+                                "east": {
+                                    "uv": [
+                                        0,
+                                        0
+                                    ],
+                                    "uv_size": [
+                                        1,
+                                        1
+                                    ]
+                                },
+                                "south": {
+                                    "uv": [
+                                        0,
+                                        0
+                                    ],
+                                    "uv_size": [
+                                        1,
+                                        1
+                                    ]
+                                },
+                                "west": {
+                                    "uv": [
+                                        0,
+                                        0
+                                    ],
+                                    "uv_size": [
+                                        1,
+                                        1
+                                    ]
+                                },
+                                "up": {
+                                    "uv": [
+                                        0,
+                                        0
+                                    ],
+                                    "uv_size": [
+                                        1,
+                                        1
+                                    ]
+                                },
+                                "down": {
+                                    "uv": [
+                                        0,
+                                        0
+                                    ],
+                                    "uv_size": [
+                                        1,
+                                        1
+                                    ]
+                                }
+                            }
+                        }
+                    ]
+                },
+                {
+                    "name": "twig6",
+                    "parent": "root",
+                    "pivot": [0, 6.4, 0],
+                    "rotation": [120, 45, 0],
+                    "cubes": [
+                        {
+                            "origin": [-6.4, 5.4, -1],
+                            "size": [12.8, 2, 2],
+                            "uv": {
+                                "north": {
+                                    "uv": [
+                                        2,
+                                        0
+                                    ],
+                                    "uv_size": [
+                                        1,
+                                        1
+                                    ]
+                                },
+                                "east": {
+                                    "uv": [
+                                        2,
+                                        0
+                                    ],
+                                    "uv_size": [
+                                        1,
+                                        1
+                                    ]
+                                },
+                                "south": {
+                                    "uv": [
+                                        2,
+                                        0
+                                    ],
+                                    "uv_size": [
+                                        1,
+                                        1
+                                    ]
+                                },
+                                "west": {
+                                    "uv": [
+                                        2,
+                                        0
+                                    ],
+                                    "uv_size": [
+                                        1,
+                                        1
+                                    ]
+                                },
+                                "up": {
+                                    "uv": [
+                                        2,
+                                        0
+                                    ],
+                                    "uv_size": [
+                                        1,
+                                        1
+                                    ]
+                                },
+                                "down": {
+                                    "uv": [
+                                        2,
+                                        0
+                                    ],
+                                    "uv_size": [
+                                        1,
+                                        1
+                                    ]
+                                }
+                            }
+                        }
+                    ]
+                },
+                {
+                    "name": "twig7",
+                    "parent": "root",
+                    "pivot": [0, 6.4, 0],
+                    "rotation": [120, 135, 0],
+                    "cubes": [
+                        {
+                            "origin": [-6.4, 5.4, -1],
+                            "size": [12.8, 2, 2],
+                            "uv": {
+                                "north": {
+                                    "uv": [
+                                        0,
+                                        0
+                                    ],
+                                    "uv_size": [
+                                        1,
+                                        1
+                                    ]
+                                },
+                                "east": {
+                                    "uv": [
+                                        0,
+                                        0
+                                    ],
+                                    "uv_size": [
+                                        1,
+                                        1
+                                    ]
+                                },
+                                "south": {
+                                    "uv": [
+                                        0,
+                                        0
+                                    ],
+                                    "uv_size": [
+                                        1,
+                                        1
+                                    ]
+                                },
+                                "west": {
+                                    "uv": [
+                                        0,
+                                        0
+                                    ],
+                                    "uv_size": [
+                                        1,
+                                        1
+                                    ]
+                                },
+                                "up": {
+                                    "uv": [
+                                        0,
+                                        0
+                                    ],
+                                    "uv_size": [
+                                        1,
+                                        1
+                                    ]
+                                },
+                                "down": {
+                                    "uv": [
+                                        0,
+                                        0
+                                    ],
+                                    "uv_size": [
+                                        1,
+                                        1
+                                    ]
+                                }
+                            }
+                        }
+                    ]
+                },
+                {
+                    "name": "twig8",
+                    "parent": "root",
+                    "pivot": [0, 6.4, 0],
+                    "rotation": [35, 20, 70],
+                    "cubes": [
+                        {
+                            "origin": [-6.4, 5.4, -1],
+                            "size": [12.8, 2, 2],
+                            "uv": {
+                                "north": {
+                                    "uv": [
+                                        3,
+                                        0
+                                    ],
+                                    "uv_size": [
+                                        1,
+                                        1
+                                    ]
+                                },
+                                "east": {
+                                    "uv": [
+                                        3,
+                                        0
+                                    ],
+                                    "uv_size": [
+                                        1,
+                                        1
+                                    ]
+                                },
+                                "south": {
+                                    "uv": [
+                                        3,
+                                        0
+                                    ],
+                                    "uv_size": [
+                                        1,
+                                        1
+                                    ]
+                                },
+                                "west": {
+                                    "uv": [
+                                        3,
+                                        0
+                                    ],
+                                    "uv_size": [
+                                        1,
+                                        1
+                                    ]
+                                },
+                                "up": {
+                                    "uv": [
+                                        3,
+                                        0
+                                    ],
+                                    "uv_size": [
+                                        1,
+                                        1
+                                    ]
+                                },
+                                "down": {
+                                    "uv": [
+                                        3,
+                                        0
+                                    ],
+                                    "uv_size": [
+                                        1,
+                                        1
+                                    ]
+                                }
+                            }
+                        }
+                    ]
+                },
+                {
+                    "name": "twig9",
+                    "parent": "root",
+                    "pivot": [0, 6.4, 0],
+                    "rotation": [150, 160, 40],
+                    "cubes": [
+                        {
+                            "origin": [-6.4, 5.4, -1],
+                            "size": [12.8, 2, 2],
+                            "uv": {
+                                "north": {
+                                    "uv": [
+                                        1,
+                                        0
+                                    ],
+                                    "uv_size": [
+                                        1,
+                                        1
+                                    ]
+                                },
+                                "east": {
+                                    "uv": [
+                                        1,
+                                        0
+                                    ],
+                                    "uv_size": [
+                                        1,
+                                        1
+                                    ]
+                                },
+                                "south": {
+                                    "uv": [
+                                        1,
+                                        0
+                                    ],
+                                    "uv_size": [
+                                        1,
+                                        1
+                                    ]
+                                },
+                                "west": {
+                                    "uv": [
+                                        1,
+                                        0
+                                    ],
+                                    "uv_size": [
+                                        1,
+                                        1
+                                    ]
+                                },
+                                "up": {
+                                    "uv": [
+                                        1,
+                                        0
+                                    ],
+                                    "uv_size": [
+                                        1,
+                                        1
+                                    ]
+                                },
+                                "down": {
+                                    "uv": [
+                                        1,
+                                        0
+                                    ],
+                                    "uv_size": [
+                                        1,
+                                        1
+                                    ]
+                                }
+                            }
+                        }
+                    ]
+                }
+            ]
+        }
+    ]
+}

@@ -212,6 +212,38 @@ export const HORSE = {
     jump: 0.5
 };
 
+/**
+ * Tumbleweeds (systems/tumbleweed.ts): purely ambient, blown across the ground by a steady "world wind".
+ * They cannot hurt or be hurt by anything, and guns are told to ignore them (systems/guns.ts excludeTypes).
+ * The id lives here, not in systems/tumbleweed.ts, so systems/guns.ts can read it without one system
+ * importing another.
+ */
+export const TUMBLEWEED_ENTITY_ID = "bountysys:tumbleweed";
+
+export const TUMBLEWEED = {
+    /** How often the mover/spawner/cleanup handler runs. */
+    tickInterval: 4,
+    /** The wind's direction, degrees clockwise from +Z (the way a player's yaw is measured), and its steady push per handler run. */
+    windHeadingDegrees: 0,
+    windStrength: 0.03,
+    /** Random sideways push added each run, so a group doesn't travel in lockstep. */
+    jitter: 0.01,
+    /** Chance per handler run of an extra, stronger gust on top of the steady wind. */
+    gustChance: 0.05,
+    gustStrength: 0.12,
+    /** How fast it visibly spins (degrees per handler run), independent of its travel direction. */
+    spinDegrees: 35,
+    /** At most this many alive at once. */
+    maxActive: 6,
+    /** A new one spawns near a random online player, this far off (blocks), upwind so it blows past them. */
+    spawnDistanceMin: 12,
+    spawnDistanceMax: 24,
+    /** Removed once it has existed this long (ticks)... */
+    maxAgeTicks: 6000,
+    /** ...or once it is farther than this from every online player (blocks), whichever comes first. */
+    despawnDistance: 80
+};
+
 export const HARMING = {
     /** Harming level = aliveOutlaws - 1, clamped at zero. */
     levelOffset: 1

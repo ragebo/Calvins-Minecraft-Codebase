@@ -175,3 +175,14 @@ test("against a target that ignores repeat hits in the vanilla window, the whole
     }
     done();
 });
+
+test("every ray excludes tumbleweeds: one can never soak up or shield a pellet", async () => {
+    const { check, done } = checks();
+    const { TUMBLEWEED_ENTITY_ID } = await load("config/balance.js");
+
+    for (const gun of shotguns) {
+        const { rays } = shoot(gun, () => []);
+        check(`${gun.id}: every ray's excludeTypes names the tumbleweed`, rays.every((r) => r.options.excludeTypes?.includes(TUMBLEWEED_ENTITY_ID)), JSON.stringify(rays.map((r) => r.options.excludeTypes)));
+    }
+    done();
+});
