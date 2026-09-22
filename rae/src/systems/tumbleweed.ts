@@ -1,4 +1,4 @@
-import { world, type Entity, type Vector3 } from "@minecraft/server";
+import { world, type Dimension, type Entity, type Vector3 } from "@minecraft/server";
 import { TUMBLEWEED, TUMBLEWEED_ENTITY_ID } from "../config/balance.js";
 import { toggleTumbleweeds, tumbleweedsEnabled } from "../core/ambience.js";
 import { onScriptEvent } from "../core/events.js";
@@ -15,10 +15,14 @@ import { announce } from "../core/ui.js";
  * ray (systems/guns.ts), belt and braces: one standing between a shooter and a target can never soak up a
  * hit or shield anyone, on any gun.
  *
+ * With collision off nothing rests it on the ground on its own (the first version of this file just left the
+ * spawn height alone, and it visibly floated — 2026-09-21 playtest), so `snapToGround` casts a ray straight
+ * down every handler run and teleports it onto whatever the ray finds, the same `getBlockFromRay` technique
+ * systems/guns.ts uses to find where a shot stops. `keepVelocity: true` on that teleport means the wind's
+ * horizontal push (still applied by `applyImpulse`) is undisturbed; only its height is corrected.
+ *
  * They are spawned and swept by this file's own onTick handler: no gameplay system depends on them, and
- * resetting a round leaves them alone (they are decoration, not round state). Without collision they don't
- * settle to the ground on their own, so a spawn spot far from the player who anchors it can end up floating
- * or sinking into a slope — acceptable for ambience, and easy to improve later with a ground-height check.
+ * resetting a round leaves them alone (they are decoration, not round state).
  */
 
 const BORN_TICK_PROPERTY = "bornTick";
@@ -68,7 +72,7 @@ function shouldDespawn(entity: Entity, players: readonly { location: Vector3 }[]
     return players.every((player) => distance(player.location, entity.location) > TUMBLEWEED.despawnDistance);
 }
 
-/** A spot upwind of a random online player, so the new tumbleweed blows past them rather than away from them. */
+/** An x/z spot upwind of a random online player, so the new tumbleweed blows past them rather than away from them. Its height is settled by `snapToGround` right after it spawns. */
 function spawnSpot(players: readonly { location: Vector3 }[]): Vector3 {
 
     const near = players[Math.floor(Math.random() * players.length)]!;
@@ -78,9 +82,30 @@ function spawnSpot(players: readonly { location: Vector3 }[]): Vector3 {
 
     return {
         x: near.location.x + upwind.x * range + jitter.x,
-        y: near.location.y,              // no gravity to correct it afterwards, so this is its height for good
+        y: near.location.y,
         z: near.location.z + upwind.z * range + jitter.z
     };
+}
+
+/** The y of the ground surface straight down from (x, z), probed from a little above `aroundY`, or undefined over open air, a void, or an unloaded chunk. */
+function groundY(dimension: Dimension, x: number, aroundY: number, z: number): number | undefined {
+
+    const origin = { x, y: aroundY + TUMBLEWEED.groundProbeUp, z };
+    const hit = dimension.getBlockFromRay(origin, { x: 0, y: -1, z: 0 }, { maxDistance: TUMBLEWEED.groundProbeUp + TUMBLEWEED.groundProbeDown });
+
+    return hit ? hit.block.location.y + hit.faceLocation.y : undefined;
+}
+
+/** Keeps it hugging the terrain under wherever the wind has carried it. Left alone if no ground is found, rather than guessed at. */
+function snapToGround(entity: Entity, dimension: Dimension): void {
+
+    const surface = groundY(dimension, entity.location.x, entity.location.y, entity.location.z);
+    if (surface === undefined) return;
+
+    const target = surface + TUMBLEWEED.groundOffset;
+    if (Math.abs(entity.location.y - target) < 1e-6) return;
+
+    entity.teleport({ x: entity.location.x, y: target, z: entity.location.z }, { keepVelocity: true });
 }
 
 onTick("tumbleweed", (ctx) => {
@@ -96,11 +121,13 @@ onTick("tumbleweed", (ctx) => {
         }
 
         pushOne(entity);
+        snapToGround(entity, dimension);
     }
 
     if (tumbleweedsEnabled() && rolling.length < TUMBLEWEED.maxActive && ctx.players.length > 0) {
         const spawned = dimension.spawnEntity(TUMBLEWEED_ENTITY_ID, spawnSpot(ctx.players));
         spawned.setDynamicProperty(BORN_TICK_PROPERTY, ctx.tick);
+        snapToGround(spawned, dimension);
     }
 
 }, { everyTicks: TUMBLEWEED.tickInterval });

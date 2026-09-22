@@ -241,7 +241,16 @@ export const TUMBLEWEED = {
     /** Removed once it has existed this long (ticks)... */
     maxAgeTicks: 6000,
     /** ...or once it is farther than this from every online player (blocks), whichever comes first. */
-    despawnDistance: 80
+    despawnDistance: 80,
+    /**
+     * There is no block collision to rest it on the ground (see systems/tumbleweed.ts): every handler run,
+     * a ray straight down finds the terrain instead. Started this far above its current height...
+     */
+    groundProbeUp: 5,
+    /** ...and searched this much farther down from there. */
+    groundProbeDown: 40,
+    /** How far above the found surface its centre sits. */
+    groundOffset: 0.4
 };
 
 export const HARMING = {

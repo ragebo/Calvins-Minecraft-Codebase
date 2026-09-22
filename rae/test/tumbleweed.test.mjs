@@ -176,6 +176,50 @@ test("a fresh spawn lands within the configured distance of the player it spawne
     done();
 });
 
+test("hugs the ground: with no block collision to rest it, a ray straight down decides its height every run", (t) => {
+    t.mock.method(Math, "random", () => 0);
+    const { check, done } = checks();
+    const { restore } = scene({ maxActive: 0 });
+    const dim = overworld();
+    const original = dim.getBlockFromRay;
+    const GROUND_Y = 70;
+    let surface = GROUND_Y;
+
+    try {
+        // faceLocation.y: 0 makes groundY() (block.location.y + faceLocation.y) equal `surface` exactly.
+        dim.getBlockFromRay = (origin) => ({ block: { location: { x: Math.floor(origin.x), y: surface, z: Math.floor(origin.z) } }, faceLocation: { x: 0.5, y: 0, z: 0.5 } });
+
+        // Spawned well above the "ground" this fake ray reports.
+        const entity = dim.spawnEntity(TUMBLEWEED_ENTITY_ID, { x: 0, y: 64, z: 0 });
+        runHandler(1);
+        check("snapped onto the found surface plus groundOffset", Math.abs(entity.location.y - (surface + TUMBLEWEED.groundOffset)) < 1e-6, String(entity.location.y));
+
+        surface = GROUND_Y + 3;   // a slope: the next run should follow it, not just snap once and stop looking
+        runHandler(1);
+        check("follows a change in terrain height on the next run", Math.abs(entity.location.y - (surface + TUMBLEWEED.groundOffset)) < 1e-6, String(entity.location.y));
+    } finally {
+        dim.getBlockFromRay = original;
+        restore();
+    }
+    done();
+});
+
+test("with no ground found (open air, a void, an unloaded chunk), its height is left alone rather than guessed at", (t) => {
+    t.mock.method(Math, "random", () => 0);
+    const { check, done } = checks();
+    const { restore } = scene({ maxActive: 0 });
+
+    try {
+        // The fake's getBlockFromRay finds nothing by default, exactly this case.
+        const entity = overworld().spawnEntity(TUMBLEWEED_ENTITY_ID, { x: 0, y: 64, z: 0 });
+        runHandler(1);
+        check("its height is untouched", entity.location.y === 64, String(entity.location.y));
+    } finally {
+        restore();
+    }
+    done();
+});
+
 test("the system is registered, owns no tags, and a round reset does not touch existing tumbleweeds or the toggle", () => {
     const { check, done } = checks();
     const { restore } = scene({ maxActive: 1 });

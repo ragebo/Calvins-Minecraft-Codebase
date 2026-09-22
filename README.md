@@ -196,13 +196,17 @@ between a shooter and a target can never soak up a hit or shield anyone.
 
 Spawning is on by default; the menu's last button and `/scriptevent rae:tumbleweed` (no player
 needed, so a command block can call it) toggle it. Turning it off only stops new ones — it doesn't
-remove the ones already rolling. The model is a tangle of thin "twig" boxes made by
-`scripts/gen-tumbleweed-model.mjs` (the same no-art-drawn approach as the train and the menu icon);
-swap in your own Blockbench model any time and stop running the script.
+remove the ones already rolling.
 
-Without collision it doesn't settle onto a slope on its own, so on hilly terrain one can end up
-floating or sinking in a little — acceptable for ambience, and the first thing to improve with a
-ground-height check if it looks wrong in your world.
+Since it has no block collision, nothing rests it on the ground on its own: `systems/tumbleweed.ts`
+casts a ray straight down every handler run (the same `getBlockFromRay` technique `guns.ts` uses to
+find where a shot stops) and teleports it onto whatever the ray finds, `keepVelocity: true` so the
+wind's push isn't disturbed. Over open air, a void, or an unloaded chunk it is left where it is
+rather than guessed at. The look is several crossed, alpha-cutout planes scattered around a ball —
+the same technique vanilla uses for dead bush, ferns and saplings — made by
+`scripts/gen-tumbleweed-model.mjs` (a seeded, deterministic branch-drawing walk, so no art is
+drawn by hand and re-running it always makes the same file); swap in your own Blockbench model any
+time and stop running the script.
 
 ### Law compass
 

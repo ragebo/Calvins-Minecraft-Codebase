@@ -302,16 +302,36 @@ test("the tumbleweed model and texture in the pack are exactly what scripts/gen-
     check("the geometry file is what the generator writes (run: node scripts/gen-tumbleweed-model.mjs)", readFileSync(geometryFile, "utf8").replace(/\r\n/g, "\n") === generator.renderGeometry());
     const pixels = pngPixels(textureFile);
     check("the texture is a plain RGBA PNG", pixels !== null);
-    check("and its pixels are the generator's palette", pixels !== null && pixels.equals(generator.buildPixels()));
+    check("and its pixels are the generator's drawn branches", pixels !== null && pixels.equals(generator.buildPixels()));
 
+    if (pixels) {
+        const alphas = [];
+        for (let i = 3; i < pixels.length; i += 4) alphas.push(pixels[i]);
+        const drawn = alphas.filter((a) => a > 0).length / alphas.length;
+        check("mostly transparent, like a real bush's gaps, but not empty", drawn > 0.02 && drawn < 0.5, `${(drawn * 100).toFixed(1)}% opaque`);
+    }
+
+    // The geometry: a root, several "unit" crosses hanging off it, and two planes 90 degrees apart per unit
+    // (the standard cross-plant technique), all sharing the root's pivot so every rotation is around the
+    // same centre.
     const geometry = generator.buildGeometry()["minecraft:geometry"][0];
-    const twigs = geometry.bones.filter((b) => b.name !== "root");
-    check("every twig is a separate bone pivoting at the same point as the root, not a lone cube", twigs.every((b) => b.parent === "root" && b.pivot.join(",") === geometry.bones[0].pivot.join(",")));
-    check("more than one rotation is used, or it would look like a single stick, not a tangle", new Set(twigs.map((b) => b.rotation.join(","))).size > 1);
+    const [root, ...rest] = geometry.bones;
+    const units = rest.filter((b) => b.parent === "root");
+    const planes = rest.filter((b) => b.parent !== "root");
 
-    const palette = Object.values(generator.PALETTE).map((c) => c.join(","));
+    check("at least a few units, or it reads as one flat cross, not a tangle", units.length >= 4, String(units.length));
+    check("every unit and plane pivots at the same point as the root", rest.every((b) => b.pivot.join(",") === root.pivot.join(",")));
+    check("more than one unit rotation is used", new Set(units.map((b) => b.rotation.join(","))).size > 1);
+    check("exactly two planes per unit", planes.length === units.length * 2, `${planes.length} planes for ${units.length} units`);
+
+    for (const unit of units) {
+        const ownPlanes = planes.filter((p) => p.parent === unit.name);
+        check(`${unit.name}: its two planes are 90 degrees apart`, ownPlanes.length === 2 && Math.abs(Math.abs(ownPlanes[0].rotation[1] - ownPlanes[1].rotation[1]) - 90) < 1e-9, JSON.stringify(ownPlanes.map((p) => p.rotation)));
+        check(`${unit.name}: each plane is a zero-depth quad (the flat-cross technique), not a solid box`, ownPlanes.every((p) => p.cubes[0].size.filter((s) => s === 0).length === 1), JSON.stringify(ownPlanes.map((p) => p.cubes[0].size)));
+    }
+
+    const palette = generator.PALETTE.map((c) => c.join(","));
     check("every palette colour is different", new Set(palette).size === palette.length);
-    check("the palette fits in one row of the texture", palette.length <= generator.TEXTURE_SIZE, String(palette.length));
     done();
 });
 
