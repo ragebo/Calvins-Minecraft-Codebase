@@ -1,4 +1,6 @@
 import { test } from "node:test";
+import { readFileSync } from "node:fs";
+import path from "node:path";
 import { fake, load, checks } from "./helpers.mjs";
 
 // Tumbleweeds are ambience: a wind system spawns a few near players, blows them along, and sweeps them away
@@ -157,7 +159,7 @@ test("despawns once older than maxAgeTicks, spawned by the system itself so it c
     done();
 });
 
-test("a fresh spawn lands within the configured distance of the player it spawned near, not at the origin or nowhere", (t) => {
+test("a fresh spawn lands within the configured distance of the player it spawned near, lifted above their height for real gravity to settle", (t) => {
     t.mock.method(Math, "random", () => 0);
     const { check, done } = checks();
     const { player, restore } = scene({ maxActive: 1 });
@@ -170,50 +172,35 @@ test("a fresh spawn lands within the configured distance of the player it spawne
 
         const d = distance(player.location, weed.location);
         check("within a generous multiple of the configured range", d >= TUMBLEWEED.spawnDistanceMin * 0.3 && d <= TUMBLEWEED.spawnDistanceMax * 1.5, String(d));
+        check("spawned spawnLift above the player, for gravity to settle from there (this file has no gravity of its own to simulate that)", weed.location.y === player.location.y + TUMBLEWEED.spawnLift, `${weed.location.y} vs player ${player.location.y} + ${TUMBLEWEED.spawnLift}`);
     } finally {
         restore();
     }
     done();
 });
 
-test("hugs the ground: with no block collision to rest it, a ray straight down decides its height every run", (t) => {
-    t.mock.method(Math, "random", () => 0);
+test("it has real physics on: gravity and collision, so the engine (not a script) settles and stops it", () => {
     const { check, done } = checks();
-    const { restore } = scene({ maxActive: 0 });
-    const dim = overworld();
-    const original = dim.getBlockFromRay;
-    const GROUND_Y = 70;
-    let surface = GROUND_Y;
 
-    try {
-        // faceLocation.y: 0 makes groundY() (block.location.y + faceLocation.y) equal `surface` exactly.
-        dim.getBlockFromRay = (origin) => ({ block: { location: { x: Math.floor(origin.x), y: surface, z: Math.floor(origin.z) } }, faceLocation: { x: 0.5, y: 0, z: 0.5 } });
-
-        // Spawned well above the "ground" this fake ray reports.
-        const entity = dim.spawnEntity(TUMBLEWEED_ENTITY_ID, { x: 0, y: 64, z: 0 });
-        runHandler(1);
-        check("snapped onto the found surface plus groundOffset", Math.abs(entity.location.y - (surface + TUMBLEWEED.groundOffset)) < 1e-6, String(entity.location.y));
-
-        surface = GROUND_Y + 3;   // a slope: the next run should follow it, not just snap once and stop looking
-        runHandler(1);
-        check("follows a change in terrain height on the next run", Math.abs(entity.location.y - (surface + TUMBLEWEED.groundOffset)) < 1e-6, String(entity.location.y));
-    } finally {
-        dim.getBlockFromRay = original;
-        restore();
-    }
+    // The fake doesn't simulate gravity or block collision at all, so this is the one part of the fix a
+    // fake test can check: that the entity is actually configured to have the engine do it, in the game the
+    // fake stands in for. Whether it looks right is a real-game question (the test card).
+    const file = path.resolve(import.meta.dirname, "..", "..", "your_pack_name_BP", "entities", "tumbleweed.json");
+    const physics = JSON.parse(readFileSync(file, "utf8"))["minecraft:entity"].components["minecraft:physics"];
+    check("has_gravity and has_collision are both on", physics?.has_gravity === true && physics?.has_collision === true, JSON.stringify(physics));
     done();
 });
 
-test("with no ground found (open air, a void, an unloaded chunk), its height is left alone rather than guessed at", (t) => {
+test("a horizontal nudge every run does not fight whatever vertical velocity gravity or a bounce already gave it", (t) => {
     t.mock.method(Math, "random", () => 0);
     const { check, done } = checks();
     const { restore } = scene({ maxActive: 0 });
 
     try {
-        // The fake's getBlockFromRay finds nothing by default, exactly this case.
         const entity = overworld().spawnEntity(TUMBLEWEED_ENTITY_ID, { x: 0, y: 64, z: 0 });
+        entity.applyImpulse({ x: 0, y: -0.5, z: 0 });   // stands in for gravity, which the fake does not simulate
         runHandler(1);
-        check("its height is untouched", entity.location.y === 64, String(entity.location.y));
+        check("the downward velocity this test gave it survived the wind nudge", entity.getVelocity().y === -0.5, JSON.stringify(entity.getVelocity()));
     } finally {
         restore();
     }

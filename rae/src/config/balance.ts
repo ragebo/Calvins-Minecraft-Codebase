@@ -213,8 +213,11 @@ export const HORSE = {
 };
 
 /**
- * Tumbleweeds (systems/tumbleweed.ts): purely ambient, blown across the ground by a steady "world wind".
- * They cannot hurt or be hurt by anything, and guns are told to ignore them (systems/guns.ts excludeTypes).
+ * Tumbleweeds (systems/tumbleweed.ts): purely ambient, a real physics entity (has_gravity and
+ * has_collision both on) nudged along by a steady "world wind". They cannot hurt or be hurt by anything.
+ * Hitscan guns are told to ignore the type outright (systems/guns.ts excludeTypes), so a shotgun always
+ * passes through; a projectile gun's bullet has its own real collision and can physically stop on one, the
+ * trade-off for having the engine's gravity and collision settle and ground it instead of a script guessing.
  * The id lives here, not in systems/tumbleweed.ts, so systems/guns.ts can read it without one system
  * importing another.
  */
@@ -238,19 +241,12 @@ export const TUMBLEWEED = {
     /** A new one spawns near a random online player, this far off (blocks), upwind so it blows past them. */
     spawnDistanceMin: 12,
     spawnDistanceMax: 24,
+    /** Spawned this far above the player's own height (blocks): real gravity settles it onto the actual ground from there, rather than trusting the player's height to already match the terrain some distance away. */
+    spawnLift: 3,
     /** Removed once it has existed this long (ticks)... */
     maxAgeTicks: 6000,
     /** ...or once it is farther than this from every online player (blocks), whichever comes first. */
-    despawnDistance: 80,
-    /**
-     * There is no block collision to rest it on the ground (see systems/tumbleweed.ts): every handler run,
-     * a ray straight down finds the terrain instead. Started this far above its current height...
-     */
-    groundProbeUp: 5,
-    /** ...and searched this much farther down from there. */
-    groundProbeDown: 40,
-    /** How far above the found surface its centre sits. */
-    groundOffset: 0.4
+    despawnDistance: 80
 };
 
 export const HARMING = {

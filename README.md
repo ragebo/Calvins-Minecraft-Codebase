@@ -185,28 +185,30 @@ PNG with your own art whenever you like.
 
 ### Tumbleweeds
 
-Purely ambient: `bountysys:tumbleweed`s roll across the ground, blown by a steady "world wind"
-(`TUMBLEWEED` in `config/balance.ts`: direction, strength, jitter, occasional gusts, spin speed).
-They spawn near online players up to `TUMBLEWEED.maxActive` at once and despawn once too old or
-too far from everyone, all from one `onTick` handler in `systems/tumbleweed.ts`. They cannot hurt
-or be hurt by anything, and cannot even be hit: `minecraft:physics` is fully off (no gravity, no
-collision, the same trick as the train car), so nothing solid ever stops one or is stopped by one.
-Guns additionally exclude the type from their hitscan ray — belt and braces, so one standing
-between a shooter and a target can never soak up a hit or shield anyone.
+Purely ambient: `bountysys:tumbleweed`s roll across the ground, nudged along by a steady "world
+wind" (`TUMBLEWEED` in `config/balance.ts`: direction, strength, jitter, occasional gusts, spin
+speed). They spawn near online players up to `TUMBLEWEED.maxActive` at once and despawn once too
+old or too far from everyone, all from one `onTick` handler in `systems/tumbleweed.ts`. They
+cannot hurt or be hurt by anything.
+
+They are a **real physics entity** (`has_gravity` and `has_collision` both on): the engine settles
+them onto the ground and stops them at obstacles the normal way, rather than a script guessing at
+it (an earlier, physics-off version visibly floated and clipped through terrain). The trade-off: a
+hitscan gun's ray still excludes the type outright (`systems/guns.ts`), so a shotgun always passes
+through, but a **projectile** gun's bullet has its own real collision and can physically stop on a
+tumbleweed the same as it would on a mob — there is no "collide with terrain but not with a
+bullet" option in `minecraft:physics`.
 
 Spawning is on by default; the menu's last button and `/scriptevent rae:tumbleweed` (no player
 needed, so a command block can call it) toggle it. Turning it off only stops new ones — it doesn't
-remove the ones already rolling.
+remove the ones already rolling. A new one spawns a little above the player it's placed near
+(`TUMBLEWEED.spawnLift`) so real gravity settles it onto the actual ground, rather than trusting
+the player's own height to already match the terrain some distance away.
 
-Since it has no block collision, nothing rests it on the ground on its own: `systems/tumbleweed.ts`
-casts a ray straight down every handler run (the same `getBlockFromRay` technique `guns.ts` uses to
-find where a shot stops) and teleports it onto whatever the ray finds, `keepVelocity: true` so the
-wind's push isn't disturbed. Over open air, a void, or an unloaded chunk it is left where it is
-rather than guessed at. The look is several crossed, alpha-cutout planes scattered around a ball —
-the same technique vanilla uses for dead bush, ferns and saplings — made by
-`scripts/gen-tumbleweed-model.mjs` (a seeded, deterministic branch-drawing walk, so no art is
-drawn by hand and re-running it always makes the same file); swap in your own Blockbench model any
-time and stop running the script.
+The look is several crossed, alpha-cutout planes scattered around a ball — the same technique
+vanilla uses for dead bush, ferns and saplings — made by `scripts/gen-tumbleweed-model.mjs` (a
+seeded, deterministic branch-drawing walk, so no art is drawn by hand and re-running it always
+makes the same file); swap in your own Blockbench model any time and stop running the script.
 
 ### Law compass
 

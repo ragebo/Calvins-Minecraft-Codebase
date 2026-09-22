@@ -1,4 +1,4 @@
-import { world, type Dimension, type Entity, type Vector3 } from "@minecraft/server";
+import { world, type Entity, type Vector3 } from "@minecraft/server";
 import { TUMBLEWEED, TUMBLEWEED_ENTITY_ID } from "../config/balance.js";
 import { toggleTumbleweeds, tumbleweedsEnabled } from "../core/ambience.js";
 import { onScriptEvent } from "../core/events.js";
@@ -7,19 +7,19 @@ import { onTick } from "../core/tick.js";
 import { announce } from "../core/ui.js";
 
 /**
- * Tumbleweeds: a purely ambient entity blown across the ground by a steady "world wind". They cannot hurt
- * or be hurt by anything, and cannot be hit: `minecraft:physics` is fully off (no gravity, no collision,
- * same as the train car), so nothing solid — a wall, a player, a bullet's own hitbox — ever stops one or is
- * stopped by one. Moving a physics-off entity by `applyImpulse` was measured to work in the real game on the
- * train car (2026-09-20); it's the same trick here. Guns additionally exclude the type from their hitscan
- * ray (systems/guns.ts), belt and braces: one standing between a shooter and a target can never soak up a
- * hit or shield anyone, on any gun.
+ * Tumbleweeds: a purely ambient entity nudged along by a steady "world wind". They cannot hurt or be hurt
+ * by anything (their own damage_sensor).
  *
- * With collision off nothing rests it on the ground on its own (the first version of this file just left the
- * spawn height alone, and it visibly floated — 2026-09-21 playtest), so `snapToGround` casts a ray straight
- * down every handler run and teleports it onto whatever the ray finds, the same `getBlockFromRay` technique
- * systems/guns.ts uses to find where a shot stops. `keepVelocity: true` on that teleport means the wind's
- * horizontal push (still applied by `applyImpulse`) is undisturbed; only its height is corrected.
+ * v1 (2026-09-21) had `minecraft:physics` fully off, so it could never be a physical obstacle — but with
+ * no collision of its own, nothing rested it on the ground either, and it visibly floated and clipped
+ * through terrain (playtest) and moved "weirdly" with a script-driven ground-snap standing in for real
+ * physics (owner feedback, same day). v2 gives it real physics instead: `has_gravity` and `has_collision`
+ * are both on, so the engine settles it onto the ground and stops it at obstacles the normal way, and this
+ * file only nudges it sideways with `applyImpulse` every handler run, the way you'd nudge any physical
+ * entity. The trade-off: a hitscan gun's ray still excludes the type outright (systems/guns.ts), so a
+ * shotgun always passes through, but a PROJECTILE gun's bullet has its own real collision and can now
+ * physically stop on a tumbleweed the same as it would on a mob, since there is no "collide with terrain
+ * but not with a bullet" option in `minecraft:physics`.
  *
  * They are spawned and swept by this file's own onTick handler: no gameplay system depends on them, and
  * resetting a round leaves them alone (they are decoration, not round state).
@@ -46,13 +46,14 @@ function pushOne(entity: Entity): void {
     const jitter = headingVector(Math.random() * 360, Math.random() * TUMBLEWEED.jitter);
     const gust = Math.random() < TUMBLEWEED.gustChance ? headingVector(TUMBLEWEED.windHeadingDegrees, TUMBLEWEED.gustStrength) : undefined;
 
-    // Cleared and fully reapplied every run, exactly like the train car's momentum driver (systems/transit.ts):
-    // with physics off there is no engine drag to rely on, so this is what keeps the step size config-controlled
-    // instead of the impulses piling up run after run.
+    // X/Z (the wind) are reset and reapplied every run, so the push stays exactly what the config says
+    // instead of piling up; Y is read back and given right back untouched, so real gravity and whatever the
+    // ground's own collision is doing (settling, a small bounce) are never fought.
+    const current = entity.getVelocity();
     entity.clearVelocity();
     entity.applyImpulse({
         x: wind.x + jitter.x + (gust?.x ?? 0),
-        y: 0,
+        y: current.y,
         z: wind.z + jitter.z + (gust?.z ?? 0)
     });
 
@@ -72,7 +73,11 @@ function shouldDespawn(entity: Entity, players: readonly { location: Vector3 }[]
     return players.every((player) => distance(player.location, entity.location) > TUMBLEWEED.despawnDistance);
 }
 
-/** An x/z spot upwind of a random online player, so the new tumbleweed blows past them rather than away from them. Its height is settled by `snapToGround` right after it spawns. */
+/**
+ * An x/z spot upwind of a random online player, so the new tumbleweed blows past them rather than away from
+ * them, lifted a little above their height: real gravity is what settles it onto the actual ground from
+ * there, rather than trusting a player's own height to already match the terrain some distance away.
+ */
 function spawnSpot(players: readonly { location: Vector3 }[]): Vector3 {
 
     const near = players[Math.floor(Math.random() * players.length)]!;
@@ -82,30 +87,9 @@ function spawnSpot(players: readonly { location: Vector3 }[]): Vector3 {
 
     return {
         x: near.location.x + upwind.x * range + jitter.x,
-        y: near.location.y,
+        y: near.location.y + TUMBLEWEED.spawnLift,
         z: near.location.z + upwind.z * range + jitter.z
     };
-}
-
-/** The y of the ground surface straight down from (x, z), probed from a little above `aroundY`, or undefined over open air, a void, or an unloaded chunk. */
-function groundY(dimension: Dimension, x: number, aroundY: number, z: number): number | undefined {
-
-    const origin = { x, y: aroundY + TUMBLEWEED.groundProbeUp, z };
-    const hit = dimension.getBlockFromRay(origin, { x: 0, y: -1, z: 0 }, { maxDistance: TUMBLEWEED.groundProbeUp + TUMBLEWEED.groundProbeDown });
-
-    return hit ? hit.block.location.y + hit.faceLocation.y : undefined;
-}
-
-/** Keeps it hugging the terrain under wherever the wind has carried it. Left alone if no ground is found, rather than guessed at. */
-function snapToGround(entity: Entity, dimension: Dimension): void {
-
-    const surface = groundY(dimension, entity.location.x, entity.location.y, entity.location.z);
-    if (surface === undefined) return;
-
-    const target = surface + TUMBLEWEED.groundOffset;
-    if (Math.abs(entity.location.y - target) < 1e-6) return;
-
-    entity.teleport({ x: entity.location.x, y: target, z: entity.location.z }, { keepVelocity: true });
 }
 
 onTick("tumbleweed", (ctx) => {
@@ -121,13 +105,11 @@ onTick("tumbleweed", (ctx) => {
         }
 
         pushOne(entity);
-        snapToGround(entity, dimension);
     }
 
     if (tumbleweedsEnabled() && rolling.length < TUMBLEWEED.maxActive && ctx.players.length > 0) {
         const spawned = dimension.spawnEntity(TUMBLEWEED_ENTITY_ID, spawnSpot(ctx.players));
         spawned.setDynamicProperty(BORN_TICK_PROPERTY, ctx.tick);
-        snapToGround(spawned, dimension);
     }
 
 }, { everyTicks: TUMBLEWEED.tickInterval });

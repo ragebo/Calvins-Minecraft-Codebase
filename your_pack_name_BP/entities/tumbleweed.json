@@ -10,7 +10,7 @@
         "components": {
             "minecraft:type_family": { "family": ["tumbleweed"] },
             "minecraft:collision_box": { "width": 0.8, "height": 0.8 },
-            "minecraft:physics": { "has_gravity": false, "has_collision": false },
+            "minecraft:physics": { "has_gravity": true, "has_collision": true },
             "minecraft:damage_sensor": {
                 "triggers": { "cause": "all", "deals_damage": "no" }
             }
