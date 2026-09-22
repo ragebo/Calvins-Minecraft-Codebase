@@ -14,6 +14,10 @@ export const WORLD_SCHEMA_VERSION = 1;
 // SPAWNS
 // ---------------------------------------------------
 
+export const WORLD_SPAWN: Vector3[] = [
+    { x: 367, y: 79, z: 586 }
+];
+
 export const LAW_SPAWNS: Vector3[] = [
     { x: 125, y: 83, z: 196 },
     { x: -250, y: 64, z: 234 }
