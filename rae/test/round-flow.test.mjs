@@ -9,7 +9,7 @@ import { fake, world, system, load, checks, strip } from "./helpers.mjs";
 await load("main.js");
 const { LAW_SPAWNS, OUTLAW_SPAWNS, BOAT_NPC, BOAT_WIN_TELEPORT } = await load("config/world.js");
 const { ECONOMY, BOAT } = await load("config/balance.js");
-const { resetAllSystems } = await load("core/registry.js");
+const round = await load("core/round.js");
 
 const scriptEvent = (id, sourceEntity) => system.afterEvents.scriptEventReceive.emit({ id, sourceEntity, message: "" });
 const kill = (victim, killer) => world.afterEvents.entityDie.emit({ deadEntity: victim, damageSource: { damagingEntity: killer } });
@@ -23,10 +23,19 @@ const tagsOf = (p) => [...p.tags].sort().join(",");
 const chatLines = () => fake.chat.map(strip);
 const overworld = () => fake.dimension("overworld");
 
-/** An empty world: no players, no leftover module state from an earlier test, scoreboards in place. */
+/**
+ * An empty world: no players, no leftover module state from an earlier test, scoreboards in place,
+ * and a round already ACTIVE — the win-condition tests below simulate mid-round deaths and escapes
+ * without going through bounty:start_round, so they have to put the round machine into the state a
+ * real one would already be in. (The role-assignment tests below DO call bounty:start_round for
+ * real afterward; core/game.ts's own resetRound() there forces a clean IDLE first regardless of
+ * what this leaves the phase at, so this is safe for them too.)
+ */
 function scene() {
     fake.reset();
-    resetAllSystems();
+    round.resetRound();   // does what resetAllSystems() did, plus forces the round phase to IDLE
+    round.startRound();
+    round.beginActive();
     fake.addObjective("coins");
     fake.addObjective("bounty");
 }
@@ -77,9 +86,11 @@ test("start_round: 'Rolling...' at once, the role title and 'Roles Assigned!' ex
 
     check("everyone is told Rolling... immediately", players.every((p) => p.titles.map(strip).join("|") === "Rolling..."), players.map((p) => p.titles.join("|")).join(" / "));
     check("no announcement yet", !chatLines().includes("Roles Assigned!"));
+    check("the round is in SETUP during the wait, not ACTIVE yet", round.getPhase() === "SETUP", round.getPhase());
 
     fake.advance(59);
     check("still Rolling... at tick 59", players.every((p) => p.titles.length === 1) && !chatLines().includes("Roles Assigned!"));
+    check("still SETUP one tick before the reveal", round.getPhase() === "SETUP", round.getPhase());
 
     fake.advance(1);
     const law = players.filter((p) => p.tags.has("law"));
@@ -87,6 +98,7 @@ test("start_round: 'Rolling...' at once, the role title and 'Roles Assigned!' ex
     check("law see LAWMAN", law.length === 2 && law.every((p) => strip(p.titles.at(-1)) === "LAWMAN" && p.titles.length === 2), law.map((p) => p.titles.join("|")).join(" / "));
     check("outlaws see OUTLAW", outlaws.length === 3 && outlaws.every((p) => strip(p.titles.at(-1)) === "OUTLAW" && p.titles.length === 2), outlaws.map((p) => p.titles.join("|")).join(" / "));
     check("Roles Assigned! is announced once", chatLines().filter((m) => m === "Roles Assigned!").length === 1, chatLines().join(" | "));
+    check("the round is ACTIVE once roles are revealed", round.getPhase() === "ACTIVE", round.getPhase());
     done();
 });
 
@@ -167,6 +179,7 @@ test("law win: the last free outlaw is eliminated by a second capture", () => {
     check("with its explanation", chatLines().some((m) => m.includes("Every outlaw is captured or eliminated")), chatLines().join(" | "));
     check("the surviving law is a winner", sheriff.tags.has("winner"), tagsOf(sheriff));
     check("the eliminated outlaw is not", !bandit.tags.has("winner") && bandit.tags.has("eliminated"), tagsOf(bandit));
+    check("the round machine knows it ended, and why", round.getPhase() === "ENDED" && round.lastEnd() === "law_win", `${round.getPhase()} / ${round.lastEnd()}`);
     done();
 });
 
@@ -251,9 +264,12 @@ test("law win: a reset re-arms it", () => {
     scriptEvent("rae:reset");
     check("the reset removed the winner tag", !sheriff.tags.has("winner"), tagsOf(sheriff));
 
-    // A new round: the same two players, freshly tagged.
+    // A new round: the same two players, freshly tagged, and the round machine actually restarted
+    // (rae:reset only takes it back to IDLE; a real round start is what moves it on from there).
     for (const t of ["law"]) sheriff.tags.add(t);
     for (const t of ["outlaw", "jailed", "in_jail"]) bandit.tags.add(t);
+    round.startRound();
+    round.beginActive();
     fake.chat.length = 0;
     fake.advance(1);
     kill(bandit, sheriff); respawn(bandit);
@@ -294,6 +310,7 @@ test("boat win: the gang pools the coins, every surviving outlaw wins and is tel
     // of (need + 50), B pays the remaining need - 50 and keeps 50.
     check("coins are taken in order until the price is paid", coinsOf("A") === 0 && coinsOf("B") === 50, `(A=${coinsOf("A")} B=${coinsOf("B")})`);
     check("winners are teleported to the win spot", teleportCommands().length === 1 && teleportCommands()[0] === `tp @a[tag=winner] ${BOAT_WIN_TELEPORT.x} ${BOAT_WIN_TELEPORT.y} ${BOAT_WIN_TELEPORT.z}`, JSON.stringify(overworld().commands));
+    check("the round machine knows it ended, and why", round.getPhase() === "ENDED" && round.lastEnd() === "outlaw_win", `${round.getPhase()} / ${round.lastEnd()}`);
     done();
 });
 
@@ -352,5 +369,23 @@ test("boat win: a lone survivor pays for one, and exactly the price is enough", 
     escape(a);
     check("escaped", escaped() && a.tags.has("winner"), chatLines().join(" | "));
     check("paid the price of one, nothing more", coinsOf("A") === 0, `(${coinsOf("A")})`);
+    done();
+});
+
+test("boat win: outside an active round, the escape is refused and nothing is spent", () => {
+    const { check, done } = checks();
+    fake.reset();
+    round.resetRound();                                      // IDLE: no bounty:start_round, unlike scene()
+    fake.addObjective("coins");
+    fake.addObjective("bounty");
+    const [a] = cast(["A", { tags: ["outlaw"], location: atBoat() }]);
+    fake.setScore("coins", "A", 10 * need);
+
+    escape(a);
+
+    check("told no round is running", a.messages.map(strip).includes("No round is running."), JSON.stringify(a.messages));
+    check("no win, no coins taken, not tagged", !escaped() && !a.tags.has("winner") && coinsOf("A") === 10 * need, `coins=${coinsOf("A")}`);
+    check("nobody is teleported", teleportCommands().length === 0);
+    check("the round machine agrees: still IDLE", round.getPhase() === "IDLE", round.getPhase());
     done();
 });

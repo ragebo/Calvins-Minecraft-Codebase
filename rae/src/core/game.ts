@@ -1,7 +1,7 @@
 import { system, world, type Player, type Vector3 } from "@minecraft/server";
 import { LAW_SPAWNS, OUTLAW_SPAWNS } from "../config/world.js";
 import { players } from "./players.js";
-import { resetAllSystems } from "./registry.js";
+import { beginActive, resetRound, startRound } from "./round.js";
 import { getRecord, update, type Role } from "./state.js";
 import { announce, showTitle } from "./ui.js";
 
@@ -12,6 +12,9 @@ import { announce, showTitle } from "./ui.js";
  * (systems/menu.ts) needs them too, and a system may not import another system, so they live here and
  * both call them. The rules are unchanged: a round resets every system, assigns the roles, sends each
  * player with a role to a random spawn for it, and announces the roles a moment later.
+ *
+ * `begin()` is also this game's only caller of core/round.ts's SETUP and ACTIVE transitions — the
+ * shared "is a round running?" owner endgame.ts and boat.ts both check before declaring a win.
  */
 
 /** What the person starting a round can decide for each player. */
@@ -54,7 +57,7 @@ export function teleportToSpawn(player: Player): void {
 
 /** The reset the menu offers and `/scriptevent rae:reset` runs: every system back to its starting state. */
 export function resetGame(): void {
-    resetAllSystems();
+    resetRound();
     announce("§7All systems reset.");
 }
 
@@ -74,8 +77,10 @@ export function sendEveryoneToSpawns(): void {
  */
 function begin(roles: ReadonlyMap<Player, Role | null>): void {
 
-    // One call clears every system. No hand-maintained tag list.
-    resetAllSystems();
+    // One call clears every system, and forces the round phase back to IDLE from wherever it was
+    // (always legal), so the SETUP below is always a clean start whatever the round was doing before.
+    resetRound();
+    startRound();
 
     const playing: Player[] = [];
 
@@ -92,6 +97,10 @@ function begin(roles: ReadonlyMap<Player, Role | null>): void {
     }
 
     system.runTimeout(() => {
+        // Play begins once roles are actually revealed, not during the "Rolling..." wait: that's
+        // still setup (core/round.ts's own phase docstring).
+        beginActive();
+
         for (const player of playing) {
             if (!player.isValid) continue;
             showTitle(player, getRecord(player).role === "law" ? "§9LAWMAN" : "§cOUTLAW");

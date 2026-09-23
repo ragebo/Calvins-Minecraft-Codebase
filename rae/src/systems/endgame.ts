@@ -1,6 +1,7 @@
 import { world } from "@minecraft/server";
 import { registerSystem } from "../core/registry.js";
 import { onDeath, onSpawn } from "../core/events.js";
+import { endRound } from "../core/round.js";
 import { getRecord, update } from "../core/state.js";
 import { outlaws, lawPlayers } from "../core/players.js";
 
@@ -18,13 +19,13 @@ import { outlaws, lawPlayers } from "../core/players.js";
  * "winner" and announce it, no teleport (there's no established
  * "law victory" location the way BOAT_WIN_TELEPORT exists for
  * outlaws).
+ *
+ * "Has this round already ended?" is core/round.ts's job now, not a private flag here: endRound()
+ * only succeeds once, from ACTIVE, so a second win-condition check in the same or a later tick
+ * can't double-announce.
  */
 
-let roundEnded = false;
-
 function checkLawWin(): void {
-
-    if (roundEnded) return;
 
     const everyOutlaw = outlaws();
 
@@ -40,7 +41,9 @@ function checkLawWin(): void {
 
     if (!allNeutralized) return;
 
-    roundEnded = true;
+    // False if no round is active, or one already ended (someone else's win, or this same check
+    // running again): either way, nothing left to announce.
+    if (!endRound("law_win")) return;
 
     world.sendMessage("§9§lTHE LAW HAS WON!");
     world.sendMessage("§7Every outlaw is captured or eliminated — no one is left to break them out.");
@@ -71,6 +74,6 @@ registerSystem({
     name: "endgame",
     ownedTags: ["winner"],
     reset() {
-        roundEnded = false;
+        // Nothing local left to clear: whether a round has ended lives in core/round.ts now.
     }
 });

@@ -48,7 +48,8 @@ rae/                    TypeScript source. This is what you edit.
                          director.ts   the one slot fort raid / ranch raid / train robbery share
                          economy.ts    the only file that touches coins/bounty
                          raid.ts       shared wave-spawn engine (used by the fort raid)
-                         round.ts      round lifecycle state machine (a contract: no system uses it yet)
+                         round.ts      round lifecycle state machine (IDLE/SETUP/ACTIVE/ENDING/ENDED);
+                                       core/game.ts drives it, endgame.ts and boat.ts gate their win on it
                          persist.ts    contract for state that survives a reload (nothing registers yet)
   src/systems/          One file per gameplay system (see below). Each registers itself
                          via registerSystem() and is imported once from main.ts.
@@ -114,6 +115,24 @@ switches them and takes the old tag off. `/scriptevent rae:adopt` does the same 
 everyone right now and lists what each record says. It only changes what the game believes: it
 does not run the side effects of a role (no gamemode change, no teleport, no kit). A record with
 a change of its own still waiting to be written is left alone until it is written.
+
+### The round lifecycle
+
+`core/round.ts` is the one owner of "is a round running, and how did the last one end?" —
+`IDLE -> SETUP -> ACTIVE -> ENDING -> ENDED` (any phase can drop back to `IDLE`), with legal-transition
+checking and phase listeners (`onPhase`). `core/game.ts`'s `begin()` drives the start of it: a
+reset always forces `IDLE` first (always legal, whatever phase it was in), then `SETUP` while
+roles are assigned and everyone's teleported, then `ACTIVE` once roles are actually revealed
+(during the "Rolling..." wait it's still `SETUP` — nobody knows their role yet).
+
+`endgame.ts` (the law win) and `boat.ts` (the outlaw win) each call `endRound(reason)` when they
+detect their condition — it only succeeds once, from `ACTIVE`, so the two can never double-announce
+a win between them, and `boat.ts` additionally refuses an escape attempt outright when no round is
+`ACTIVE` (closing a real edge case: without it, an eliminated outlaw calling the escape after law
+had already won found zero survivors, and the "everyone's gathered" and "can afford it" checks
+both passed vacuously on that empty set, announcing an escape with nobody in it). Each system keeps
+its own announcement text and winner-tagging — they aren't interchangeable (boat's message includes
+the coin total) — so `round.ts` is the shared guard, not a shared announcer.
 
 ### Gun system
 

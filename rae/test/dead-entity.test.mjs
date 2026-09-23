@@ -11,7 +11,7 @@ import { fake, world, load, checks, strip } from "./helpers.mjs";
 await load("main.js");
 const { JAIL_SITES, OUTLAW_SPAWNS } = await load("config/world.js");
 const { ECONOMY } = await load("config/balance.js");
-const { resetAllSystems } = await load("core/registry.js");
+const round = await load("core/round.js");
 
 const sameSpot = (a, b) => a.x === b.x && a.y === b.y && a.z === b.z;
 const isJail = (spot) => JAIL_SITES.some((s) => sameSpot(s.jail, spot));
@@ -65,7 +65,9 @@ function comeBack(player) {
  */
 function scene(...specs) {
     fake.reset();
-    resetAllSystems();
+    round.resetRound();   // does what resetAllSystems() did, plus puts the round into ACTIVE (the
+    round.startRound();   // death/spawn scenarios below simulate a round already in progress
+    round.beginActive();
     fake.addObjective("coins");
     fake.addObjective("bounty");
     const players = specs.map(([name, options]) => fake.makePlayer(name, options));

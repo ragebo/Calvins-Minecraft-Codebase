@@ -4,6 +4,7 @@ import { ECONOMY, BOAT } from "../config/balance.js";
 import { registerSystem } from "../core/registry.js";
 import { onScriptEvent } from "../core/events.js";
 import { getCoins, takeCoins } from "../core/economy.js";
+import { endRound, isPhase } from "../core/round.js";
 import { getRecord, update } from "../core/state.js";
 import { aliveOutlaws } from "../core/players.js";
 
@@ -20,6 +21,14 @@ export function attemptOutlawEscape(player: Player): void {
 
     if (getRecord(player).role !== "outlaw") {
         player.sendMessage("§cOnly outlaws can use the escape boat.");
+        return;
+    }
+
+    // Closes a real edge case: without this, an eliminated outlaw calling this after law has
+    // already won leaves aliveOutlaws() empty, and the "must gather" and "must pay" checks below
+    // both pass vacuously on zero survivors, announcing an escape with nobody in it.
+    if (!isPhase("ACTIVE")) {
+        player.sendMessage("§cNo round is running.");
         return;
     }
 
@@ -54,6 +63,12 @@ export function attemptOutlawEscape(player: Player): void {
 
         remainingCost -= takeCoins(outlaw, remainingCost);
     }
+
+    // The isPhase check above already confirmed the round is active moments ago, and nothing
+    // between then and here can change it (synchronous script execution) — this is really only
+    // ever false on a genuine same-tick race with a law win, and it's checked anyway rather than
+    // assumed.
+    if (!endRound("outlaw_win")) return;
 
     world.sendMessage("§6§lTHE OUTLAWS HAVE ESCAPED!");
     world.sendMessage(`§eThe gang pooled ${requiredCoins} coins and escaped by boat!`);
