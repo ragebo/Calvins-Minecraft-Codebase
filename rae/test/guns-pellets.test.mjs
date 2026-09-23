@@ -6,7 +6,7 @@ import { fake, world, load, checks, leftClick, pressQ } from "./helpers.mjs";
 // invulnerability (vanilla ignores a repeat hit that is not bigger than the last). The rays are scripted
 // here, so what is judged is what the guns system does with them.
 
-const { GUNS, AMMO } = await load("config/guns.js");
+const { GUNS, AMMO, HIT_WINDOW_TICKS } = await load("config/guns.js");
 await load("systems/guns.js");
 const { listSystems } = await load("core/registry.js");
 
@@ -184,5 +184,82 @@ test("every ray excludes tumbleweeds: one can never soak up or shield a pellet",
         const { rays } = shoot(gun, () => []);
         check(`${gun.id}: every ray's excludeTypes names the tumbleweed`, rays.every((r) => r.options.excludeTypes?.includes(TUMBLEWEED_ENTITY_ID)), JSON.stringify(rays.map((r) => r.options.excludeTypes)));
     }
+    done();
+});
+
+// ---------------------------------------------------------------------------------------------------------
+// The vanilla hit window ACROSS separate shots, not just within one blast's pellets. dealGunDamage
+// (systems/guns.ts) sums a rapid follow-up shot into the pending total instead of losing it outright, the
+// same idea the pellet-summing above already uses, stretched across trigger pulls instead of pellets.
+// These fire the same armed player twice in a row without resetting between shots, so guns.ts's own
+// per-target ledger carries over exactly as it would in a real fight.
+// ---------------------------------------------------------------------------------------------------------
+
+/** Arms a player once, for firing several shots in a row and watching how the hits combine. */
+function armedForVolley(gun) {
+    fake.reset();
+    resetGuns();
+    const p = fake.makePlayer("Deputy", { location: { x: 1, y: 64, z: 2 }, holding: gun.itemId });
+    p.giveAmmo(AMMO[gun.ammo].itemId, 64);
+    fake.advance(200);
+    return p;
+}
+
+/** One shot, landing `landingPellets` of the gun's pellets on `target` (the rest miss). */
+function volleyShot(p, gun, target, landingPellets = gun.pelletCount) {
+    const dim = overworld();
+    const originalRay = dim.getEntitiesFromRay;
+    const originalBlock = dim.getBlockFromRay;
+    let index = 0;
+    dim.getEntitiesFromRay = () => (index++ < landingPellets ? [{ entity: target, distance: 2 }] : []);
+    try { use(p); } finally { dim.getEntitiesFromRay = originalRay; dim.getBlockFromRay = originalBlock; }
+}
+
+test("a rapid follow-up shot within the vanilla hit window is added to the pending total, not lost", () => {
+    const { check, done } = checks();
+    const gun = GUNS.double_barrel_shotgun;   // fireRateTicks 4, well inside the ~10-tick window
+    const p = armedForVolley(gun);
+    const target = vanillaTarget("rapid-within");
+    const full = gun.pelletCount * gun.pelletDamage;
+
+    volleyShot(p, gun, target);
+    check("the first shot lands in full", target.damage.at(-1)?.amount === full, String(target.damage.at(-1)?.amount));
+
+    fake.advance(gun.fireRateTicks);   // the fastest this gun can legally fire again
+    volleyShot(p, gun, target);
+    check("the second shot is summed onto the first instead of vanishing", target.damage.at(-1)?.amount === full * 2, String(target.damage.at(-1)?.amount));
+    check("nothing was actually lost: the target took both blasts in full", target.lost() === full * 2, String(target.lost()));
+    done();
+});
+
+test("with the window well passed, a second shot lands on its own, not summed onto the first", () => {
+    const { check, done } = checks();
+    const gun = GUNS.double_barrel_shotgun;
+    const p = armedForVolley(gun);
+    const target = vanillaTarget("rapid-after");
+    const full = gun.pelletCount * gun.pelletDamage;
+
+    volleyShot(p, gun, target);
+    fake.advance(HIT_WINDOW_TICKS + 1);
+    volleyShot(p, gun, target);
+
+    check("the second shot is recorded at its own damage, not inflated", target.damage.at(-1)?.amount === full, String(target.damage.at(-1)?.amount));
+    check("both shots landed in full", target.lost() === full * 2, String(target.lost()));
+    done();
+});
+
+test("a second hit that is already bigger than the last lands as itself, not further inflated", () => {
+    const { check, done } = checks();
+    const gun = GUNS.double_barrel_shotgun;
+    const p = armedForVolley(gun);
+    const target = vanillaTarget("rapid-bigger");
+    const half = Math.ceil(gun.pelletCount / 2);
+    const full = gun.pelletCount * gun.pelletDamage;
+
+    volleyShot(p, gun, target, half);              // a partial hit: smaller than the next one
+    fake.advance(gun.fireRateTicks);
+    volleyShot(p, gun, target, gun.pelletCount);   // the full blast, already bigger than the first shot
+
+    check("the bigger second shot is recorded at its own damage, not summed further", target.damage.at(-1)?.amount === full, String(target.damage.at(-1)?.amount));
     done();
 });

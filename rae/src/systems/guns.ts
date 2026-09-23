@@ -1,9 +1,10 @@
 import {
     world, system,
     type Dimension, type ItemStack, type Player, type Entity, type Vector3,
+    type EntityApplyDamageByProjectileOptions, type EntityApplyDamageOptions,
     EquipmentSlot, EntityDamageCause, EntitySwingSource
 } from "@minecraft/server";
-import { AMMO, GUNS, BULLET_ENTITY_ID, BULLET_LIFETIME_TICKS, type GunConfig, type GunId, type MuzzleEffects, type SoundCue } from "../config/guns.js";
+import { AMMO, GUNS, BULLET_ENTITY_ID, BULLET_LIFETIME_TICKS, HIT_WINDOW_TICKS, type GunConfig, type GunId, type MuzzleEffects, type SoundCue } from "../config/guns.js";
 import { AIM, TUMBLEWEED_ENTITY_ID } from "../config/balance.js";
 import { hideScope, showScope, zoomReset, zoomTo } from "../core/aim.js";
 import { registerSystem } from "../core/registry.js";
@@ -317,6 +318,30 @@ function showShot(player: Player, gun: Extract<GunConfig, { kind: "hitscan" }>, 
     }
 }
 
+/**
+ * What a target was last dealt by a gun, and when, so a rapid follow-up shot can be summed into it
+ * instead of lost outright: keyed by target.id, cleared on a round reset.
+ */
+const lastHit = new Map<string, { tick: number; amount: number }>();
+
+/**
+ * Deals gun damage the way `applyDamage` should, given vanilla's post-hit invulnerability: a hit no bigger
+ * than the last one dealt within HIT_WINDOW_TICKS is otherwise swallowed outright (measured with
+ * `rae:probe_damage`). The shotguns already avoid this within one blast by summing their pellets into one
+ * call; this does the same across separate trigger pulls, adding a would-be-lost hit to the pending total
+ * instead of dealing it (and losing it) on its own. Every gun's damage should go through this, not a bare
+ * `entity.applyDamage`.
+ */
+function dealGunDamage(target: Entity, amount: number, options: EntityApplyDamageByProjectileOptions | EntityApplyDamageOptions): void {
+
+    const previous = lastHit.get(target.id);
+    const withinWindow = previous !== undefined && system.currentTick - previous.tick < HIT_WINDOW_TICKS;
+    const dealt = withinWindow && amount <= previous!.amount ? previous!.amount + amount : amount;
+
+    target.applyDamage(dealt, options);
+    lastHit.set(target.id, { tick: system.currentTick, amount: dealt });
+}
+
 function fireHitscan(player: Player, gun: Extract<GunConfig, { kind: "hitscan" }>): void {
 
     const origin = player.getHeadLocation();
@@ -375,7 +400,7 @@ function fireHitscan(player: Player, gun: Extract<GunConfig, { kind: "hitscan" }
         // No physical projectile exists for hitscan pellets, so
         // the "projectile" cause (which requires a real
         // damagingProjectile entity) isn't available here.
-        entity.applyDamage(gun.pelletDamage * pellets, {
+        dealGunDamage(entity, gun.pelletDamage * pellets, {
             cause: EntityDamageCause.entityAttack,
             damagingEntity: player
         });
@@ -685,7 +710,7 @@ world.afterEvents.projectileHitEntity.subscribe((event) => {
     if (hitEntity && hitEntity.isValid) {
         // The "projectile" cause requires the actual projectile
         // entity, not a bare cause string.
-        hitEntity.applyDamage(gun.damage, {
+        dealGunDamage(hitEntity, gun.damage, {
             damagingProjectile: event.projectile,
             damagingEntity: event.source
         });
@@ -711,6 +736,7 @@ registerSystem({
         reloadingKeys.clear();
         loadedRounds.clear();
         dropStates.clear();
+        lastHit.clear();
         for (const id of [...aiming.keys()]) stopAim(id);
     }
 });

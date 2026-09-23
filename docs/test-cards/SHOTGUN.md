@@ -48,7 +48,7 @@ Cheats on, Content Log GUI on. Stand in the open with nothing in front of you.
 | 3 | `/give @s bountysys:pump_shotgun`, `/give @s bountysys:shotgun_ammo 64`. Shoot a zombie (20 health) from about 2 blocks. | Around 8 hearts gone in one blast (16 damage), so a second blast finishes it. Not 1 heart. |
 | 4 | The same from 6 blocks. | Roughly 3 to 4 hearts, varying with the spread. |
 | 5 | `/give @s bountysys:double_barrel_shotgun`. Shoot a zombie at point blank. | Most of its health in one blast (up to 25 of 20). |
-| 6 | Fire both barrels as fast as you can at one zombie. | The second blast may add little or nothing if the probe's `D:` line lost damage. That is the known limit above, not a new bug. |
+| 6 | Fire both barrels as fast as you can at one zombie. | **Fixed 2026-09-22** (see `docs/test-cards/RAPID-FIRE.md`): both blasts should land in full now, even though they land only 4 ticks apart. If the second blast still adds little or nothing, the fix broke. |
 
 ## Content log
 

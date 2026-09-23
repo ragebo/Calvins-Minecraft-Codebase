@@ -339,3 +339,13 @@ export const BULLET_ENTITY_ID = "bountysys:bullet";
 
 /** Safety-net cleanup if a bullet never hits anything. */
 export const BULLET_LIFETIME_TICKS = 60;
+
+/**
+ * Vanilla's own post-hit invulnerability: a target that was just hurt ignores a further hit that
+ * isn't bigger than the last one, for about this many ticks. Measured in the real game with
+ * `rae:probe_damage` (2026-09-19): 12 ticks apart, both hits landed; 4 ticks apart at equal
+ * damage, the second was lost. `systems/guns.ts`'s `dealGunDamage` uses this to sum a rapid
+ * follow-up shot into the pending total instead of losing it, the same idea the shotguns' own
+ * pellet-summing already uses within one blast.
+ */
+export const HIT_WINDOW_TICKS = 10;

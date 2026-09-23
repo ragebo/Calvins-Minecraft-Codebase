@@ -141,7 +141,18 @@ How each of these works, and what the game really reports for them, is in
 Projectile guns spawn a shared `bountysys:bullet` entity and
 apply damage on hit via script (not the entity's own vanilla damage) so each gun's
 number is independent. Shotguns jitter several rays per trigger pull via
-`Dimension.getEntitiesFromRay` for real per-pellet spread. Every gun shows muzzle smoke
+`Dimension.getEntitiesFromRay` for real per-pellet spread.
+
+Every gun's damage goes through `dealGunDamage` (`systems/guns.ts`), not a bare
+`applyDamage`: vanilla ignores a repeat hit on a target that isn't bigger than the last one,
+for about `HIT_WINDOW_TICKS` (`config/guns.ts`, measured with `rae:probe_damage`). A shotgun's
+own pellets are already summed into one hit per blast; `dealGunDamage` does the same across
+separate trigger pulls, so a fast-firing gun (the double-barrel's second barrel, a rapid-fired
+revolver) never has a follow-up shot silently vanish. It only knows about damage guns
+themselves dealt, so a shot arriving right after some unrelated hit (a fall, a punch) is a
+narrower, unfixed edge of the same rule.
+
+Every gun shows muzzle smoke
 when it fires, and, having no bullet to watch, a shotgun shot is also drawn with vanilla
 particles (a muzzle flash, an ember trail along every pellet, a puff where one ends):
 `effects` per gun in `config/guns.ts`, `docs/test-cards/SHOTGUN-EFFECTS.md`. Use only
