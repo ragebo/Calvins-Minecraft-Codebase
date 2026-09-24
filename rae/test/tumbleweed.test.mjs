@@ -160,7 +160,7 @@ test("despawns once older than maxAgeTicks, spawned by the system itself so it c
 });
 
 test("a fresh spawn lands within the configured distance of the player it spawned near, lifted above their height for real gravity to settle", (t) => {
-    t.mock.method(Math, "random", () => 0);
+    t.mock.method(Math, "random", () => 0.99);   // deterministic, and safely above hopChance so a hop can't sneak in and move its y
     const { check, done } = checks();
     const { player, restore } = scene({ maxActive: 1 });
 
@@ -191,8 +191,8 @@ test("it has real physics on: gravity and collision, so the engine (not a script
     done();
 });
 
-test("a horizontal nudge every run does not fight whatever vertical velocity gravity or a bounce already gave it", (t) => {
-    t.mock.method(Math, "random", () => 0);
+test("a horizontal nudge every run does not fight whatever vertical velocity gravity already gave it, when it doesn't bounce", (t) => {
+    t.mock.method(Math, "random", () => 0.99);   // above hopChance: isolates this from the bounce, tested separately below
     const { check, done } = checks();
     const { restore } = scene({ maxActive: 0 });
 
@@ -201,6 +201,31 @@ test("a horizontal nudge every run does not fight whatever vertical velocity gra
         entity.applyImpulse({ x: 0, y: -0.5, z: 0 });   // stands in for gravity, which the fake does not simulate
         runHandler(1);
         check("the downward velocity this test gave it survived the wind nudge", entity.getVelocity().y === -0.5, JSON.stringify(entity.getVelocity()));
+    } finally {
+        restore();
+    }
+    done();
+});
+
+test("the occasional bounce adds an upward kick on top of existing velocity, only while it isn't already rising", (t) => {
+    t.mock.method(Math, "random", () => 0);   // guarantees the hop's own chance roll succeeds whenever it's eligible
+    const { check, done } = checks();
+    const { restore } = scene({ maxActive: 0 });
+
+    try {
+        const falling = overworld().spawnEntity(TUMBLEWEED_ENTITY_ID, { x: 0, y: 64, z: 0 });
+        falling.applyImpulse({ x: 0, y: -0.5, z: 0 });        // resting/falling (y <= 0): eligible for a hop
+
+        const rising = overworld().spawnEntity(TUMBLEWEED_ENTITY_ID, { x: 10, y: 64, z: 0 });
+        rising.applyImpulse({ x: 0, y: 0.3, z: 0 });          // still airborne from an earlier hop: not eligible
+
+        runHandler(1);   // guarantees 1 or 2 handler runs within the window (never more), not exactly 1
+
+        // Each eligible run adds exactly one hopStrength on top of what was already there — never resets it
+        // to a fixed value — so after 1 or 2 runs it's somewhere between one hop's worth and two.
+        const fallingY = falling.getVelocity().y;
+        check("still falling: the hop's kick is added on top of the existing -0.5, not overwriting it", fallingY >= -0.5 + TUMBLEWEED.hopStrength - 1e-9 && fallingY <= -0.5 + 2 * TUMBLEWEED.hopStrength + 1e-9, String(fallingY));
+        check("already rising: not hopped again, so a lucky streak can't stack into one big launch", Math.abs(rising.getVelocity().y - 0.3) < 1e-9, JSON.stringify(rising.getVelocity()));
     } finally {
         restore();
     }

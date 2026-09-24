@@ -23,6 +23,10 @@ import { announce } from "../core/ui.js";
  *
  * They are spawned and swept by this file's own onTick handler: no gameplay system depends on them, and
  * resetting a round leaves them alone (they are decoration, not round state).
+ *
+ * `pushOne`'s occasional upward kick is what makes it look like it's bouncing (owner feedback 2026-09-23:
+ * moving too slowly and not bouncing at all) — `minecraft:physics` has no bounciness/restitution setting
+ * to turn on, so this is scripted, gated to only fire while it isn't already moving upward.
  */
 
 const BORN_TICK_PROPERTY = "bornTick";
@@ -47,13 +51,19 @@ function pushOne(entity: Entity): void {
     const gust = Math.random() < TUMBLEWEED.gustChance ? headingVector(TUMBLEWEED.windHeadingDegrees, TUMBLEWEED.gustStrength) : undefined;
 
     // X/Z (the wind) are reset and reapplied every run, so the push stays exactly what the config says
-    // instead of piling up; Y is read back and given right back untouched, so real gravity and whatever the
-    // ground's own collision is doing (settling, a small bounce) are never fought.
+    // instead of piling up; Y is read back first so real gravity is never fought.
     const current = entity.getVelocity();
+
+    // The bounce: minecraft:physics has no bounciness/restitution setting, so this is a small upward kick
+    // standing in for one. Only while it isn't already moving upward (current.y <= 0, i.e. falling or
+    // resting) — otherwise a run of lucky rolls while it's still airborne from the last hop would stack
+    // into one big launch instead of a series of small bounces.
+    const hop = current.y <= 0 && Math.random() < TUMBLEWEED.hopChance ? TUMBLEWEED.hopStrength : 0;
+
     entity.clearVelocity();
     entity.applyImpulse({
         x: wind.x + jitter.x + (gust?.x ?? 0),
-        y: current.y,
+        y: current.y + hop,
         z: wind.z + jitter.z + (gust?.z ?? 0)
     });
 

@@ -226,16 +226,30 @@ export const TUMBLEWEED_ENTITY_ID = "bountysys:tumbleweed";
 export const TUMBLEWEED = {
     /** How often the mover/spawner/cleanup handler runs. */
     tickInterval: 4,
-    /** The wind's direction, degrees clockwise from +Z (the way a player's yaw is measured), and its steady push per handler run. */
+    /**
+     * The wind's direction, degrees clockwise from +Z (the way a player's yaw is measured), and its steady
+     * push per handler run. Raised sharply from the original 0.03 (owner feedback 2026-09-23: too slow) —
+     * there is no recorded real-game measurement of how far this actually carries it once ground friction
+     * from `minecraft:physics.has_collision` is in the mix, so this is a first guess to playtest again, not
+     * a measured value like TRANSIT's speeds.
+     */
     windHeadingDegrees: 0,
-    windStrength: 0.03,
+    windStrength: 0.18,
     /** Random sideways push added each run, so a group doesn't travel in lockstep. */
-    jitter: 0.01,
+    jitter: 0.05,
     /** Chance per handler run of an extra, stronger gust on top of the steady wind. */
-    gustChance: 0.05,
-    gustStrength: 0.12,
-    /** How fast it visibly spins (degrees per handler run), independent of its travel direction. */
-    spinDegrees: 35,
+    gustChance: 0.08,
+    gustStrength: 0.4,
+    /**
+     * An upward kick, so it visibly bounces along instead of sliding: `minecraft:physics` has no
+     * restitution/bounciness setting to turn on, so this is what stands in for one. Only applied when it
+     * isn't already moving upward (systems/tumbleweed.ts), so a lucky streak of rolls can't stack hops into
+     * one huge jump; real gravity (has_gravity: true) is what always brings it back down.
+     */
+    hopChance: 0.6,
+    hopStrength: 0.22,
+    /** How fast it visibly spins (degrees per handler run), independent of its travel direction. Raised to match the faster roll. */
+    spinDegrees: 55,
     /** At most this many alive at once. */
     maxActive: 6,
     /** A new one spawns near a random online player, this far off (blocks), upwind so it blows past them. */

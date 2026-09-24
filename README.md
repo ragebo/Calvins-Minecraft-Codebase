@@ -235,6 +235,14 @@ remove the ones already rolling. A new one spawns a little above the player it's
 (`TUMBLEWEED.spawnLift`) so real gravity settles it onto the actual ground, rather than trusting
 the player's own height to already match the terrain some distance away.
 
+`minecraft:physics` has no bounciness/restitution setting, so the visible bounce is scripted:
+`TUMBLEWEED.hopChance` of an upward kick (`hopStrength`) every handler run, added on top of
+whatever vertical velocity it already has rather than replacing it, and only while it isn't
+already moving upward — otherwise a run of lucky rolls while still airborne from the last hop
+would stack into one big launch instead of a series of small bounces. `windStrength` (how fast it
+travels) has no recorded real-game measurement of how far ground friction from `has_collision`
+eats into it, unlike `TRANSIT`'s measured speeds — treat it as a first guess to keep tuning.
+
 The look is several crossed, alpha-cutout planes scattered around a ball — the same technique
 vanilla uses for dead bush, ferns and saplings — made by `scripts/gen-tumbleweed-model.mjs` (a
 seeded, deterministic branch-drawing walk, so no art is drawn by hand and re-running it always
