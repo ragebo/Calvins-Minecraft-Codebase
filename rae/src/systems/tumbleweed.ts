@@ -1,4 +1,4 @@
-import { world, type Entity, type Vector3 } from "@minecraft/server";
+import { world, type Dimension, type Entity, type Vector3 } from "@minecraft/server";
 import { TUMBLEWEED, TUMBLEWEED_ENTITY_ID } from "../config/balance.js";
 import { toggleTumbleweeds, tumbleweedsEnabled } from "../core/ambience.js";
 import { onScriptEvent } from "../core/events.js";
@@ -27,9 +27,16 @@ import { announce } from "../core/ui.js";
  * `pushOne`'s occasional upward kick is what makes it look like it's bouncing (owner feedback 2026-09-23:
  * moving too slowly and not bouncing at all) — `minecraft:physics` has no bounciness/restitution setting
  * to turn on, so this is scripted, gated to only fire while it isn't already moving upward.
+ *
+ * Same owner feedback also asked that it actually roll (not just spin in place) as it moves, only spawn in
+ * the desert, despawn quickly, and never hop while it's stuck against something rather than truly rolling.
+ * `pushOne` tracks how far it really moved since the last run (not its velocity) to tell "rolling" from
+ * "stuck", and `desertSpawnSpot` checks `Dimension.getBiome` before a spawn is allowed to happen at all.
  */
 
 const BORN_TICK_PROPERTY = "bornTick";
+const LAST_X_PROPERTY = "lastX";
+const LAST_Z_PROPERTY = "lastZ";
 
 function distance(a: Vector3, b: Vector3): number {
     const dx = a.x - b.x;
@@ -49,6 +56,23 @@ function pushOne(entity: Entity): void {
     const wind = headingVector(TUMBLEWEED.windHeadingDegrees, TUMBLEWEED.windStrength);
     const jitter = headingVector(Math.random() * 360, Math.random() * TUMBLEWEED.jitter);
     const gust = Math.random() < TUMBLEWEED.gustChance ? headingVector(TUMBLEWEED.windHeadingDegrees, TUMBLEWEED.gustStrength) : undefined;
+    const push = {
+        x: wind.x + jitter.x + (gust?.x ?? 0),
+        z: wind.z + jitter.z + (gust?.z ?? 0)
+    };
+
+    // Stuck against something (a block, a corner) rather than truly rolling: judged by how far it actually
+    // moved since the last run, not by velocity — a wedged entity can be pushed all day and go nowhere.
+    // Nothing recorded yet (it just spawned) counts as free to move, not stuck.
+    const lastX = entity.getDynamicProperty(LAST_X_PROPERTY);
+    const lastZ = entity.getDynamicProperty(LAST_Z_PROPERTY);
+    const moved = typeof lastX === "number" && typeof lastZ === "number"
+        ? Math.hypot(entity.location.x - lastX, entity.location.z - lastZ)
+        : Infinity;
+    const stuck = moved < TUMBLEWEED.stuckThreshold;
+
+    entity.setDynamicProperty(LAST_X_PROPERTY, entity.location.x);
+    entity.setDynamicProperty(LAST_Z_PROPERTY, entity.location.z);
 
     // X/Z (the wind) are reset and reapplied every run, so the push stays exactly what the config says
     // instead of piling up; Y is read back first so real gravity is never fought.
@@ -56,21 +80,20 @@ function pushOne(entity: Entity): void {
 
     // The bounce: minecraft:physics has no bounciness/restitution setting, so this is a small upward kick
     // standing in for one. Only while it isn't already moving upward (current.y <= 0, i.e. falling or
-    // resting) — otherwise a run of lucky rolls while it's still airborne from the last hop would stack
-    // into one big launch instead of a series of small bounces.
-    const hop = current.y <= 0 && Math.random() < TUMBLEWEED.hopChance ? TUMBLEWEED.hopStrength : 0;
+    // resting) and isn't stuck — a lucky streak of rolls can't stack hops into one huge jump, and it
+    // doesn't jitter in place while wedged against something instead of just waiting for the wind to turn.
+    const hop = !stuck && current.y <= 0 && Math.random() < TUMBLEWEED.hopChance ? TUMBLEWEED.hopStrength : 0;
 
     entity.clearVelocity();
-    entity.applyImpulse({
-        x: wind.x + jitter.x + (gust?.x ?? 0),
-        y: current.y + hop,
-        z: wind.z + jitter.z + (gust?.z ?? 0)
-    });
+    entity.applyImpulse({ x: push.x, y: current.y + hop, z: push.z });
 
-    // Tumbles in place, independent of which way the wind is pushing it: a real tumbleweed spins on
-    // whatever axis it happens to be resting on, not necessarily the one it is travelling along.
-    const spin = entity.getRotation();
-    entity.setRotation({ x: spin.x, y: (spin.y + TUMBLEWEED.spinDegrees) % 360 });
+    // Rolls forward in the direction it's actually travelling (yaw), tumbling as it goes (pitch), instead
+    // of spinning in place on a vertical axis. No visible roll while stuck, to match no hop while stuck.
+    if (!stuck && (push.x !== 0 || push.z !== 0)) {
+        const yaw = (Math.atan2(push.x, push.z) * 180) / Math.PI;
+        const pitch = entity.getRotation().x;
+        entity.setRotation({ x: (pitch + TUMBLEWEED.rollDegrees) % 360, y: yaw });
+    }
 }
 
 /** True once it has rolled out of every player's sight, or has simply been around long enough. */
@@ -102,6 +125,24 @@ function spawnSpot(players: readonly { location: Vector3 }[]): Vector3 {
     };
 }
 
+/**
+ * `spawnSpot`, but only when the candidate is in one of `TUMBLEWEED.biomes` — undefined otherwise (an
+ * unloaded chunk counts as "no", the same as the wrong biome, rather than guessing). If nobody online is
+ * near a desert, this returns undefined every run and nothing spawns: expected, not a bug.
+ */
+function desertSpawnSpot(dimension: Dimension, players: readonly { location: Vector3 }[]): Vector3 | undefined {
+
+    const spot = spawnSpot(players);
+
+    try {
+        if (!TUMBLEWEED.biomes.includes(dimension.getBiome(spot).id)) return undefined;
+    } catch {
+        return undefined;
+    }
+
+    return spot;
+}
+
 onTick("tumbleweed", (ctx) => {
 
     const dimension = world.getDimension("overworld");
@@ -118,8 +159,11 @@ onTick("tumbleweed", (ctx) => {
     }
 
     if (tumbleweedsEnabled() && rolling.length < TUMBLEWEED.maxActive && ctx.players.length > 0) {
-        const spawned = dimension.spawnEntity(TUMBLEWEED_ENTITY_ID, spawnSpot(ctx.players));
-        spawned.setDynamicProperty(BORN_TICK_PROPERTY, ctx.tick);
+        const spot = desertSpawnSpot(dimension, ctx.players);
+        if (spot) {
+            const spawned = dimension.spawnEntity(TUMBLEWEED_ENTITY_ID, spot);
+            spawned.setDynamicProperty(BORN_TICK_PROPERTY, ctx.tick);
+        }
     }
 
 }, { everyTicks: TUMBLEWEED.tickInterval });

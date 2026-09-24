@@ -215,11 +215,13 @@ PNG with your own art whenever you like.
 
 ### Tumbleweeds
 
-Purely ambient: `bountysys:tumbleweed`s roll across the ground, nudged along by a steady "world
-wind" (`TUMBLEWEED` in `config/balance.ts`: direction, strength, jitter, occasional gusts, spin
-speed). They spawn near online players up to `TUMBLEWEED.maxActive` at once and despawn once too
-old or too far from everyone, all from one `onTick` handler in `systems/tumbleweed.ts`. They
-cannot hurt or be hurt by anything.
+Purely ambient: `bountysys:tumbleweed`s roll across desert ground, nudged along by a steady "world
+wind" (`TUMBLEWEED` in `config/balance.ts`: direction, strength, jitter, occasional gusts, roll
+speed). They spawn near online players up to `TUMBLEWEED.maxActive` at once (only when the
+candidate spot is in one of `TUMBLEWEED.biomes` — `Dimension.getBiome`, confirmed against the
+installed game's own biome data; if nobody's near a desert, nothing spawns, which is correct, not
+a bug) and despawn once too old (quickly, `TUMBLEWEED.maxAgeTicks`) or too far from everyone, all
+from one `onTick` handler in `systems/tumbleweed.ts`. They cannot hurt or be hurt by anything.
 
 They are a **real physics entity** (`has_gravity` and `has_collision` both on): the engine settles
 them onto the ground and stops them at obstacles the normal way, rather than a script guessing at
@@ -242,6 +244,20 @@ already moving upward — otherwise a run of lucky rolls while still airborne fr
 would stack into one big launch instead of a series of small bounces. `windStrength` (how fast it
 travels) has no recorded real-game measurement of how far ground friction from `has_collision`
 eats into it, unlike `TRANSIT`'s measured speeds — treat it as a first guess to keep tuning.
+
+It's judged **stuck** (against a block, a corner) by how far it actually moved since the last
+handler run, not by its velocity — a wedged entity can be pushed all day and go nowhere. Stuck
+suppresses both the hop and the roll, so it doesn't jitter or spin in place while wedged; the
+horizontal push still keeps trying, in case a jitter or a gust eventually frees it.
+
+It **rolls** as it travels rather than spinning on a vertical axis: yaw faces the direction it's
+actually moving (recomputed from that run's real push vector, not the configured wind heading
+alone, since jitter and gusts deflect it), and pitch (`TUMBLEWEED.rollDegrees` per run) tumbles it
+forward. This is **experimental** — the engine's own docs describe pitch as a head-tilt "for most
+mobs", and this model has no head bone, so whether it reads as genuinely rolling (rather than
+doing nothing) needed a real playtest to confirm. If it doesn't visibly roll, the fallback is a
+custom entity property updated from script plus a resource-pack animation reading it via molang —
+real work, and a first for this codebase, not attempted until the cheap version was tried.
 
 The look is several crossed, alpha-cutout planes scattered around a ball — the same technique
 vanilla uses for dead bush, ferns and saplings — made by `scripts/gen-tumbleweed-model.mjs` (a

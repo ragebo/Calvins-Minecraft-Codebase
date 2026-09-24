@@ -243,13 +243,27 @@ export const TUMBLEWEED = {
     /**
      * An upward kick, so it visibly bounces along instead of sliding: `minecraft:physics` has no
      * restitution/bounciness setting to turn on, so this is what stands in for one. Only applied when it
-     * isn't already moving upward (systems/tumbleweed.ts), so a lucky streak of rolls can't stack hops into
-     * one huge jump; real gravity (has_gravity: true) is what always brings it back down.
+     * isn't already moving upward AND isn't stuck (see `stuckThreshold`) — a lucky streak of rolls can't
+     * stack hops into one huge jump, and it doesn't jitter in place while wedged against something; real
+     * gravity (has_gravity: true) is what always brings it back down.
      */
     hopChance: 0.6,
     hopStrength: 0.22,
-    /** How fast it visibly spins (degrees per handler run), independent of its travel direction. Raised to match the faster roll. */
-    spinDegrees: 55,
+    /**
+     * Below this much horizontal movement since the last handler run (blocks), it's judged stuck against
+     * something (a block, a corner) rather than actually rolling — judged by how far it really moved, not
+     * by velocity, since a wedged entity can be pushed all day and go nowhere. No hop and no visible roll
+     * while stuck (owner feedback 2026-09-23: it shouldn't jump in place when caught on something).
+     */
+    stuckThreshold: 0.02,
+    /**
+     * Degrees the tumble (pitch) advances per handler run, on top of yaw always facing the direction it's
+     * actually travelling. EXPERIMENTAL: the engine's own docs describe pitch as a head-tilt "for most
+     * mobs", and this model has no head bone, so whether this reads as genuinely rolling forward (rather
+     * than doing nothing) is unconfirmed — the fallback if it doesn't is a custom entity property plus a
+     * resource-pack animation reading it, real work, not this.
+     */
+    rollDegrees: 55,
     /** At most this many alive at once. */
     maxActive: 6,
     /** A new one spawns near a random online player, this far off (blocks), upwind so it blows past them. */
@@ -257,10 +271,18 @@ export const TUMBLEWEED = {
     spawnDistanceMax: 24,
     /** Spawned this far above the player's own height (blocks): real gravity settles it onto the actual ground from there, rather than trusting the player's height to already match the terrain some distance away. */
     spawnLift: 3,
-    /** Removed once it has existed this long (ticks)... */
-    maxAgeTicks: 6000,
+    /**
+     * Only spawns when the candidate spot is in one of these biomes (owner feedback 2026-09-23: only in the
+     * desert) — checked with `Dimension.getBiome`, confirmed present in the installed game's own biome data.
+     * Mesa/badlands (which the mod that inspired this also used) isn't included; add "minecraft:mesa" etc.
+     * if that's wanted too. If nobody online is in one of these biomes, nothing spawns at all — expected,
+     * not a bug.
+     */
+    biomes: ["minecraft:desert", "minecraft:desert_hills"],
+    /** Removed once it has existed this long (ticks): despawns "pretty quickly" now (owner feedback 2026-09-23), down from 6000 (5 minutes). */
+    maxAgeTicks: 400,
     /** ...or once it is farther than this from every online player (blocks), whichever comes first. */
-    despawnDistance: 80
+    despawnDistance: 50
 };
 
 export const HARMING = {

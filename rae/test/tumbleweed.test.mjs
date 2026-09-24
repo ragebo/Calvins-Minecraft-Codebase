@@ -33,6 +33,9 @@ function scene(overrides = {}) {
     fake.reset();
     resetAllSystems();
     if (!tumbleweedsEnabled()) toggleTumbleweeds();
+    // Spawning is desert-only now; every test but the one specifically about that gate assumes this and
+    // overrides it away only for its own duration (matching how getBlockFromRay overrides work elsewhere).
+    overworld().getBiome = () => ({ id: "minecraft:desert" });
 
     const saved = { ...TUMBLEWEED };
     Object.assign(TUMBLEWEED, overrides);
@@ -88,14 +91,14 @@ test("turning it off stops new spawns, but leaves the ones already rolling alone
     done();
 });
 
-test("a rolling tumbleweed moves in the configured wind direction and keeps spinning, not sideways and not standing still", (t) => {
+test("a rolling tumbleweed moves in the configured wind direction, faces the way it's travelling, and tumbles forward rather than standing still", (t) => {
     t.mock.method(Math, "random", () => 0);   // no jitter direction, and gustChance 0 is never beaten by 0 < 0
     const { check, done } = checks();
-    const { restore } = scene({ maxActive: 0, windHeadingDegrees: 0, windStrength: 1, jitter: 0, gustChance: 0, spinDegrees: 15 });
+    const { restore } = scene({ maxActive: 0, windHeadingDegrees: 0, windStrength: 1, jitter: 0, gustChance: 0, rollDegrees: 15 });
 
     try {
         const entity = overworld().spawnEntity(TUMBLEWEED_ENTITY_ID, { x: 5, y: 64, z: 5 });
-        const startRotation = entity.getRotation().y;
+        const startPitch = entity.getRotation().x;
         const totalTicks = 5 * CADENCE;
 
         fake.advance(totalTicks);
@@ -109,8 +112,11 @@ test("a rolling tumbleweed moves in the configured wind direction and keeps spin
         check("moved toward +Z by roughly windStrength * ticks elapsed", Math.abs(entity.location.z - 5 - totalTicks) < 1.5 * CADENCE + 1, JSON.stringify(entity.location));
         check("no sideways drift (no jitter, wind is pure +Z)", Math.abs(entity.location.x - 5) < 1e-6, JSON.stringify(entity.location));
 
-        const spun = ((entity.getRotation().y - startRotation) % 360 + 360) % 360;
-        check("it spun by a whole number of spinDegrees steps, and at least once", spun > 0 && Math.abs(spun % 15) < 1e-6, JSON.stringify({ spun }));
+        // Yaw faces the direction it's actually travelling (pure +Z here, so 0 degrees), not spinning on its own.
+        check("yaw faces the direction of travel", Math.abs(entity.getRotation().y) < 1e-6, JSON.stringify(entity.getRotation()));
+
+        const rolled = ((entity.getRotation().x - startPitch) % 360 + 360) % 360;
+        check("it tumbled (pitch) by a whole number of rollDegrees steps, and at least once", rolled > 0 && Math.abs(rolled % 15) < 1e-6, JSON.stringify({ rolled }));
     } finally {
         restore();
     }
@@ -227,6 +233,82 @@ test("the occasional bounce adds an upward kick on top of existing velocity, onl
         check("still falling: the hop's kick is added on top of the existing -0.5, not overwriting it", fallingY >= -0.5 + TUMBLEWEED.hopStrength - 1e-9 && fallingY <= -0.5 + 2 * TUMBLEWEED.hopStrength + 1e-9, String(fallingY));
         check("already rising: not hopped again, so a lucky streak can't stack into one big launch", Math.abs(rising.getVelocity().y - 0.3) < 1e-9, JSON.stringify(rising.getVelocity()));
     } finally {
+        restore();
+    }
+    done();
+});
+
+test("no hop and no visible roll while stuck against something, judged by how far it actually moved, not by velocity", (t) => {
+    t.mock.method(Math, "random", () => 0);   // would always hop and roll if the stuck check didn't suppress it
+    const { check, done } = checks();
+    const { restore } = scene({ maxActive: 0 });
+
+    try {
+        const entity = overworld().spawnEntity(TUMBLEWEED_ENTITY_ID, { x: 0, y: 64, z: 0 });
+
+        // fake.advance(CADENCE) always crosses exactly one due tick: due runs recur every CADENCE ticks,
+        // so any CADENCE-long window contains exactly one, never zero or two. The first run records its
+        // "last position" as (0, 0) — wherever it was the INSTANT it ran, before that run's own push had
+        // any effect — then the push moves it somewhere else by the time this call returns.
+        fake.advance(CADENCE);
+        check("(setup) it actually made progress on the first run", entity.location.x !== 0 || entity.location.z !== 0, JSON.stringify(entity.location));
+
+        // Simulate a wall: put it right back at (0, 0) — exactly what the first run recorded as its
+        // position — with velocity reset (the fake has no real collision to hold it there otherwise), as
+        // if a block had stopped it cold the instant it started moving.
+        entity.teleport({ x: 0, y: entity.location.y, z: 0 });
+        const rotationBefore = entity.getRotation();
+
+        fake.advance(CADENCE);   // exactly the next due run
+
+        check("no hop: y velocity stayed at 0, not bumped up", entity.getVelocity().y === 0, JSON.stringify(entity.getVelocity()));
+        check("no roll: rotation is unchanged", entity.getRotation().x === rotationBefore.x && entity.getRotation().y === rotationBefore.y, JSON.stringify(entity.getRotation()));
+    } finally {
+        restore();
+    }
+    done();
+});
+
+test("only spawns where the candidate spot is in a desert biome; nothing spawns if nobody's near one", (t) => {
+    t.mock.method(Math, "random", () => 0);
+    const { check, done } = checks();
+    const { restore } = scene({ maxActive: 1 });
+    const dim = overworld();
+    const original = dim.getBiome;
+
+    try {
+        dim.getBiome = () => ({ id: "minecraft:plains" });
+        runHandler(3);
+        check("nothing spawns outside a desert biome", weeds().length === 0, String(weeds().length));
+
+        dim.getBiome = () => ({ id: "minecraft:desert" });
+        runHandler(1);
+        check("spawns once the candidate spot is in a desert biome", weeds().length === 1, String(weeds().length));
+
+        dim.getBiome = () => ({ id: "minecraft:desert_hills" });
+        weeds()[0].remove();
+        runHandler(1);
+        check("desert_hills counts too", weeds().length === 1, String(weeds().length));
+    } finally {
+        dim.getBiome = original;
+        restore();
+    }
+    done();
+});
+
+test("a biome lookup that throws (an unloaded chunk) is treated as 'not desert', not a crash", (t) => {
+    t.mock.method(Math, "random", () => 0);
+    const { check, done } = checks();
+    const { restore } = scene({ maxActive: 1 });
+    const dim = overworld();
+    const original = dim.getBiome;
+
+    try {
+        dim.getBiome = () => { throw new Error("LocationInUnloadedChunkError: chunk not loaded"); };
+        runHandler(3);
+        check("no crash, and nothing spawned", weeds().length === 0, String(weeds().length));
+    } finally {
+        dim.getBiome = original;
         restore();
     }
     done();

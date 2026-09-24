@@ -109,6 +109,8 @@ function makeDimension(id) {
         getBlock() { return undefined; },
         getBlockFromRay() { return undefined; },
         getEntitiesFromRay() { return []; },
+        // An ordinary, non-desert biome by default; a test that needs a specific one replaces this.
+        getBiome() { return { id: "minecraft:plains" }; },
         particles: [],
         spawnParticle(effectName, location) { dim.particles.push({ tick: fake.tick, id: effectName, location: { ...location } }); },
         // The whole fake world counts as loaded; a test that wants an unloaded stretch replaces this.
