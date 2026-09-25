@@ -12,7 +12,7 @@ import { fake, load, checks } from "./helpers.mjs";
 // real cadence, and every test advances in multiples of it. Everything else in TUMBLEWEED is read fresh on
 // every run and can be overridden freely.
 
-const { TUMBLEWEED, TUMBLEWEED_ENTITY_ID } = await load("config/balance.js");
+const { TUMBLEWEED, TUMBLEWEED_ENTITY_ID, TUMBLEWEED_ROLL_PROPERTY } = await load("config/balance.js");
 await load("main.js");
 const { resetAllSystems, listSystems } = await load("core/registry.js");
 const { tumbleweedsEnabled, toggleTumbleweeds } = await load("core/ambience.js");
@@ -91,14 +91,13 @@ test("turning it off stops new spawns, but leaves the ones already rolling alone
     done();
 });
 
-test("a rolling tumbleweed moves in the configured wind direction, faces the way it's travelling, and tumbles forward rather than standing still", (t) => {
+test("a rolling tumbleweed moves in the configured wind direction and faces the way it's travelling", (t) => {
     t.mock.method(Math, "random", () => 0);   // no jitter direction, and gustChance 0 is never beaten by 0 < 0
     const { check, done } = checks();
-    const { restore } = scene({ maxActive: 0, windHeadingDegrees: 0, windStrength: 1, jitter: 0, gustChance: 0, rollDegrees: 15 });
+    const { restore } = scene({ maxActive: 0, windHeadingDegrees: 0, windStrength: 1, jitter: 0, gustChance: 0 });
 
     try {
         const entity = overworld().spawnEntity(TUMBLEWEED_ENTITY_ID, { x: 5, y: 64, z: 5 });
-        const startPitch = entity.getRotation().x;
         const totalTicks = 5 * CADENCE;
 
         fake.advance(totalTicks);
@@ -114,9 +113,92 @@ test("a rolling tumbleweed moves in the configured wind direction, faces the way
 
         // Yaw faces the direction it's actually travelling (pure +Z here, so 0 degrees), not spinning on its own.
         check("yaw faces the direction of travel", Math.abs(entity.getRotation().y) < 1e-6, JSON.stringify(entity.getRotation()));
+        check("pitch is left at 0 (the actual tumble is the roll property/animation, not this)", entity.getRotation().x === 0, JSON.stringify(entity.getRotation()));
+    } finally {
+        restore();
+    }
+    done();
+});
 
-        const rolled = ((entity.getRotation().x - startPitch) % 360 + 360) % 360;
-        check("it tumbled (pitch) by a whole number of rollDegrees steps, and at least once", rolled > 0 && Math.abs(rolled % 15) < 1e-6, JSON.stringify({ rolled }));
+// ---------------------------------------------------------------------------------------------------------
+// The rolling animation: a bountysys:roll entity property, driven every tick (not just every handler run,
+// so BountySys_RP/animations/tumbleweed.animation.json reads it as smooth rolling rather than a step every
+// TUMBLEWEED.tickInterval ticks) in proportion to how far it actually moved (rolling without slipping:
+// angle = distance / radius). Entity.setRotation's pitch does nothing visible on this headless model
+// (confirmed by a real playtest of that first attempt) -- this is the real mechanism instead.
+// ---------------------------------------------------------------------------------------------------------
+
+test("the roll property advances in proportion to real distance moved", (t) => {
+    t.mock.method(Math, "random", () => 0);
+    const { check, done } = checks();
+    const { restore } = scene({ maxActive: 1, windHeadingDegrees: 0, windStrength: 0.05, jitter: 0, gustChance: 0 });
+
+    try {
+        runHandler(1);   // spawns one and folds it into `known` within that same run
+        const [weed] = weeds();
+        check("(setup) one spawned", weed !== undefined);
+        if (!weed) return done();
+
+        const before = weed.getProperty(TUMBLEWEED_ROLL_PROPERTY);
+        const startZ = weed.location.z;
+
+        fake.advance(5);   // the roll handler is guaranteed to run on every one of these, unlike the slower one
+
+        const moved = weed.location.z - startZ;
+        const expectedDelta = (moved / TUMBLEWEED.radius) * (180 / Math.PI);
+        const actualDelta = weed.getProperty(TUMBLEWEED_ROLL_PROPERTY) - before;
+
+        check("it actually moved (a meaningful check needs it to)", moved > 0, String(moved));
+        check("the roll advanced by (distance moved / radius) in degrees, not a fixed rate", Math.abs(actualDelta - expectedDelta) < 1e-6, `delta=${actualDelta} expected=${expectedDelta} (moved ${moved})`);
+    } finally {
+        restore();
+    }
+    done();
+});
+
+test("the roll property stays within [0, 360) even after far more than one full turn's worth of travel", (t) => {
+    t.mock.method(Math, "random", () => 0);
+    const { check, done } = checks();
+    const { restore } = scene({ maxActive: 1, windHeadingDegrees: 0, windStrength: 2, jitter: 0, gustChance: 0, despawnDistance: 100000 });
+
+    try {
+        runHandler(1);
+        const [weed] = weeds();
+        check("(setup) one spawned", weed !== undefined);
+        if (!weed) return done();
+
+        fake.advance(50 * CADENCE);   // far enough to have turned many full circles at this speed (despawnDistance
+                                       // is neutralized above so travelling this far doesn't remove it mid-test)
+
+        const synced = weed.getProperty(TUMBLEWEED_ROLL_PROPERTY);
+        check("wrapped into [0, 360), not left to grow unbounded (setProperty throws outside a property's declared range in the real game)", typeof synced === "number" && synced >= 0 && synced < 360, String(synced));
+    } finally {
+        restore();
+    }
+    done();
+});
+
+test("the roll stops advancing once it stops actually moving, even though the animation keeps being driven every tick", () => {
+    const { check, done } = checks();
+    // windStrength/jitter/gustChance all zeroed: maxActive: 0 only stops NEW spawns, and pushOne still runs
+    // on this existing one every handler run regardless — with the wind inert, that's just a harmless
+    // velocity no-op, leaving the teleports below as the only thing that actually moves it.
+    const { restore } = scene({ maxActive: 0, windStrength: 0, jitter: 0, gustChance: 0 });
+
+    try {
+        const entity = overworld().spawnEntity(TUMBLEWEED_ENTITY_ID, { x: 0, y: 64, z: 0 });
+
+        // Move it by hand, one tick at a time, so the every-tick roll handler sees real progress each time.
+        for (let i = 0; i < 5; i++) {
+            entity.teleport({ x: entity.location.x + 0.1, y: entity.location.y, z: entity.location.z });
+            fake.advance(1);
+        }
+        const rolledSoFar = entity.getProperty(TUMBLEWEED_ROLL_PROPERTY);
+        check("(setup) it actually rolled from real movement", typeof rolledSoFar === "number" && rolledSoFar > 0, String(rolledSoFar));
+
+        fake.advance(10);   // now left alone: the roll handler still runs on every one of these regardless
+
+        check("the roll property is unchanged now that it isn't actually moving", entity.getProperty(TUMBLEWEED_ROLL_PROPERTY) === rolledSoFar, `${entity.getProperty(TUMBLEWEED_ROLL_PROPERTY)} vs ${rolledSoFar}`);
     } finally {
         restore();
     }
@@ -148,6 +230,13 @@ test("despawns once older than maxAgeTicks, spawned by the system itself so it c
     const { restore } = scene({ maxActive: 1, maxAgeTicks: 5, despawnDistance: 100000 });
 
     try {
+        // scene()'s own fake.advance(1) can itself land on a due tick for the shared handler (its tick
+        // count runs for the whole file, never reset per test) and spawn one before this test's setup even
+        // starts. With maxAgeTicks this aggressive, that stray's unknown age would make the timing below
+        // unpredictable, so clear whatever's there first and let this test's own runHandler(1) be the one
+        // true "spawned by the system itself" moment it's named for.
+        for (const stray of weeds()) stray.remove();
+
         runHandler(1);
         check("(setup) one spawned", weeds().length === 1, String(weeds().length));
         const born = weeds()[0].getDynamicProperty("bornTick");

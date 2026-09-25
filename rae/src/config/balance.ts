@@ -223,6 +223,15 @@ export const HORSE = {
  */
 export const TUMBLEWEED_ENTITY_ID = "bountysys:tumbleweed";
 
+/**
+ * The entity property `your_pack_name_BP/entities/tumbleweed.json` declares (range [0, 360), client-synced)
+ * and `BountySys_RP/animations/tumbleweed.animation.json` reads via molang to turn the model's root bone —
+ * the real mechanism for rotating an arbitrary bone from script, since `Entity.setRotation`'s pitch does
+ * nothing visible on this headless model. Lives here, alongside the entity id, so tests can import it too
+ * without hardcoding the string a second time.
+ */
+export const TUMBLEWEED_ROLL_PROPERTY = "bountysys:roll";
+
 export const TUMBLEWEED = {
     /** How often the mover/spawner/cleanup handler runs. */
     tickInterval: 4,
@@ -257,13 +266,19 @@ export const TUMBLEWEED = {
      */
     stuckThreshold: 0.02,
     /**
-     * Degrees the tumble (pitch) advances per handler run, on top of yaw always facing the direction it's
-     * actually travelling. EXPERIMENTAL: the engine's own docs describe pitch as a head-tilt "for most
-     * mobs", and this model has no head bone, so whether this reads as genuinely rolling forward (rather
-     * than doing nothing) is unconfirmed — the fallback if it doesn't is a custom entity property plus a
-     * resource-pack animation reading it, real work, not this.
+     * The rolling animation (`BountySys_RP/animations/tumbleweed.animation.json`) turns the model's root
+     * bone by a `bountysys:roll` entity property the script updates every tick — `Entity.setRotation`'s
+     * pitch turned out to do nothing on this headless model (confirmed 2026-09-24 playtest; the engine's
+     * own docs call it a head-tilt "for most mobs"), so this is the real mechanism instead.
+     *
+     * Driven physically (rolling without slipping: angle = distance moved / radius), not a fixed rate, so a
+     * stuck entity's roll naturally stalls along with everything else — no separate check needed here.
+     * `radius` matches `scripts/gen-tumbleweed-model.mjs`'s own `RADIUS / 16` (keep them in sync if the
+     * model is ever resized); `rollScale` is a fudge factor for by-eye tuning if the physical rate looks
+     * wrong (a scattered tangle of planes isn't a perfect sphere, so it might).
      */
-    rollDegrees: 55,
+    radius: 0.4,
+    rollScale: 1,
     /** At most this many alive at once. */
     maxActive: 6,
     /** A new one spawns near a random online player, this far off (blocks), upwind so it blows past them. */

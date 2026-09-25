@@ -166,6 +166,12 @@ function makeEntity(options = {}) {
         runCommand(command) { guard(entity); return entity._dimension.runCommand(command); },
         getDynamicProperty(k) { guard(entity); return entity.dynamic.get(k); },
         setDynamicProperty(k, v) { guard(entity); if (v === undefined || v === null) entity.dynamic.delete(k); else entity.dynamic.set(k, v); },
+        // Entity properties (declared per entity type in the real game, with a range/default/client_sync):
+        // the fake just stores whatever is set, with no range enforcement — that's real-engine behavior a
+        // test of this file's own logic doesn't need modeled.
+        properties: new Map(),
+        getProperty(id) { guard(entity); return entity.properties.get(id); },
+        setProperty(id, v) { guard(entity); entity.properties.set(id, v); },
         // A vehicle: entities made with `seats` (and the train car, always) accept riders. A rider is moved along
         // with the vehicle by fake.advance and reads its mount back through minecraft:riding.
         seats: options.seats ?? (options.typeId === "bountysys:train_car" ? 4 : 0),

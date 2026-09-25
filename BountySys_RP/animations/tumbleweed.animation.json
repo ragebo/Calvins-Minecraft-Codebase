@@ -1,0 +1,13 @@
+{
+    "format_version": "1.10.0",
+    "animations": {
+        "animation.tumbleweed.roll": {
+            "loop": true,
+            "bones": {
+                "root": {
+                    "rotation": ["query.property('bountysys:roll')", 0, 0]
+                }
+            }
+        }
+    }
+}

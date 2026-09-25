@@ -6,7 +6,9 @@
             "materials": { "default": "entity_alphatest" },
             "textures": { "default": "textures/entity/tumbleweed" },
             "geometry": { "default": "geometry.tumbleweed" },
-            "render_controllers": ["controller.render.default"]
+            "render_controllers": ["controller.render.default"],
+            "animations": { "roll": "animation.tumbleweed.roll" },
+            "scripts": { "animate": ["roll"] }
         }
     }
 }

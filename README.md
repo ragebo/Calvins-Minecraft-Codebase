@@ -252,12 +252,21 @@ horizontal push still keeps trying, in case a jitter or a gust eventually frees 
 
 It **rolls** as it travels rather than spinning on a vertical axis: yaw faces the direction it's
 actually moving (recomputed from that run's real push vector, not the configured wind heading
-alone, since jitter and gusts deflect it), and pitch (`TUMBLEWEED.rollDegrees` per run) tumbles it
-forward. This is **experimental** — the engine's own docs describe pitch as a head-tilt "for most
-mobs", and this model has no head bone, so whether it reads as genuinely rolling (rather than
-doing nothing) needed a real playtest to confirm. If it doesn't visibly roll, the fallback is a
-custom entity property updated from script plus a resource-pack animation reading it via molang —
-real work, and a first for this codebase, not attempted until the cheap version was tried.
+alone, since jitter and gusts deflect it), and a custom, client-synced entity property
+(`bountysys:roll`) drives a resource-pack animation that turns the model's root bone via molang
+(`query.property('bountysys:roll')`, in `BountySys_RP/animations/tumbleweed.animation.json`) —
+the real Bedrock mechanism for rotating an arbitrary bone from script, and a first for this
+codebase. It updates every tick rather than only on the main `TUMBLEWEED.tickInterval` cadence
+(the same reason `transit.ts`'s train updates every tick — any slower and it visibly steps
+instead of rolling), and advances physically rather than at a fixed rate per run: angle turned =
+distance actually moved / `TUMBLEWEED.radius` (the model's real size), scaled by
+`TUMBLEWEED.rollScale` for by-eye tuning. A stuck entity's real movement is ~0, so its roll stalls
+right along with it — no separate check needed, unlike the hop.
+
+This replaced an earlier, cheaper attempt that drove pitch (`setRotation`'s `x`) directly from
+script every run: a real playtest confirmed it did nothing visible, because the engine's own docs
+describe pitch as a head-tilt "for most mobs" and this headless model has no bone for it to apply
+to.
 
 The look is several crossed, alpha-cutout planes scattered around a ball — the same technique
 vanilla uses for dead bush, ferns and saplings — made by `scripts/gen-tumbleweed-model.mjs` (a

@@ -1,5 +1,5 @@
 import { world, type Dimension, type Entity, type Vector3 } from "@minecraft/server";
-import { TUMBLEWEED, TUMBLEWEED_ENTITY_ID } from "../config/balance.js";
+import { TUMBLEWEED, TUMBLEWEED_ENTITY_ID, TUMBLEWEED_ROLL_PROPERTY } from "../config/balance.js";
 import { toggleTumbleweeds, tumbleweedsEnabled } from "../core/ambience.js";
 import { onScriptEvent } from "../core/events.js";
 import { registerSystem } from "../core/registry.js";
@@ -32,11 +32,25 @@ import { announce } from "../core/ui.js";
  * the desert, despawn quickly, and never hop while it's stuck against something rather than truly rolling.
  * `pushOne` tracks how far it really moved since the last run (not its velocity) to tell "rolling" from
  * "stuck", and `desertSpawnSpot` checks `Dimension.getBiome` before a spawn is allowed to happen at all.
+ *
+ * Rolling turned out to need its own real mechanism: `Entity.setRotation`'s pitch (tried first, since it's
+ * free) does nothing visible on this headless model, confirmed by a playtest of that attempt (2026-09-24).
+ * `updateRoll` drives a `bountysys:roll` entity property instead, which
+ * `BountySys_RP/animations/tumbleweed.animation.json` turns into an actual root-bone rotation via molang —
+ * on its own onTick, every tick rather than every handler run, so the animation reads as smooth rolling
+ * rather than a visible step each time the slower handler runs.
  */
 
 const BORN_TICK_PROPERTY = "bornTick";
 const LAST_X_PROPERTY = "lastX";
 const LAST_Z_PROPERTY = "lastZ";
+const ROLL_ACCUMULATED_PROPERTY = "rollAccumulated";
+const ROLL_LAST_X_PROPERTY = "rollLastX";
+const ROLL_LAST_Z_PROPERTY = "rollLastZ";
+
+/** The tumbleweeds currently alive, refreshed once per (slower) handler run below — so the every-tick roll
+ * update doesn't need its own `dimension.getEntities` call every single tick. */
+let known: Entity[] = [];
 
 function distance(a: Vector3, b: Vector3): number {
     const dx = a.x - b.x;
@@ -87,13 +101,43 @@ function pushOne(entity: Entity): void {
     entity.clearVelocity();
     entity.applyImpulse({ x: push.x, y: current.y + hop, z: push.z });
 
-    // Rolls forward in the direction it's actually travelling (yaw), tumbling as it goes (pitch), instead
-    // of spinning in place on a vertical axis. No visible roll while stuck, to match no hop while stuck.
+    // Faces the direction it's actually travelling, instead of a fixed heading — the tumbling itself is
+    // updateRoll's job now (an entity property plus an animation, not this entity-level rotation: pitch
+    // does nothing visible on this headless model). No visible turn while stuck, to match no hop while stuck.
     if (!stuck && (push.x !== 0 || push.z !== 0)) {
         const yaw = (Math.atan2(push.x, push.z) * 180) / Math.PI;
-        const pitch = entity.getRotation().x;
-        entity.setRotation({ x: (pitch + TUMBLEWEED.rollDegrees) % 360, y: yaw });
+        entity.setRotation({ x: 0, y: yaw });
     }
+}
+
+/**
+ * Drives the rolling animation: a real tumbleweed turns by (distance moved / radius) rolling without
+ * slipping, so this reuses the same "how far did it actually move" idea `pushOne` uses for the stuck
+ * detector, at `TUMBLEWEED.radius` and `rollScale`. A stuck entity's real movement is ~0, so its roll
+ * naturally stalls too — no separate stuck check needed here, unlike the hop.
+ *
+ * Runs from its own every-tick handler (not the slower one `pushOne` runs from), so the animation reads as
+ * a smooth roll rather than visibly stepping once every `TUMBLEWEED.tickInterval` ticks. `bountysys:roll`
+ * is declared with range [0, 360) (`setProperty` throws outside a property's declared range), so the
+ * running total is kept separately (unbounded) and only the wrapped value is written to it.
+ */
+function updateRoll(entity: Entity): void {
+
+    const lastX = entity.getDynamicProperty(ROLL_LAST_X_PROPERTY);
+    const lastZ = entity.getDynamicProperty(ROLL_LAST_Z_PROPERTY);
+    const moved = typeof lastX === "number" && typeof lastZ === "number"
+        ? Math.hypot(entity.location.x - lastX, entity.location.z - lastZ)
+        : 0;
+
+    entity.setDynamicProperty(ROLL_LAST_X_PROPERTY, entity.location.x);
+    entity.setDynamicProperty(ROLL_LAST_Z_PROPERTY, entity.location.z);
+
+    const accumulated = entity.getDynamicProperty(ROLL_ACCUMULATED_PROPERTY);
+    const radians = (moved / TUMBLEWEED.radius) * TUMBLEWEED.rollScale;
+    const degrees = ((typeof accumulated === "number" ? accumulated : 0) + radians * (180 / Math.PI)) % 360;
+
+    entity.setDynamicProperty(ROLL_ACCUMULATED_PROPERTY, degrees);
+    entity.setProperty(TUMBLEWEED_ROLL_PROPERTY, degrees);
 }
 
 /** True once it has rolled out of every player's sight, or has simply been around long enough. */
@@ -147,6 +191,7 @@ onTick("tumbleweed", (ctx) => {
 
     const dimension = world.getDimension("overworld");
     const rolling = dimension.getEntities({ type: TUMBLEWEED_ENTITY_ID });
+    const stillAlive: Entity[] = [];
 
     for (const entity of rolling) {
 
@@ -156,6 +201,7 @@ onTick("tumbleweed", (ctx) => {
         }
 
         pushOne(entity);
+        stillAlive.push(entity);
     }
 
     if (tumbleweedsEnabled() && rolling.length < TUMBLEWEED.maxActive && ctx.players.length > 0) {
@@ -163,10 +209,21 @@ onTick("tumbleweed", (ctx) => {
         if (spot) {
             const spawned = dimension.spawnEntity(TUMBLEWEED_ENTITY_ID, spot);
             spawned.setDynamicProperty(BORN_TICK_PROPERTY, ctx.tick);
+            stillAlive.push(spawned);
         }
     }
 
+    known = stillAlive;
+
 }, { everyTicks: TUMBLEWEED.tickInterval });
+
+/** Smooths the rolling animation between the slower handler's runs — see `updateRoll`. */
+onTick("tumbleweed:roll", () => {
+    for (const entity of known) {
+        if (!entity.isValid) continue;
+        updateRoll(entity);
+    }
+}, { everyTicks: 1 });
 
 /** The menu's toggle, for a command block (it needs no player, unlike rae:menu). */
 onScriptEvent("rae:tumbleweed", () => {

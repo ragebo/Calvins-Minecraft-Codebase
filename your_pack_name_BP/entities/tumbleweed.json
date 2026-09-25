@@ -5,7 +5,15 @@
             "identifier": "bountysys:tumbleweed",
             "is_spawnable": false,
             "is_summonable": true,
-            "is_experimental": false
+            "is_experimental": false,
+            "properties": {
+                "bountysys:roll": {
+                    "type": "float",
+                    "range": [0, 360],
+                    "default": 0,
+                    "client_sync": true
+                }
+            }
         },
         "components": {
             "minecraft:type_family": { "family": ["tumbleweed"] },
