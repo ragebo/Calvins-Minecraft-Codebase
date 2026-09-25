@@ -4,7 +4,7 @@
  * not in either system, is what lets both import it: a system may not import another system.
  */
 
-let tumbleweedsOn = true;
+let tumbleweedsOn = false;
 
 export function tumbleweedsEnabled(): boolean {
     return tumbleweedsOn;

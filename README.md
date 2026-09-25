@@ -231,8 +231,8 @@ through, but a **projectile** gun's bullet has its own real collision and can ph
 tumbleweed the same as it would on a mob — there is no "collide with terrain but not with a
 bullet" option in `minecraft:physics`.
 
-Spawning is on by default; the menu's last button and `/scriptevent rae:tumbleweed` (no player
-needed, so a command block can call it) toggle it. Turning it off only stops new ones — it doesn't
+Spawning starts **off** by default (`core/ambience.ts`); the menu's last button and
+`/scriptevent rae:tumbleweed` (no player needed, so a command block can call it) toggle it. Turning it off only stops new ones — it doesn't
 remove the ones already rolling. A new one spawns a little above the player it's placed near
 (`TUMBLEWEED.spawnLift`) so real gravity settles it onto the actual ground, rather than trusting
 the player's own height to already match the terrain some distance away.
