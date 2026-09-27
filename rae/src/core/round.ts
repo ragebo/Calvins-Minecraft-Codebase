@@ -1,3 +1,4 @@
+import { registerPersistable } from "./persist.js";
 import { resetAllSystems } from "./registry.js";
 
 /**
@@ -14,6 +15,10 @@ import { resetAllSystems } from "./registry.js";
 
 export type Phase = "IDLE" | "SETUP" | "ACTIVE" | "ENDING" | "ENDED";
 export type EndReason = "law_win" | "outlaw_win" | "aborted";
+
+/** Bumped when the shape of what this module hands to core/persist changes. Passed through to
+ *  restore() as savedVersion. */
+export const ROUND_SCHEMA_VERSION = 1;
 
 export interface PhaseChange {
     readonly from: Phase;
@@ -123,3 +128,18 @@ export function resetRound(): void {
     lastEndReason = null;
     resetAllSystems();
 }
+
+// phase is saved for future diagnostics only: restore() below never applies it back. Resuming
+// straight into ACTIVE or SETUP after a reload is dangerous (no players placed, no timers
+// re-armed), so a reload always leaves this module at its own default, IDLE, and only the last
+// end reason comes back.
+registerPersistable({
+    key: "round",
+    version: ROUND_SCHEMA_VERSION,
+    save: () => ({ phase: getPhase(), lastEndReason: lastEnd() }),
+    restore(data, savedVersion) {
+        if (savedVersion !== ROUND_SCHEMA_VERSION) return;
+        const parsed = data as { lastEndReason?: EndReason | null };
+        if (parsed.lastEndReason !== undefined) lastEndReason = parsed.lastEndReason;
+    }
+});

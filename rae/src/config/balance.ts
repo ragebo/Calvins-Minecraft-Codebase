@@ -173,6 +173,13 @@ export const STATE_SYNC = {
     reconcileIntervalTicks: 20
 };
 
+export const PERSIST = {
+    /** A key's serialized save() output larger than this is skipped (and reported), others still save. */
+    maxSavedCharsPerKey: 10000,
+    /** How often saveAll() runs on its own, in ticks. */
+    autosaveIntervalTicks: 200
+};
+
 export const LOOT = {
     trainVault: "chests/gold_2",
     fortReward: "chests/gold_2"

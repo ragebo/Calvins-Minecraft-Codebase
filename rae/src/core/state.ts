@@ -2,6 +2,7 @@ import { world, type Player } from "@minecraft/server";
 import { STATE_SYNC } from "../config/balance.js";
 import type { JailSite } from "../config/world.js";
 import { onScriptEvent, onSpawn } from "./events.js";
+import { registerPersistable } from "./persist.js";
 import { registerSystem } from "./registry.js";
 import { onTick } from "./tick.js";
 import { format, tell } from "./ui.js";
@@ -36,6 +37,10 @@ import { format, tell } from "./ui.js";
  * That only works if the record exists BEFORE the death, so everyone is adopted early: at their
  * first spawn (joining or respawning), and at load for whoever is already in the world.
  */
+
+/** Bumped when the shape of what this module hands to core/persist changes. Passed through to
+ *  restore() as savedVersion; see mergeRecords(). */
+export const STATE_SCHEMA_VERSION = 1;
 
 export type Role = "law" | "outlaw";
 
@@ -352,6 +357,44 @@ export function clearRecords(): void {
     version++;
 }
 
+/**
+ * Backfills ammo/flags onto a record that already exists from tag-adoption (tags already won that
+ * race for role/eliminated/inJail/etc — never overwrite those from saved data). Seeds a whole
+ * record if one doesn't exist yet at all. Safe to call whether this runs before or after
+ * state:adopt-at-load: whichever of the two sees a player first wins their role/status fields,
+ * and a save's ammo/flags always make it onto the record either way.
+ */
+export function mergeRecords(saved: readonly PlayerRecord[]): void {
+
+    for (const entry of saved) {
+
+        const existing = records.get(entry.id);
+
+        if (existing) {
+            // Something (adoption, a fresh blank(), this session's own play) already claimed this
+            // id: only the ammo/flags a live entity has no way to already know about are ours to add.
+            Object.assign(existing.ammo, entry.ammo);
+            Object.assign(existing.flags, entry.flags);
+        } else {
+            // Nothing has claimed this id yet, so there is nothing saved data could clobber.
+            records.set(entry.id, {
+                id: entry.id,
+                role: entry.role,
+                eliminated: entry.eliminated,
+                captures: entry.captures,
+                inJail: entry.inJail,
+                pendingJail: entry.pendingJail,
+                escortVulnerable: entry.escortVulnerable,
+                winner: entry.winner,
+                ammo: { ...entry.ammo },
+                flags: { ...entry.flags }
+            });
+        }
+
+        version++;
+    }
+}
+
 registerSystem({
     name: "state",
     // This module writes these tags, so it declares them: a round reset clears them whatever
@@ -407,5 +450,17 @@ onScriptEvent("rae:adopt", (source) => {
         const tags = [...tagsFor(record)];
 
         tell(source, format("info", `  ${player.name}: ${tags.length > 0 ? tags.join(" ") : "no role"}`));
+    }
+});
+
+registerPersistable({
+    key: "state",
+    version: STATE_SCHEMA_VERSION,
+    save: () => ({ records: allRecords(), jailSite: getJailSite() }),
+    restore(data, savedVersion) {
+        if (savedVersion !== STATE_SCHEMA_VERSION) return; // no migration path yet, refuse rather than guess
+        const parsed = data as { records?: PlayerRecord[]; jailSite?: JailSite | null };
+        if (parsed.records) mergeRecords(parsed.records);
+        if (parsed.jailSite !== undefined) setJailSite(parsed.jailSite);
     }
 });
