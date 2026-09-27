@@ -118,6 +118,30 @@ test("telemetry: resetting after a round already ended does not record it a seco
     done();
 });
 
+test("telemetry: a resetRound() nested inside an ENDING subscriber never produces a spurious 'aborted' record", () => {
+    // round.ts can drop straight to IDLE from ANY phase, including ENDING itself, if some
+    // subscriber calls resetRound() before the ENDED transition it's already mid-way through gets
+    // a chance to run. When that happens, phase is "IDLE" by the time endRound() tries its own
+    // transition("ENDED", ...), which round.ts's own legality table refuses (IDLE only legally
+    // goes to SETUP) -- so the real result is never recorded. That's an accepted, pre-existing
+    // consequence of resetRound()'s "back to IDLE from anywhere" design, not something telemetry
+    // can fix. What telemetry MUST NOT do is compound it by recording a spurious "aborted" round
+    // for the nested from:"ENDING" -> IDLE step, since startedAtTick is still set at that instant
+    // (the real ENDED handler hasn't run yet to clear it) -- exactly the case the guard being
+    // `change.from !== "ACTIVE"`, rather than just relying on pushRecord's own null check, exists
+    // to catch. A quick mutation check (removing the guard, reverted) confirmed this test does
+    // fail without it, where the SETUP->IDLE and ENDED->IDLE tests above do not.
+    scene();
+    round.startRound();
+    round.beginActive();
+    fake.advance(2);
+    const offNested = round.onPhase("ENDING", () => round.resetRound());
+    round.endRound("law_win");
+    offNested();
+
+    assert.equal(telemetry.recentRounds().length, 0, "no spurious 'aborted' record from the nested from:\"ENDING\" step");
+});
+
 // ---------------------------------------------------------------------------
 // Ring buffer: caps at TELEMETRY.maxStoredRounds, oldest dropped, newest first
 // ---------------------------------------------------------------------------
