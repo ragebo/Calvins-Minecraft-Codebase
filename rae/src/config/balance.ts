@@ -180,6 +180,11 @@ export const PERSIST = {
     autosaveIntervalTicks: 200
 };
 
+export const TELEMETRY = {
+    /** Round summaries kept at once; the oldest is dropped once a new one would exceed this. */
+    maxStoredRounds: 20
+};
+
 export const LOOT = {
     trainVault: "chests/gold_2",
     fortReward: "chests/gold_2"

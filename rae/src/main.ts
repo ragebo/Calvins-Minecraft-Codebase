@@ -22,6 +22,10 @@ import "./systems/compass.js";
 import "./systems/endgame.js";
 import "./systems/probe.js";
 
+// Not a system (no round-reset hook, by design — see core/telemetry.ts): only needs importing so
+// its onDeath/onPhase/persist registrations run.
+import "./core/telemetry.js";
+
 // ---------------------------------------------------
 // DEBUG COMMANDS
 // ---------------------------------------------------
