@@ -159,7 +159,7 @@ export const GUNS: Record<GunId, GunConfig> = {
         },
         kind: "projectile",
         damage: 4,
-        projectileSpeed: 3.5,
+        projectileSpeed: 5,
         effects: {
             muzzle: ["minecraft:basic_smoke_particle", "minecraft:basic_smoke_particle", "minecraft:basic_smoke_particle"],
             muzzleDistance: 1
@@ -187,7 +187,7 @@ export const GUNS: Record<GunId, GunConfig> = {
         },
         kind: "projectile",
         damage: 6,
-        projectileSpeed: 3.5,
+        projectileSpeed: 5,
         effects: {
             muzzle: ["minecraft:basic_smoke_particle", "minecraft:basic_smoke_particle"],
             muzzleDistance: 1
