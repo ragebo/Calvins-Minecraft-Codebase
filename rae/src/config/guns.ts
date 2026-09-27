@@ -201,7 +201,7 @@ export const GUNS: Record<GunId, GunConfig> = {
         magazineSize: 1,
         fireRateTicks: 10,
         reloadTicks: 70,
-        aim: { fov: 30, scope: true, slowness: 3 },
+        aim: { fov: 30, scope: true, slowness: 2 },
         sounds: {
             fire: [
                 { id: "firework.large_blast", volume: 3.0, pitch: 0.85 },
@@ -217,7 +217,7 @@ export const GUNS: Record<GunId, GunConfig> = {
         },
         kind: "projectile",
         damage: 14,
-        projectileSpeed: 20,
+        projectileSpeed: 25,
         effects: {
             muzzle: ["minecraft:basic_smoke_particle", "minecraft:basic_smoke_particle", "minecraft:basic_smoke_particle", "minecraft:basic_smoke_particle"],
             muzzleDistance: 1.2
@@ -229,8 +229,8 @@ export const GUNS: Record<GunId, GunConfig> = {
         displayName: "Repeater Rifle",
         ammo: "rifle_ammo",
         magazineSize: 11,
-        fireRateTicks: 12,
-        reloadTicks: 35,
+        fireRateTicks: 15,
+        reloadTicks: 70,
         aim: { fov: 52, slowness: 1 },
         sounds: {
             fire: [
@@ -244,8 +244,8 @@ export const GUNS: Record<GunId, GunConfig> = {
             ]
         },
         kind: "projectile",
-        damage: 6,
-        projectileSpeed: 6,
+        damage: 5,
+        projectileSpeed: 5,
         effects: {
             muzzle: ["minecraft:basic_smoke_particle", "minecraft:basic_smoke_particle", "minecraft:basic_smoke_particle"],
             muzzleDistance: 1.2
