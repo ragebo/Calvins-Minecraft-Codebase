@@ -5,6 +5,7 @@ import { toggleTumbleweeds, tumbleweedsEnabled } from "../core/ambience.js";
 import { onScriptEvent } from "../core/events.js";
 import { showForm } from "../core/forms.js";
 import { resetGame, sendEveryoneToSpawns, startChosenRound, startRandomRound, type Choice } from "../core/game.js";
+import { warn } from "../core/log.js";
 import { players } from "../core/players.js";
 import { getRecord } from "../core/state.js";
 import { format, tell } from "../core/ui.js";
@@ -189,8 +190,8 @@ async function openMenu(player: Player): Promise<void> {
 
     try {
         await mainMenu(player);
-    } catch (error) {
-        console.warn(`[menu] the menu failed for a player: ${error}`);
+    } catch (err) {
+        warn("menu", `the menu failed for a player: ${err}`);
     } finally {
         open.delete(player.id);
     }
@@ -207,7 +208,7 @@ world.afterEvents.itemUse.subscribe((event) => {
 onScriptEvent("rae:menu", (player) => {
 
     if (!player) {
-        console.warn("[menu] rae:menu has to be run by a player: a form needs someone to show it to.");
+        warn("menu", "rae:menu has to be run by a player: a form needs someone to show it to.");
         return;
     }
 

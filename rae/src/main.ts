@@ -3,6 +3,7 @@ import { LAW_SPAWNS, OUTLAW_SPAWNS } from "./config/world.js";
 import { verifyScoreboards } from "./core/economy.js";
 import { onScriptEvent, onSpawn, listScriptEvents } from "./core/events.js";
 import { resetGame } from "./core/game.js";
+import { error } from "./core/log.js";
 import { listSystems } from "./core/registry.js";
 import { onTick } from "./core/tick.js";
 import { pickRandom } from "./systems/roles.js";
@@ -76,8 +77,8 @@ onSpawn("main:respawn-placement", 200, (ctx) => {
                 player.teleport(pickRandom(spawnList));
             });
 
-        } catch (error) {
-            world.sendMessage(`§c[SPAWN ERROR] Could not respawn ${player.name}: ${error}`);
+        } catch (err) {
+            error("main", `Could not respawn ${player.name}: ${err}`);
         }
     }
 });

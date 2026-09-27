@@ -1,6 +1,7 @@
 import { world, system } from "@minecraft/server";
 import { registerSystem } from "./registry.js";
 import { onScriptEvent } from "./events.js";
+import { error } from "./log.js";
 import { onTick } from "./tick.js";
 
 /**
@@ -127,8 +128,8 @@ function begin(definition: EventDefinition): RequestResult {
 
     try {
         started = definition.start();
-    } catch (error) {
-        console.error(`[director] ${definition.id} threw while starting: ${error}`);
+    } catch (err) {
+        error("director", `${definition.id} threw while starting: ${err}`);
     }
 
     if (!started) {

@@ -7,6 +7,7 @@ import {
 import { AMMO, GUNS, BULLET_ENTITY_ID, BULLET_LIFETIME_TICKS, HIT_WINDOW_TICKS, type GunConfig, type GunId, type MuzzleEffects, type SoundCue } from "../config/guns.js";
 import { AIM, TUMBLEWEED_ENTITY_ID } from "../config/balance.js";
 import { hideScope, showScope, zoomReset, zoomTo } from "../core/aim.js";
+import { warn } from "../core/log.js";
 import { registerSystem } from "../core/registry.js";
 import { onTick } from "../core/tick.js";
 
@@ -305,7 +306,7 @@ function spawnEffect(dimension: Dimension, id: string, location: Vector3): void 
         // A wrong particle id must never break a shot, and it would repeat on every pellet, so each is reported once.
         if (reportedEffectErrors.has(id)) return;
         reportedEffectErrors.add(id);
-        console.warn(`[gun effects] ${id} failed: ${error}`);
+        warn("gun effects", `${id} failed: ${error}`);
     }
 }
 
@@ -548,7 +549,7 @@ function slowWhileAimed(player: Player, gun: GunConfig): void {
     } catch (error) {
         if (slowFailureReported) return;
         slowFailureReported = true;
-        console.warn(`[aim] slowing the player failed: ${error}`);
+        warn("aim", `slowing the player failed: ${error}`);
     }
 }
 

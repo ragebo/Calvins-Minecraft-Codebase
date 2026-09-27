@@ -36,6 +36,14 @@ const overworld = fake.dimension("overworld");
 overworld.getBlock = () => ({ getComponent: (id) => (id === "minecraft:inventory" ? { container: {} } : undefined) });
 
 const chat = () => fake.chat.map(strip);
+
+// A fort raid's onFail() reports through core/log's error() (console, plus an operator), not
+// world.sendMessage/fake.chat any more.
+const consoleErrors = [];
+const realConsoleError = console.error;
+console.error = (...args) => consoleErrors.push(args.join(" "));
+process.on("exit", () => { console.error = realConsoleError; });
+const errors = () => consoleErrors;
 const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 const advanceUntil = (done, limit) => { for (let i = 0; i < limit && !done(); i++) fake.advance(1); return done(); };
 
@@ -52,7 +60,7 @@ const EVENTS = {
             people.fortGuy.location = OUTSIDE;              // everyone leaves; the raid notices on its next pass
             fake.advance(PASS);
             people.fortGuy.location = FORT_INSIDE;
-            return chat().includes("[DEBUG] Fort raid ended");
+            return errors().some((m) => m.includes("Fort raid ended"));
         }
     },
     ranch: {
@@ -96,6 +104,7 @@ function scene() {
     fake.advance(TRAIN.bridgeRestoreDelayTicks + TRAIN.cleanupDelayTicks);      // let leftover timeouts play out
     fake.reset();
     resetAllSystems();
+    consoleErrors.length = 0;
     fake.advanceTo(Math.ceil(fake.tick / PASS) * PASS + 3);
     return {
         fortGuy: fake.makePlayer("FortGuy", { location: FORT_INSIDE }),

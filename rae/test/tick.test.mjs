@@ -287,18 +287,30 @@ test("a throwing handler does not stop the others and is reported with the exact
     const { check, done } = checks();
     scene();
     const order = [];
-    on("first", () => { order.push("first"); });
-    on("bad", () => { order.push("bad"); throw new Error("boom"); });
-    on("thrower-of-strings", () => { order.push("strings"); throw "oops"; });
-    on("last", () => { order.push("last"); });
 
-    fake.advance(20);
-    check("every handler ran, in order", same(order, ["first", "bad", "strings", "last"]), JSON.stringify(order));
-    check("each failure is reported with the exact chat message",
-        same(fake.chat, ["§c[TICK ERROR] bad: Error: boom", "§c[TICK ERROR] thrower-of-strings: oops"]), JSON.stringify(fake.chat));
+    // core/log's error() reports failures to the console (and to an operator), not to
+    // world.sendMessage/fake.chat any more, so the exact message is now observed via console.error.
+    const errors = [];
+    const originalError = console.error;
+    console.error = (...args) => errors.push(args.join(" "));
 
-    fake.advance(20);
-    check("a handler that threw runs again on its next tick, and is reported again", order.length === 8 && fake.chat.length === 4, `(${order.length} runs, ${fake.chat.length} messages)`);
+    try {
+        on("first", () => { order.push("first"); });
+        on("bad", () => { order.push("bad"); throw new Error("boom"); });
+        on("thrower-of-strings", () => { order.push("strings"); throw "oops"; });
+        on("last", () => { order.push("last"); });
+
+        fake.advance(20);
+        check("every handler ran, in order", same(order, ["first", "bad", "strings", "last"]), JSON.stringify(order));
+        check("each failure is reported with the exact message",
+            same(errors, ["[tick] bad: Error: boom", "[tick] thrower-of-strings: oops"]), JSON.stringify(errors));
+        check("nothing is broadcast to chat any more", fake.chat.length === 0, JSON.stringify(fake.chat));
+
+        fake.advance(20);
+        check("a handler that threw runs again on its next tick, and is reported again", order.length === 8 && errors.length === 4, `(${order.length} runs, ${errors.length} messages)`);
+    } finally {
+        console.error = originalError;
+    }
     done();
 });
 

@@ -1,6 +1,7 @@
 import { system, world, type Dimension, type Entity, type Player, type Vector3 } from "@minecraft/server";
 import { TRANSIT as T } from "../config/balance.js";
 import { onScriptEvent } from "../core/events.js";
+import { warn } from "../core/log.js";
 import { registerSystem } from "../core/registry.js";
 import { onTick } from "../core/tick.js";
 import { format, tell } from "../core/ui.js";
@@ -31,8 +32,8 @@ const CAR_TAG = "rae_train";
 const COW_TYPE = "minecraft:cow";
 const ROUTE_PROPERTY = "rae:train_route";
 
-const LOG = "[train-spike]";
-const log = (text: string): void => console.warn(`${LOG} ${text}`);
+const LOG_SOURCE = "train-spike";
+const log = (text: string): void => warn(LOG_SOURCE, text);
 
 const PROFILE: SpeedProfile = { cruise: T.cruiseSpeed, accel: T.acceleration, brake: T.braking, crawl: T.crawlSpeed };
 
@@ -83,7 +84,7 @@ function currentRoute(): Route | undefined {
 function onPlayerCommand(id: string, fn: (player: Player, message: string) => void): void {
     onScriptEvent(id, (player, message) => {
         if (!player) {
-            console.warn(`[transit] ${id} has to be run by a player.`);
+            warn("transit", `${id} has to be run by a player.`);
             return;
         }
         fn(player, message.trim());

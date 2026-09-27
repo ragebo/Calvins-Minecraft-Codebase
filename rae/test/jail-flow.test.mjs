@@ -1,5 +1,7 @@
 import { test } from "node:test";
-import { fake, world, system, fakeUi, load, checks, strip } from "./helpers.mjs";
+import { fake, world, system, fakeApi, fakeUi, load, checks, strip } from "./helpers.mjs";
+
+const { PlayerPermissionLevel } = fakeApi;
 
 // Characterization of the jail: which site a prisoner is sent to, who counts as being in jail, who may
 // pick the lock, and what a breakout opens and frees. Driven through public entry points only
@@ -150,6 +152,34 @@ test("bounty:test_capture from something that is not a player does nothing", () 
     scriptEvent("bounty:test_capture", undefined);
     fake.advance(1);
     check("nobody was jailed", p.tags.size === 0 && p.teleports.length === 0, [...p.tags].join());
+    done();
+});
+
+// A dead outlaw's scoreboardIdentity is the one thing that can be missing here (see CLAUDE.md's
+// engine gotchas: a dead entity's handle is not fully reliable). Previously this told the killer
+// directly ("§c[DEBUG] Could not get dead outlaw's scoreboard identity."), which was the wrong
+// audience: the killer isn't responsible for, or able to act on, an internal bookkeeping fault.
+// core/log's error() now takes it instead: the console always, and an operator if one is online —
+// never the killer.
+test("jail: a captured outlaw with no scoreboard identity is not reported to the killer, only to an operator and the console", () => {
+    const { check, done } = checks();
+    scene();
+    const [sheriff, bandit] = cast(["Sheriff", { tags: ["law"] }], ["Bandit", { tags: ["outlaw"] }]);
+    const chief = fake.makePlayer("Chief", { permission: PlayerPermissionLevel.Operator });
+    bandit.scoreboardIdentity = undefined;
+
+    const errors = [];
+    const originalError = console.error;
+    console.error = (...args) => errors.push(args.join(" "));
+    try {
+        kill(bandit, sheriff);
+    } finally {
+        console.error = originalError;
+    }
+
+    check("the killer hears nothing about it", !sheriff.messages.some((m) => /scoreboard identity/i.test(m)), JSON.stringify(sheriff.messages));
+    check("an operator is told instead", chief.messages.some((m) => /scoreboard identity/i.test(m)), JSON.stringify(chief.messages));
+    check("and it reaches the console too", errors.some((m) => /scoreboard identity/i.test(m)), JSON.stringify(errors));
     done();
 });
 

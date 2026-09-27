@@ -1,4 +1,5 @@
 import { world, system, type Player } from "@minecraft/server";
+import { error } from "./log.js";
 
 /**
  * Fixes the polling problem your profiler found.
@@ -153,8 +154,9 @@ function dispatch(): void {
 
         try {
             registration.fn(ctx);
-        } catch (error) {
-            world.sendMessage(`§c[TICK ERROR] ${registration.name}: ${error}`);
+        } catch (err) {
+            const name = registration.name;
+            error("tick", `${name}: ${err}`);
         }
     }
 }

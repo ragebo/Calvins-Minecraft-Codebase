@@ -12,6 +12,13 @@ const { listSystems } = await load("core/registry.js");
 const resetSystem = (name) => listSystems().find((s) => s.name === name).reset();
 const PAIRS = [["different names (control)", "Alice", "Bob"], ["the same name", "Dup", "Dup"]];
 
+// core/log's error() reports a failure to the console (and to an operator), not to
+// world.sendMessage/fake.chat any more, so jailbreakErrors() below reads console.error instead.
+const consoleErrors = [];
+const realConsoleError = console.error;
+console.error = (...args) => consoleErrors.push(args.join(" "));
+process.on("exit", () => { console.error = realConsoleError; });
+
 // ---------------------------------------------------------------------------
 // guns: magazine, fire-rate window and reload lock
 // ---------------------------------------------------------------------------
@@ -250,6 +257,7 @@ function scene(prisonerNames) {
     resetSystem("jailbreak");
     resetSystem("jail");
     resetSystem("state");                           // records are kept by player id, and the same ids come back in every scene
+    consoleErrors.length = 0;
     fake.advance(1);                                // and the cached player list is per tick, so start from a fresh one
     fake.addObjective("coins");
     fake.addObjective("bounty");
@@ -261,7 +269,7 @@ function scene(prisonerNames) {
 
 const outlaw = (name, id) => fake.makePlayer(name, { id, tags: ["outlaw"] });
 const coinsOf = (name) => world.scoreboard.getObjective("coins").getScore(name) ?? 0;
-const jailbreakErrors = () => fake.chat.filter((m) => m.includes("[JAILBREAK ERROR]") || m.includes("[EVENT ERROR]"));
+const jailbreakErrors = () => consoleErrors.filter((m) => m.includes("[jailbreak]") || m.includes("[events]"));
 const succeeded = () => fake.chat.some((m) => m.includes("The jailbreak succeeded"));
 const correctPicks = (p) => p.messages.filter((m) => m.includes("Found it")).length;
 

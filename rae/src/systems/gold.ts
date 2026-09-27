@@ -2,6 +2,7 @@ import { world } from "@minecraft/server";
 import { ECONOMY } from "../config/balance.js";
 import { registerSystem } from "../core/registry.js";
 import { addCoins } from "../core/economy.js";
+import { error } from "../core/log.js";
 
 /**
  * Ratios match vanilla gold conversion (9 nuggets = 1 ingot, 9
@@ -42,8 +43,8 @@ world.afterEvents.playerInventoryItemChange.subscribe((event) => {
 
         player.sendMessage(`§6+${coinValue} coins`);
 
-    } catch (error) {
-        world.sendMessage(`§c[GOLD ERROR] Could not convert gold for ${player.name}: ${error}`);
+    } catch (err) {
+        error("gold", `Could not convert gold for ${player.name}: ${err}`);
     }
 
 }, {

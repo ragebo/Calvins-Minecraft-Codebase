@@ -1,5 +1,6 @@
 import { world, system, type Entity } from "@minecraft/server";
 import { HORSE } from "../config/balance.js";
+import { error } from "../core/log.js";
 import { registerSystem } from "../core/registry.js";
 
 function standardizeHorse(horse: Entity): void {
@@ -14,8 +15,8 @@ function standardizeHorse(horse: Entity): void {
             movement.setCurrentValue(HORSE.speed);
         }
 
-    } catch (error) {
-        world.sendMessage(`§c[HORSE ERROR] ${error}`);
+    } catch (err) {
+        error("horse", `${err}`);
     }
 }
 

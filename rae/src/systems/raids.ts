@@ -9,6 +9,7 @@ import { onDeath } from "../core/events.js";
 import { onTick } from "../core/tick.js";
 import { registerRaid, resetAllRaids, startRaid, isRaidActive, reportWhyNoOneIsInside } from "../core/raid.js";
 import { addCoins } from "../core/economy.js";
+import { error } from "../core/log.js";
 import { registerEvent, finishEvent } from "../core/director.js";
 
 /**
@@ -47,8 +48,8 @@ registerRaid({
             dimension.runCommand(
                 `loot insert ${FORT_REWARD_CHEST.x} ${FORT_REWARD_CHEST.y} ${FORT_REWARD_CHEST.z} loot "${LOOT.fortReward}"`
             );
-        } catch (error) {
-            world.sendMessage(`§c[FORT ERROR] Could not fill reward chest: ${error}`);
+        } catch (err) {
+            error("raids", `Could not fill reward chest: ${err}`);
         }
 
         for (const player of participants) {
@@ -62,8 +63,8 @@ registerRaid({
                 const health = player.getComponent("minecraft:health");
                 if (health) health.resetToMaxValue();
 
-            } catch (error) {
-                world.sendMessage(`§c[FORT ERROR] Could not reward ${player.name}: ${error}`);
+            } catch (err) {
+                error("raids", `Could not reward ${player.name}: ${err}`);
             }
         }
 
@@ -71,7 +72,7 @@ registerRaid({
         finishEvent("fort");
     },
     onFail() {
-        world.sendMessage("§c[DEBUG] Fort raid ended");
+        error("raids", "Fort raid ended");
         finishEvent("fort");
     }
 });

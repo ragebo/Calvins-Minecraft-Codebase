@@ -2,6 +2,7 @@ import { world, EquipmentSlot, type Entity, type Player } from "@minecraft/serve
 import { AIM as A } from "../config/balance.js";
 import { hideScope, showScope } from "../core/aim.js";
 import { onScriptEvent } from "../core/events.js";
+import { warn } from "../core/log.js";
 import { registerSystem } from "../core/registry.js";
 import { onTick } from "../core/tick.js";
 import { format, tell } from "../core/ui.js";
@@ -25,8 +26,8 @@ import { format, tell } from "../core/ui.js";
  * Everything goes to the content log as warnings (which it records), prefixed `[aim-spike]`.
  */
 
-const LOG = "[aim-spike]";
-const log = (text: string): void => console.warn(`${LOG} ${text}`);
+const LOG_SOURCE = "aim-spike";
+const log = (text: string): void => warn(LOG_SOURCE, text);
 
 const USAGE = "Usage: /scriptevent rae:aim_spike log on|off | fov <number> | fov reset | scope on | scope off";
 
@@ -165,7 +166,7 @@ function setScope(player: Player, on: boolean): void {
 onScriptEvent("rae:aim_spike", (player, message) => {
 
     if (!player) {
-        console.warn(`${LOG} rae:aim_spike has to be run by a player.`);
+        warn(LOG_SOURCE, "rae:aim_spike has to be run by a player.");
         return;
     }
 

@@ -1,5 +1,6 @@
-import { system, world, type Player, type Vector3 } from "@minecraft/server";
+import { system, type Player, type Vector3 } from "@minecraft/server";
 import { LAW_SPAWNS, OUTLAW_SPAWNS } from "../config/world.js";
+import { error } from "./log.js";
 import { players } from "./players.js";
 import { beginActive, resetRound, startRound } from "./round.js";
 import { getRecord, update, type Role } from "./state.js";
@@ -50,8 +51,8 @@ export function spawnListFor(player: Player): Vector3[] {
 export function teleportToSpawn(player: Player): void {
     try {
         player.teleport(pickRandom(spawnListFor(player)));
-    } catch (error) {
-        world.sendMessage(`§c[ROLES] Could not teleport ${player.name}: ${error}`);
+    } catch (err) {
+        error("game", `Could not teleport ${player.name}: ${err}`);
     }
 }
 

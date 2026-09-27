@@ -3,6 +3,7 @@ import { ECONOMY } from "../config/balance.js";
 import { registerSystem } from "../core/registry.js";
 import { onDeath } from "../core/events.js";
 import { getCoins, setCoins, addCoins, addBounty } from "../core/economy.js";
+import { error } from "../core/log.js";
 import { getRecord, recordOf } from "../core/state.js";
 
 function dropInventory(player: Player): void {
@@ -24,8 +25,8 @@ function dropInventory(player: Player): void {
             container.setItem(i, undefined);
         }
 
-    } catch (error) {
-        world.sendMessage(`§c[DEATH ERROR] Could not drop inventory for ${player.name}: ${error}`);
+    } catch (err) {
+        error("economy-rules", `Could not drop inventory for ${player.name}: ${err}`);
     }
 }
 

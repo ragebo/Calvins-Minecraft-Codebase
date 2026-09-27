@@ -1,6 +1,7 @@
 import { system, EntityDamageCause, type Entity, type Player, type Vector3 } from "@minecraft/server";
 import { DAMAGE_PROBE as P } from "../config/balance.js";
 import { onScriptEvent } from "../core/events.js";
+import { warn } from "../core/log.js";
 import { registerSystem } from "../core/registry.js";
 import { format, tell } from "../core/ui.js";
 
@@ -72,7 +73,7 @@ let running = false;
 const targets = new Set<Entity>();
 
 function say(player: Player, text: string): void {
-    console.warn(`[probe] ${text}`);
+    warn("probe", text);
     if (player.isValid) tell(player, format("info", text));
 }
 
@@ -241,7 +242,7 @@ function start(player: Player): void {
 onScriptEvent("rae:probe_damage", (player) => {
 
     if (!player) {
-        console.warn("[probe] rae:probe_damage has to be run by a player, so there is someone to stand in front of.");
+        warn("probe", "rae:probe_damage has to be run by a player, so there is someone to stand in front of.");
         return;
     }
 
