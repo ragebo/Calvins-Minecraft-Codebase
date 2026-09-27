@@ -217,7 +217,7 @@ export const GUNS: Record<GunId, GunConfig> = {
         },
         kind: "projectile",
         damage: 14,
-        projectileSpeed: 10,
+        projectileSpeed: 20,
         effects: {
             muzzle: ["minecraft:basic_smoke_particle", "minecraft:basic_smoke_particle", "minecraft:basic_smoke_particle", "minecraft:basic_smoke_particle"],
             muzzleDistance: 1.2
@@ -226,7 +226,7 @@ export const GUNS: Record<GunId, GunConfig> = {
     semi_rifle: {
         id: "semi_rifle",
         itemId: "bountysys:semi_rifle",
-        displayName: "Semi-Auto Rifle",
+        displayName: "Repeater Rifle",
         ammo: "rifle_ammo",
         magazineSize: 11,
         fireRateTicks: 12,
