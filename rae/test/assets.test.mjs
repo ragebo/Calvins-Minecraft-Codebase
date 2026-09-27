@@ -411,6 +411,7 @@ test("every gun is a plain item: not hold-to-use (a used item blocks left-click)
         check(`${gun.id}: held like a tool`, components["minecraft:hand_equipped"] === true);
         check(`${gun.id}: no allow_off_hand (Bedrock has no swap key, so it would only let a gun be parked there)`, components["minecraft:allow_off_hand"] === undefined);
         check(`${gun.id}: has a zoom in its config`, gun.aim?.fov > 0);
+        check(`${gun.id}: the inventory tooltip name matches what the script says in chat`, components["minecraft:display_name"]?.value === gun.displayName, `item says "${components["minecraft:display_name"]?.value}", config says "${gun.displayName}"`);
     }
     done();
 });

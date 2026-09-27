@@ -33,7 +33,10 @@ function armed(gun, name = "Deputy", options = {}) {
 
 const heardShot = (gun) => overworld().played.some((pl) => pl.id === gun.sounds.fire[0].id);
 const emptyMagazine = (p, gun) => {
-    for (let i = 0; i < gun.magazineSize; i++) { leftClick(p); fake.advance(gun.fireRateTicks); }
+    for (let i = 0; i < gun.magazineSize; i++) {
+        leftClick(p); fake.advance(gun.fireRateTicks);
+        if (gun.primeTicks !== undefined) { leftClick(p); fake.advance(gun.primeTicks); }   // the prime click between shots, so this really does fire magazineSize times
+    }
     fake.advance(gun.reloadTicks + 60);
     overworld().played.length = 0; p.messages.length = 0;
 };
@@ -115,6 +118,99 @@ test("sneaking does nothing to a gun: it neither reloads nor stops a shot", () =
 });
 
 // ---------------------------------------------------------------------------------------------------------
+// Priming: the revolver and the repeater (semi_rifle) need their action manually cycled between shots
+// (config/guns.ts's primeTicks) -- a click after the shot cycles it instead of firing, and only the click
+// after that fires again. Needing two clicks instead of one is what actually slows these two guns down.
+// ---------------------------------------------------------------------------------------------------------
+
+const primingGuns = guns.filter((gun) => gun.primeTicks !== undefined);
+const heardPrime = (gun) => overworld().played.some((pl) => gun.sounds.prime?.some((cue) => cue.id === pl.id));
+
+test("config: exactly the revolver and the repeater need manual priming, and the semi-auto is now called Repeater", () => {
+    const { check, done } = checks();
+    check("revolver and semi_rifle have primeTicks; no other gun does", primingGuns.map((g) => g.id).sort().join() === "revolver,semi_rifle", primingGuns.map((g) => g.id).join());
+    for (const gun of primingGuns) check(`${gun.id}: has its own priming sound`, gun.sounds.prime !== undefined && gun.sounds.prime.length > 0);
+    check("semi_rifle (the old Semi-Auto Rifle) is now called Repeater", GUNS.semi_rifle.displayName === "Repeater", GUNS.semi_rifle.displayName);
+    done();
+});
+
+test("a manual-priming gun needs a click to cycle the action before the next shot: fire, prime, fire", () => {
+    const { check, done } = checks();
+    for (const gun of primingGuns) {
+        const p = armed(gun, `cycle-${gun.id}`);
+
+        leftClick(p);
+        check(`${gun.id}: the first click fires`, heardShot(gun), JSON.stringify(overworld().played.map((x) => x.id)));
+
+        fake.advance(gun.primeTicks);
+        overworld().played.length = 0;
+        leftClick(p);
+        check(`${gun.id}: the very next click does not fire again`, !heardShot(gun), JSON.stringify(overworld().played.map((x) => x.id)));
+        check(`${gun.id}: it plays the priming sound instead`, heardPrime(gun), JSON.stringify(overworld().played.map((x) => x.id)));
+
+        fake.advance(gun.fireRateTicks);
+        overworld().played.length = 0;
+        leftClick(p);
+        check(`${gun.id}: and the click after that fires again`, heardShot(gun), JSON.stringify(overworld().played.map((x) => x.id)));
+    }
+    done();
+});
+
+test("a priming click too soon after the shot is ignored, same as a too-soon fire", () => {
+    const { check, done } = checks();
+    for (const gun of primingGuns) {
+        const p = armed(gun, `too-soon-${gun.id}`);
+
+        leftClick(p);
+        overworld().played.length = 0;
+
+        leftClick(p);   // immediately: primeTicks has not elapsed at all yet
+        check(`${gun.id}: too soon to cycle it: nothing plays`, overworld().played.length === 0, JSON.stringify(overworld().played.map((x) => x.id)));
+
+        fake.advance(gun.primeTicks);
+        leftClick(p);
+        check(`${gun.id}: once primeTicks has actually passed, the same click cycles it`, heardPrime(gun), JSON.stringify(overworld().played.map((x) => x.id)));
+    }
+    done();
+});
+
+test("reloading a gun that needs priming leaves it ready to fire at once, not still needing a cycle", () => {
+    const { check, done } = checks();
+    for (const gun of primingGuns) {
+        const p = armed(gun, `reload-primed-${gun.id}`);
+
+        leftClick(p);   // now needs priming
+        check(`${gun.id}: (setup) fired once`, heardShot(gun));
+
+        pressQ(p);
+        check(`${gun.id}: (setup) a reload starts`, text(p).includes("Reloading"), text(p));
+        fake.advance(gun.reloadTicks + 2);
+        overworld().played.length = 0;
+
+        leftClick(p);
+        check(`${gun.id}: the first click after the reload fires; it is not spent on a leftover prime`, heardShot(gun), JSON.stringify(overworld().played.map((x) => x.id)));
+    }
+    done();
+});
+
+test("a system reset clears a pending prime: the next click fires instead of cycling", () => {
+    const { check, done } = checks();
+    for (const gun of primingGuns) {
+        const p = armed(gun, `reset-primed-${gun.id}`);
+
+        leftClick(p);   // now needs priming
+        check(`${gun.id}: (setup) fired once`, heardShot(gun));
+
+        resetGuns();
+        overworld().played.length = 0;
+
+        leftClick(p);
+        check(`${gun.id}: fires right away after a reset, rather than cycling first`, heardShot(gun), JSON.stringify(overworld().played.map((x) => x.id)));
+    }
+    done();
+});
+
+// ---------------------------------------------------------------------------------------------------------
 // Auto-reload
 // ---------------------------------------------------------------------------------------------------------
 
@@ -191,6 +287,7 @@ test("you can fire while aimed, again and again, and the aim stays on (the reaso
         leftClick(p);
         check(`${gun.id}: a click while aimed fires`, heardShot(gun), JSON.stringify(overworld().played.map((x) => x.id)));
         fake.advance(gun.fireRateTicks);
+        if (gun.primeTicks !== undefined) { leftClick(p); fake.advance(gun.primeTicks); }   // a manual-action gun needs this prime click before it can fire again
         overworld().played.length = 0;
         leftClick(p);
         check(`${gun.id}: and again`, heardShot(gun));

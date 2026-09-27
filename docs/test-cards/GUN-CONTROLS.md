@@ -8,8 +8,11 @@ Not an ARCH task: added on request. A lot of the game is spent on horseback, and
 | Aim | **Right-click toggles it** (tap to aim, tap again to stop). A bow-like zoom (62 to 52 degrees depending on the gun; the normal view is about 70). The **bolt rifle** zooms furthest (30, the smallest the game allows) and shows a **scope overlay** (black screen, clear round lens, crosshair). You walk slower while aimed (the bolt rifle most), and you **can fire while aimed** |
 | Reload | **Q**. The game drops the gun, and a script takes it back into its slot and starts the reload. You see the reload messages and hear its sounds as before |
 | Reload (automatic) | **Clicking an empty gun** clicks and starts the reload by itself |
+| Cycle (**revolver** and **repeater** only, new) | After firing, the next click doesn't fire — it cycles the action (its own sound, a hammer click or a lever cycle) — and the click after **that** fires again |
 
 Sneaking does nothing to a gun any more. Right-click never fires: it only aims.
+
+**New: the revolver and the repeater (`semi_rifle`, renamed from Semi-Auto Rifle) now need their action cycled by hand between shots**, like a single-action revolver or a lever rifle in Red Dead Redemption 2: fire, then one more click to cycle it (no shot, just its own sound), then the next click fires. Requesting two clicks instead of one for a shot is what actually slows these two down — the cycle itself only takes as many ticks as the gun's own fire rate, `config/guns.ts`'s `primeTicks` — real click-to-click time dwarfs that either way. Reloading (Q, or an empty click) always leaves the gun ready to fire at once, never mid-cycle. The repeater's damage went up (5 to 6) to compensate for effectively firing slower; the revolver's did not (not asked for). Every other gun is completely unaffected — no `primeTicks` in their config, no change in behavior.
 
 **Why aim is a toggle and not a hold.** The first version made it a hold. The game sends no attack input while an item is in use (the same rule that stops you hitting things while drawing a bow), so you could not left-click to fire while holding right-click. A tap has no "in use" state, so it does not block the click. The guns are therefore plain items again (no hold-to-use, no cooldown).
 
@@ -17,31 +20,36 @@ Two other things the first real-game run of the controls showed, both fixed here
 
 Every one of these was measured in the game first (`AIM-SPIKE.md`): a left-click at the air is a swing with source Attack, at a block Mine, on a horse too; a held right-click sends a start and, when let go, a stop; Q sends a drop, the slot emptying and a DropItem swing in the same tick; Bedrock has no swap-to-off-hand key.
 
-Packs: behavior pack **0.1.13** (the controls, plain gun items) and resource pack **1.0.18** (the six gun sprites, unchanged since the last deploy).
+Packs: behavior pack **0.1.27** (priming, the repeater rename and damage bump — no resource-pack change this round: no new texture, and the new display name is set directly on the behavior-pack item, not a lang file). Resource pack unchanged at **1.0.23**.
 
-`npm test` checks each rule with the same event sequences the game sent (fire on Attack and Mine, nothing on the other swings, no shot from right-click, the zoom and its reset, the scope only for the bolt rifle, Q keeping the gun and starting the reload, a drop that is not Q left alone, two players at once). It cannot say how it feels or whether the game accepts every piece together. This card does.
+`npm test` checks each rule with the same event sequences the game sent (fire on Attack and Mine, nothing on the other swings, no shot from right-click, the zoom and its reset, the scope only for the bolt rifle, Q keeping the gun and starting the reload, a drop that is not Q left alone, two players at once), plus, new this round, the priming cycle itself (fire then prime then fire, a too-soon cycle click ignored, a reload clearing a pending cycle, a round reset clearing one too) and that the inventory tooltip name matches what the config and script chat messages say. It cannot say how any of it *feels*, or whether the game accepts every piece together. This card does.
 
 ## Steps
 
-`/give @s bountysys:revolver`, `bountysys:handgun_ammo 64`, and the same for the bolt rifle (`bolt_rifle` and `rifle_ammo`) and a shotgun (`pump_shotgun` and `shotgun_ammo`).
+`/give @s bountysys:revolver`, `bountysys:handgun_ammo 64`, and the same for the repeater (`semi_rifle` and `rifle_ammo`), the bolt rifle (`bolt_rifle` and `rifle_ammo`) and a shotgun (`pump_shotgun` and `shotgun_ammo`).
 
 | # | Do | Expect |
 |---|---|---|
 | 1 | Hold the revolver. Left-click at the sky, then at a mob, then at a block. | A shot each time: the bang, and a bullet flying. Nothing is mined. |
-| 2 | Tap right-click once, look around, walk, then tap it again. | The first tap zooms in a little and it **stays** zoomed; you walk slower. The second tap puts the view back to normal. No shot from either tap. |
-| 3 | Hold the bolt rifle and tap right-click. Fire a shot **through the scope** (left-click), then tap right-click again. | The view zooms a lot **and** the black scope overlay appears. The shot fires while the scope stays up. The second tap removes both the zoom and the overlay. |
-| 4 | Fire until the revolver clicks empty. Click once more. | A dry click, then "Reloading Revolver..." with the reload sounds, and it is full again after a couple of seconds. No key needed. |
-| 5 | Fire a few rounds and press **Q**. | The gun does not stay on the ground: it stays in your hand or hotbar slot, the reload starts, and the magazine is full afterwards. If it is already full you are told so. |
-| 6 | Get on a horse and repeat 1 to 5. | The same. Left-click, aim and Q all work while riding. **Q on a horse is the one thing not seen in the game yet.** |
-| 7 | Aim, then switch to another hotbar slot. | The zoom (and the scope) end by themselves within a fraction of a second. |
-| 8 | Drag a gun out of the inventory screen onto the ground. | It drops for real and stays dropped (only the Q key is a reload). |
+| 2 | **New:** hold the revolver. Left-click once, then left-click again right away. | The first click fires. The second **does not** — you hear a cycling click (the hammer) instead, no bullet. |
+| 3 | **New:** left-click a third time. | Now it fires again. Keep going: fire, click, fire, click, alternating. |
+| 4 | **New:** switch to the repeater (inventory tooltip should say **Repeater**, not Semi-Auto Rifle) and repeat steps 2 to 3. | The same fire/cycle/fire pattern, with its own cycling sound (should read as a lever, not a hammer). |
+| 5 | Tap right-click once, look around, walk, then tap it again. | The first tap zooms in a little and it **stays** zoomed; you walk slower. The second tap puts the view back to normal. No shot from either tap. |
+| 6 | Hold the bolt rifle and tap right-click. Fire a shot **through the scope** (left-click), then tap right-click again. | The view zooms a lot **and** the black scope overlay appears. The shot fires while the scope stays up. The second tap removes both the zoom and the overlay. |
+| 7 | Fire until the revolver clicks empty (remember: fire, click-to-cycle, fire, ... every other click is the one that counts). Click once more. | A dry click, then "Reloading Revolver..." with the reload sounds, and it is full again after a couple of seconds. No key needed, and no leftover cycle click needed either — the very next click after it reloads just fires. |
+| 8 | Fire a few rounds (revolver or repeater — remember the cycle click between them) and press **Q**. | The gun does not stay on the ground: it stays in your hand or hotbar slot, the reload starts, and the magazine is full afterwards. If it is already full you are told so. |
+| 9 | Get on a horse and repeat 1 to 4 and 8. | The same, including the cycle click. Left-click, aim and Q all work while riding. **Q on a horse is the one thing not seen in the game yet.** |
+| 10 | Aim, then switch to another hotbar slot. | The zoom (and the scope) end by themselves within a fraction of a second. |
+| 11 | Drag a gun out of the inventory screen onto the ground. | It drops for real and stays dropped (only the Q key is a reload). |
 
 ## What to tell me
 
 1. Does left-click feel right for firing, or does mining or hitting something get in the way (a block you break, a mob you also punch)?
-2. Zoom: enough, too much? Is the scope overlay right (round, no text, gone on release)?
-3. Q: does the gun come back every time, and does the item flicker on the ground? Does it work on a horse?
-4. Anything that stays stuck: a zoom that does not reset, a scope that stays up, a gun that vanished.
+2. **New:** does the fire/cycle/fire rhythm on the revolver and repeater feel like Red Dead Redemption 2's manual cycling, or just clunky? Is it clear from the sound alone which click just happened (a shot vs. a cycle)?
+3. **New:** does the repeater's higher damage (5 to 6) feel like it makes up for effectively firing at half speed now, or does it need to go higher still?
+4. Zoom: enough, too much? Is the scope overlay right (round, no text, gone on release)?
+5. Q: does the gun come back every time, and does the item flicker on the ground? Does it work on a horse?
+6. Anything that stays stuck: a zoom that does not reset, a scope that stays up, a gun that vanished, or a gun that seems to eat a click and do nothing at all (should never happen — it should always either fire, cycle, or dry-click).
 
 ## Content log
 

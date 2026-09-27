@@ -68,6 +68,8 @@ export interface AimConfig {
 export interface GunSounds {
     /** Played as the shot goes off. Delayed cues can add a pump or bolt cycle. */
     readonly fire: readonly SoundCue[];
+    /** Played when a manual-priming gun's between-shots cycle click lands (see `primeTicks`). */
+    readonly prime?: readonly SoundCue[];
     /** Played across a reload, so keep every delay under that gun's reloadTicks. */
     readonly reload: readonly SoundCue[];
 }
@@ -80,6 +82,15 @@ interface BaseGunConfig {
     readonly magazineSize: number;
     /** Ticks that must pass between shots. */
     readonly fireRateTicks: number;
+    /**
+     * Omit for a gun that fires on every trigger pull, same as always. Set it and firing becomes
+     * two clicks: the shot, then one more click (no earlier than this many ticks later) to cycle
+     * the action (a revolver's hammer, a lever gun's lever) before the next shot can fire — a
+     * click while still cycling does nothing, same silent ignore as a too-soon fire. Since a real
+     * player's own click-to-click time dwarfs a few ticks either way, needing two clicks instead
+     * of one is what actually slows the gun down in practice, not this number itself.
+     */
+    readonly primeTicks?: number;
     /** Ticks a reload takes once started (Q, or clicking an empty gun). */
     readonly reloadTicks: number;
     /** What holding right-click does. */
@@ -142,12 +153,16 @@ export const GUNS: Record<GunId, GunConfig> = {
         ammo: "handgun_ammo",
         magazineSize: 6,
         fireRateTicks: 8,
+        primeTicks: 8,
         reloadTicks: 40,
         aim: { fov: 60 },
         sounds: {
             fire: [
                 { id: "firework.blast", volume: 2.0, pitch: 0.9 },
                 { id: "random.explode", volume: 0.6, pitch: 1.7 }
+            ],
+            prime: [
+                { id: "random.lever_click", volume: 0.7, pitch: 1.4 }
             ],
             reload: [
                 { id: "random.lever_click", volume: 0.7, pitch: 0.8 },
@@ -226,15 +241,20 @@ export const GUNS: Record<GunId, GunConfig> = {
     semi_rifle: {
         id: "semi_rifle",
         itemId: "bountysys:semi_rifle",
-        displayName: "Semi-Auto Rifle",
+        displayName: "Repeater",
         ammo: "rifle_ammo",
         magazineSize: 15,
         fireRateTicks: 6,
+        primeTicks: 6,
         reloadTicks: 35,
         aim: { fov: 52, slowness: 1 },
         sounds: {
             fire: [
                 { id: "firework.large_blast", volume: 2.2, pitch: 1.25 }
+            ],
+            prime: [
+                { id: "tile.piston.out", volume: 0.5, pitch: 1.9 },
+                { id: "tile.piston.in", volume: 0.6, pitch: 2.1, delayTicks: 3 }
             ],
             reload: [
                 { id: "random.click", volume: 0.6, pitch: 0.8 },
@@ -244,7 +264,7 @@ export const GUNS: Record<GunId, GunConfig> = {
             ]
         },
         kind: "projectile",
-        damage: 5,
+        damage: 6,
         projectileSpeed: 4.5,
         effects: {
             muzzle: ["minecraft:basic_smoke_particle", "minecraft:basic_smoke_particle", "minecraft:basic_smoke_particle"],

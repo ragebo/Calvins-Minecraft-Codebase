@@ -7,7 +7,7 @@
         },
         "components": {
             "minecraft:icon": "semi_rifle",
-            "minecraft:display_name": { "value": "Semi-Auto Rifle" },
+            "minecraft:display_name": { "value": "Repeater" },
             "minecraft:max_stack_size": 1,
             "minecraft:hand_equipped": true
         }

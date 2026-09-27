@@ -139,7 +139,7 @@ the coin total) — so `round.ts` is the shared guard, not a shared announcer.
 6 guns in `src/config/guns.ts`, one shared firing engine in `src/systems/guns.ts`:
 
 - **Handguns** (projectile): revolver, pistol
-- **Rifles** (projectile): bolt-action (single shot, long reload), semi-auto
+- **Rifles** (projectile): bolt-action (single shot, long reload), repeater (`semi_rifle` in code — renamed from "Semi-Auto Rifle" once it stopped actually being semi-auto, below)
 - **Shotguns** (true hitscan, not projectile): pump, double-barrel
 
 Ammo is per weapon category (handgun/rifle/shotgun rounds), real inventory items.
@@ -156,6 +156,17 @@ Ammo is per weapon category (handgun/rifle/shotgun rounds), real inventory items
 How each of these works, and what the game really reports for them, is in
 `docs/test-cards/AIM-SPIKE.md` (measured) and `docs/test-cards/GUN-CONTROLS.md`. Aiming lives in
 `core/aim.ts` (the zoom and the scope overlay); the zoom per gun is `aim.fov` in `config/guns.ts`.
+
+The revolver and the repeater need their action cycled by hand between shots, like a single-action
+revolver or a lever gun in Red Dead Redemption 2: the click right after a shot doesn't fire, it
+cycles the action (its own sound), and the click after that fires. `config/guns.ts`'s `primeTicks`
+(set only on those two — every other gun omits it and fires on every eligible click, unchanged) is
+how long that cycle takes; needing two clicks per shot instead of one is what actually slows a
+player down, since real click-to-click time dwarfs a few ticks either way. `systems/guns.ts`'s
+`tryFire` tracks it per player+gun, the same way it already tracks the fire-rate window and the
+loaded round count. Reloading (Q, or an empty click) always leaves a gun ready to fire at once,
+never mid-cycle. The repeater's damage went up (5 to 6) to offset firing at effectively half speed;
+the revolver's is unchanged.
 
 Projectile guns spawn a shared `bountysys:bullet` entity and
 apply damage on hit via script (not the entity's own vanilla damage) so each gun's

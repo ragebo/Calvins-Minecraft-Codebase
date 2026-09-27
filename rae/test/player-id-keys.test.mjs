@@ -19,7 +19,7 @@ const PAIRS = [["different names (control)", "Alice", "Bob"], ["the same name", 
 const { GUNS, AMMO } = await load("config/guns.js");
 await load("systems/guns.js");
 
-const gun = GUNS.revolver;                          // 6 rounds, fireRateTicks 8, reloadTicks 40
+const gun = GUNS.revolver;                          // 6 rounds, fireRateTicks 8, primeTicks 8, reloadTicks 40
 const overworld = () => fake.dimension("overworld");
 const useItem = (p) => leftClick(p);
 const shotsHeard = () => overworld().played.filter((s) => s.id === gun.sounds.fire[0].id).length;
@@ -38,12 +38,18 @@ function shooters(nameA, nameB) {
     return { a, b };
 }
 
-/** One trigger pull, then waiting out the fire-rate window. Reports what it did: "shot", a dry "click" or "nothing". */
+/**
+ * One trigger pull, then waiting out the fire-rate window. Reports what it did: "shot", a dry "click" or
+ * "nothing". The revolver needs its hammer manually cycled between shots (primeTicks): a click that lands
+ * on a primed-and-ready gun fires it and leaves it needing that cycle again, so this always also spends the
+ * cycling click before returning, leaving the gun ready for the next call the same way every time.
+ */
 function pull(p) {
     const shots = shotsHeard();
     const clicks = clicksHeard(p);
     useItem(p);
     fake.advance(gun.fireRateTicks);
+    if (gun.primeTicks !== undefined) { useItem(p); fake.advance(gun.primeTicks); }
     if (shotsHeard() > shots) return "shot";
     return clicksHeard(p) > clicks ? "click" : "nothing";
 }

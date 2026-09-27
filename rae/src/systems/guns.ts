@@ -18,6 +18,11 @@ import { onTick } from "../core/tick.js";
  * can have an independent damage number. Shotguns are true hitscan:
  * several rays per trigger pull, each jittered within the gun's
  * spread cone, fired via Dimension.getEntitiesFromRay.
+ *
+ * The revolver and the repeater (semi_rifle) need their action manually cycled between shots
+ * (config/guns.ts's primeTicks): the click right after a shot doesn't fire, it primes, and the one
+ * after that does. Needing two clicks per shot is what actually slows these two down in practice; see
+ * tryFire.
  */
 
 const gunsByItemId = new Map<string, GunConfig>();
@@ -39,6 +44,14 @@ for (const gun of Object.values(GUNS)) {
 const lastFiredTick = new Map<string, number>();
 const reloadingKeys = new Set<string>();
 const loadedRounds = new Map<string, number>();
+
+/**
+ * A gun with `primeTicks` set (config/guns.ts) needs its action manually cycled between shots: this
+ * tracks which player+gun is currently waiting on that click. `lastFiredTick` doubles as "last fire OR
+ * prime tick" for these guns, so the same fireRateTicks-style gate (`tryFire`) works for both stages
+ * without a second timer.
+ */
+const needsPrimeKeys = new Set<string>();
 
 function stateKey(player: Player, gunId: GunId): string {
     return `${player.id}:${gunId}`;
@@ -163,6 +176,7 @@ function startReload(player: Player, gun: GunConfig): void {
     }
 
     reloadingKeys.add(key);
+    needsPrimeKeys.delete(key);   // a full reload leaves it ready to fire, not mid-cycle
     player.sendMessage(`§7Reloading ${gun.displayName}...`);
     playCues(player, gun, gun.sounds.reload);
 
@@ -201,8 +215,20 @@ function tryFire(player: Player, gun: GunConfig): void {
 
     if (reloadingKeys.has(key)) return;
 
-    const lastFired = lastFiredTick.get(key) ?? -Infinity;
-    if (system.currentTick - lastFired < gun.fireRateTicks) return;
+    const lastAction = lastFiredTick.get(key) ?? -Infinity;
+
+    // A gun that needs manual priming: this click cycles the action instead of firing it, once
+    // it's had at least primeTicks since the shot. Too soon is a silent no-op, same as a too-soon
+    // fire below — spamming both clicks back to back can't skip the cycle time either way.
+    if (gun.primeTicks !== undefined && needsPrimeKeys.has(key)) {
+        if (system.currentTick - lastAction < gun.primeTicks) return;
+        needsPrimeKeys.delete(key);
+        lastFiredTick.set(key, system.currentTick);
+        if (gun.sounds.prime) playCues(player, gun, gun.sounds.prime);
+        return;
+    }
+
+    if (system.currentTick - lastAction < gun.fireRateTicks) return;
 
     const loaded = getLoadedRounds(player, gun);
 
@@ -225,6 +251,8 @@ function tryFire(player: Player, gun: GunConfig): void {
     }
 
     playCues(player, gun, gun.sounds.fire);
+
+    if (gun.primeTicks !== undefined) needsPrimeKeys.add(key);
 }
 
 function fireProjectile(player: Player, gun: Extract<GunConfig, { kind: "projectile" }>): void {
@@ -735,6 +763,7 @@ registerSystem({
         lastFiredTick.clear();
         reloadingKeys.clear();
         loadedRounds.clear();
+        needsPrimeKeys.clear();
         dropStates.clear();
         lastHit.clear();
         for (const id of [...aiming.keys()]) stopAim(id);

@@ -21,7 +21,10 @@ function armed(gun, name = "Deputy") {
 }
 
 function emptyMagazine(p, gun) {
-    for (let i = 0; i < gun.magazineSize; i++) { use(p); fake.advance(gun.fireRateTicks); }
+    for (let i = 0; i < gun.magazineSize; i++) {
+        use(p); fake.advance(gun.fireRateTicks);
+        if (gun.primeTicks !== undefined) { use(p); fake.advance(gun.primeTicks); }   // the prime click between shots, so this really does fire magazineSize times
+    }
     fake.advance(80);
     overworld().played.length = 0; p.messages.length = 0; p.privateSounds.length = 0;
 }
@@ -166,6 +169,7 @@ test("a broken cue can never break firing, and is reported once", () => {
     let threw = null;
     try {
         use(p); fake.advance(gun.fireRateTicks);
+        use(p); fake.advance(gun.primeTicks);   // the revolver's own prime click between shots: no shot, no cue
         use(p); fake.advance(gun.fireRateTicks);
     } catch (e) { threw = e; }
     gun.sounds.fire[0].pitch = original;
