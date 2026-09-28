@@ -42,7 +42,8 @@ export type GunId =
     | "bolt_rifle"
     | "semi_rifle"
     | "pump_shotgun"
-    | "double_barrel_shotgun";
+    | "double_barrel_shotgun"
+    | "gatling_gun";
 
 /** One layer of a gun sound: a vanilla sound event played at the shooter. */
 export interface SoundCue {
@@ -63,6 +64,26 @@ export interface AimConfig {
     readonly scope?: boolean;
     /** Slowness amplifier while aimed (0 is 15% slower, 1 is 30%, 2 is 45%, 3 is 60%). Omit for no slowdown. */
     readonly slowness?: number;
+}
+
+/**
+ * Set only on a gun that is manned, not held: no swing on this gun's itemId ever fires it (nothing ever
+ * holds it — it is placed, then ridden), so `systems/guns.ts` instead fires it on a swing from whoever is
+ * currently riding `mountEntityId`.
+ *
+ * There's no engine signal for "the trigger is still held down", only discrete swings, so sustained fire is
+ * approximated from real click frequency instead: every qualifying swing "revs" the gun (moves it a step
+ * from fireRateTicksStart towards fireRateTicksSpunUp, over spinUpShots consecutive swings each landing
+ * within graceTicks of the last one) whether or not that swing's own shot is actually due yet. A gap longer
+ * than graceTicks resets it to a cold start. This means clicking fast enough keeps it accelerating even
+ * through swings that don't themselves produce a shot — the closest this engine gets to "hold to fire".
+ */
+export interface AutomaticConfig {
+    readonly mountEntityId: string;
+    readonly fireRateTicksStart: number;
+    readonly fireRateTicksSpunUp: number;
+    readonly spinUpShots: number;
+    readonly graceTicks: number;
 }
 
 export interface GunSounds {
@@ -93,8 +114,10 @@ interface BaseGunConfig {
     readonly primeTicks?: number;
     /** Ticks a reload takes once started (Q, or clicking an empty gun). */
     readonly reloadTicks: number;
-    /** What holding right-click does. */
+    /** What holding right-click does. Unreachable on a mounted gun (see `automatic`): nothing is ever held to fire itemUse on. */
     readonly aim: AimConfig;
+    /** Set only for a gun that is manned rather than carried — see AutomaticConfig. */
+    readonly automatic?: AutomaticConfig;
     /** Smoke (and flame) at the muzzle. Hitscan guns add a trail and impact puffs on top (GunEffects). */
     readonly effects: MuzzleEffects;
     readonly sounds: GunSounds;
@@ -144,6 +167,9 @@ export interface HitscanGunConfig extends BaseGunConfig {
 }
 
 export type GunConfig = ProjectileGunConfig | HitscanGunConfig;
+
+/** The placed, rideable Gatling gun. Same identifier for the carryable item and the placed entity — items and entities are separate registries, so this doesn't collide. */
+export const GATLING_GUN_ENTITY_ID = "bountysys:gatling_gun";
 
 export const GUNS: Record<GunId, GunConfig> = {
     revolver: {
@@ -311,6 +337,48 @@ export const GUNS: Record<GunId, GunConfig> = {
             trail: "minecraft:basic_flame_particle",
             trailSpacing: 2,
             impact: "minecraft:basic_smoke_particle"
+        }
+    },
+    gatling_gun: {
+        id: "gatling_gun",
+        itemId: GATLING_GUN_ENTITY_ID,
+        displayName: "Gatling Gun",
+        ammo: "rifle_ammo",
+        magazineSize: 90,
+        fireRateTicks: 6,
+        reloadTicks: 100,
+        aim: { fov: 65 },
+        automatic: {
+            mountEntityId: GATLING_GUN_ENTITY_ID,
+            fireRateTicksStart: 6,
+            fireRateTicksSpunUp: 1,
+            spinUpShots: 12,
+            graceTicks: 8
+        },
+        sounds: {
+            fire: [
+                { id: "firework.large_blast", volume: 1.8, pitch: 0.8 }
+            ],
+            reload: [
+                { id: "random.chestopen", volume: 0.6, pitch: 0.8 },
+                { id: "tile.piston.out", volume: 0.6, pitch: 1.1, delayTicks: 10 },
+                { id: "random.pop", volume: 0.5, pitch: 1.1, delayTicks: 24 },
+                { id: "random.pop", volume: 0.5, pitch: 1.2, delayTicks: 38 },
+                { id: "random.pop", volume: 0.5, pitch: 1.3, delayTicks: 52 },
+                { id: "random.pop", volume: 0.5, pitch: 1.4, delayTicks: 66 },
+                { id: "tile.piston.in", volume: 0.6, pitch: 1.1, delayTicks: 84 },
+                { id: "random.chestclosed", volume: 0.7, pitch: 1.2, delayTicks: 96 }
+            ]
+        },
+        kind: "projectile",
+        damage: 3,
+        projectileSpeed: 5,
+        effects: {
+            muzzle: [
+                "minecraft:basic_smoke_particle", "minecraft:basic_smoke_particle",
+                "minecraft:basic_smoke_particle", "minecraft:basic_smoke_particle"
+            ],
+            muzzleDistance: 1.4
         }
     },
     double_barrel_shotgun: {

@@ -11,7 +11,9 @@ await load("systems/guns.js");
 const { listSystems } = await load("core/registry.js");
 
 const shotguns = [GUNS.pump_shotgun, GUNS.double_barrel_shotgun];
-const others = Object.values(GUNS).filter((g) => g.kind !== "hitscan");
+// The Gatling gun is a projectile gun too, but it's never held to fire (it's placed, then ridden) — its own
+// muzzle effects are covered by its dedicated tests instead.
+const others = Object.values(GUNS).filter((g) => g.kind !== "hitscan" && !g.automatic);
 const overworld = () => fake.dimension("overworld");
 const resetGuns = () => listSystems().find((s) => s.name === "guns").reset();
 

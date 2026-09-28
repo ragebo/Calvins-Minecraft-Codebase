@@ -1,0 +1,28 @@
+{
+    "format_version": "1.26.50",
+    "minecraft:entity": {
+        "description": {
+            "identifier": "bountysys:gatling_gun",
+            "is_spawnable": false,
+            "is_summonable": true,
+            "is_experimental": false
+        },
+        "components": {
+            "minecraft:type_family": { "family": ["gatling_gun"] },
+            "minecraft:collision_box": { "width": 1.0, "height": 1.4 },
+            "minecraft:physics": { "has_gravity": false, "has_collision": true },
+            "minecraft:damage_sensor": {
+                "triggers": { "cause": "all", "deals_damage": "no" }
+            },
+            "minecraft:rideable": {
+                "seat_count": 1,
+                "family_types": ["player"],
+                "interact_text": "Man the Gatling gun",
+                "pull_in_entities": false,
+                "seats": [
+                    { "position": [0, 0.85, 0.3], "min_rider_count": 0, "max_rider_count": 1 }
+                ]
+            }
+        }
+    }
+}

@@ -289,6 +289,27 @@ test("the train model and texture in the pack are exactly what scripts/gen-train
     done();
 });
 
+test("the Gatling gun model and texture in the pack are exactly what scripts/gen-gatling-model.mjs makes", async () => {
+    const { check, done } = checks();
+    const generator = await import(pathToFileURL(path.join(import.meta.dirname, "..", "scripts", "gen-gatling-model.mjs")).href);
+
+    const geometryFile = path.join(RP, "models", "entity", "gatling_gun.geo.json");
+    const textureFile = path.join(RP, "textures", "entity", "gatling_gun.png");
+    check("the geometry file exists", existsSync(geometryFile));
+    check("the texture file exists", existsSync(textureFile));
+    if (!existsSync(geometryFile) || !existsSync(textureFile)) return done();
+
+    check("the geometry file is what the generator writes (run: node scripts/gen-gatling-model.mjs)", readFileSync(geometryFile, "utf8").replace(/\r\n/g, "\n") === generator.renderGeometry());
+    const pixels = pngPixels(textureFile);
+    check("the texture is a plain RGBA PNG", pixels !== null);
+    check("and its pixels are the generator's palette (the compressed bytes may differ between Node versions, the pixels may not)", pixels !== null && pixels.equals(generator.buildPixels()));
+
+    const palette = Object.values(generator.PALETTE).map((c) => c.join(","));
+    check("every palette colour is different", new Set(palette).size === palette.length);
+    check("the palette fits in one row of the texture", palette.length <= generator.TEXTURE_SIZE, String(palette.length));
+    done();
+});
+
 test("the tumbleweed model and texture in the pack are exactly what scripts/gen-tumbleweed-model.mjs makes", async () => {
     const { check, done } = checks();
     const generator = await import(pathToFileURL(path.join(import.meta.dirname, "..", "scripts", "gen-tumbleweed-model.mjs")).href);

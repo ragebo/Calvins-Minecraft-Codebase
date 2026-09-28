@@ -202,6 +202,24 @@ defined per gun in `src/config/guns.ts` (`sounds.fire` / `sounds.reload`, each a
 them. Every id was checked against the sound names the game's own `sounds.json` files
 reference. To audition a change first: `/playsound <id> @s ~ ~ ~ <volume> <pitch>`.
 
+**The Gatling gun (`bountysys:gatling_gun`)** is the one gun that is placed rather than carried and fired:
+right-click it against a block to plant it there (facing the way you were), consuming it from the stack, as
+a rideable entity (`minecraft:rideable`, one seat, no gravity so it never drifts once set down). From then
+on it fires like any other gun — a left-click swing while riding it, same aiming (your own view direction,
+unchanged whether you're standing, on a horse, or seated at a gun) and the same damage/ammo/reload machinery
+every gun shares — except it never toggles an aim zoom (nothing is ever held long enough to right-click) and
+it never fires from being merely held (holding it and swinging does nothing; only riding its placed entity
+does).
+
+It has no real "hold left-click to fire": Bedrock has no held-button signal for a swing, only discrete swing
+events, the same limitation that already forced aiming to be a toggle rather than a hold. Instead,
+`config/guns.ts`'s `automatic` block ramps the gun's own fire-rate gate from `fireRateTicksStart` down to
+`fireRateTicksSpunUp` as swings keep landing within `graceTicks` of each other (`spinUpShots` consecutive
+ones to reach full speed) — every qualifying swing advances the ramp whether or not that swing's own shot is
+actually due yet, so clicking fast enough keeps it accelerating even through swings that don't themselves
+fire. A gap longer than `graceTicks` resets it to a cold start. This is the closest approximation of "hold to
+fire" the engine allows; `systems/guns.ts`'s `revAutomatic` is where it happens.
+
 ### Game menu
 
 `bountysys:game_menu` (the "RAE Menu", a gold sheriff star) opens a menu when it is used, and so

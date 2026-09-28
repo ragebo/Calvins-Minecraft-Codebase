@@ -1,0 +1,12 @@
+{
+    "format_version": "1.21.100",
+    "minecraft:client_entity": {
+        "description": {
+            "identifier": "bountysys:gatling_gun",
+            "materials": { "default": "entity_alphatest" },
+            "textures": { "default": "textures/entity/gatling_gun" },
+            "geometry": { "default": "geometry.gatling_gun" },
+            "render_controllers": ["controller.render.default"]
+        }
+    }
+}

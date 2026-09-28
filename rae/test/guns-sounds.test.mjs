@@ -6,6 +6,9 @@ await load("systems/guns.js");
 const { listSystems } = await load("core/registry.js");
 
 const guns = Object.values(GUNS);
+// The Gatling gun is never held to fire (it's placed, then ridden) — tests here that exercise the held-item
+// fire/reload controls exclude it; its own controls have dedicated tests in guns-controls.test.mjs.
+const heldGuns = guns.filter((gun) => !gun.automatic);
 const overworld = () => fake.dimension("overworld");
 const resetGuns = () => listSystems().find((s) => s.name === "guns").reset();
 const use = (p) => leftClick(p);
@@ -57,7 +60,7 @@ test("config: every cue is valid for the engine and the game", (t) => {
 
 test("firing plays each gun's cues on schedule, at the shooter, with the configured volume and pitch", () => {
     const { check, done } = checks();
-    for (const gun of guns) {
+    for (const gun of heldGuns) {
         const p = armed(gun, `fire-${gun.id}`);
         const t0 = fake.tick;
         use(p);
@@ -93,7 +96,7 @@ test("an empty gun clicks privately, then reloads itself: the shot is not heard,
 
 test("reloading plays each gun's sequence on schedule and still refills the magazine", () => {
     const { check, done } = checks();
-    for (const gun of guns) {
+    for (const gun of heldGuns) {
         const p = armed(gun, `reload-${gun.id}`);
         emptyMagazine(p, gun);
 

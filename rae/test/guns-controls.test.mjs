@@ -11,6 +11,10 @@ await load("systems/guns.js");
 const { listSystems } = await load("core/registry.js");
 
 const guns = Object.values(GUNS);
+// The Gatling gun is never held to fire (it's placed, then ridden) — every "for every gun" test in this
+// file that exercises the held-item fire/aim/reload controls means "every gun you carry", so it excludes
+// this one. Its own controls (place, mount, fire while ridden) have dedicated tests further down.
+const heldGuns = guns.filter((gun) => !gun.automatic);
 const overworld = () => fake.dimension("overworld");
 const resetGuns = () => listSystems().find((s) => s.name === "guns").reset();
 const text = (p) => p.messages.map(strip).join("\n");
@@ -47,7 +51,7 @@ const emptyMagazine = (p, gun) => {
 
 test("left-click fires every gun: at the air or a mob (Attack) and at a block (Mine), on foot or on a horse", () => {
     const { check, done } = checks();
-    for (const gun of guns) {
+    for (const gun of heldGuns) {
         for (const source of ["Attack", "Mine"]) {
             for (const riding of [false, true]) {
                 const p = armed(gun, `fire-${gun.id}-${source}-${riding}`);
@@ -216,7 +220,7 @@ test("a system reset clears a pending prime: the next click fires instead of cyc
 
 test("clicking an empty gun clicks, tells nothing about keys, and reloads by itself", () => {
     const { check, done } = checks();
-    for (const gun of guns) {
+    for (const gun of heldGuns) {
         const p = armed(gun, `auto-${gun.id}`);
         emptyMagazine(p, gun);
         leftClick(p);
@@ -263,7 +267,7 @@ test("an empty gun with no ammo says so and does not start a reload; clicks duri
 
 test("a right-click toggles the aim: the first zooms to the gun's field of view, the second puts the view back", () => {
     const { check, done } = checks();
-    for (const gun of guns) {
+    for (const gun of heldGuns) {
         const p = armed(gun, `zoom-${gun.id}`);
         rightClick(p);
         check(`${gun.id}: zoomed to ${gun.aim.fov}, eased`, p.camera.fovCalls.length === 1 && p.camera.fovCalls[0].fov === gun.aim.fov && p.camera.fovCalls[0].easeOptions.easeTime === AIM.fovEaseSeconds, JSON.stringify(p.camera.fovCalls));
@@ -497,7 +501,7 @@ test("a camera that refuses never breaks aiming or firing, and is reported once"
 
 test("Q takes the gun back and reloads it, on foot or on a horse, for every gun", () => {
     const { check, done } = checks();
-    for (const gun of guns) {
+    for (const gun of heldGuns) {
         for (const riding of [false, true]) {
             const p = armed(gun, `q-${gun.id}-${riding}`, { selectedSlotIndex: 4 });
             if (riding) p.ridingOn = fake.makeEntity({ typeId: "minecraft:horse" });
@@ -656,6 +660,163 @@ test("a system reset forgets a half-seen drop", () => {
     resetGuns();
     world.afterEvents.playerSwingStart.emit({ swingSource: "DropItem", heldItemStack: stack, player: p });
     check("the swing after a reset does not complete the old drop", dropped.isValid);
+    done();
+});
+
+// ---------------------------------------------------------------------------------------------------------
+// The Gatling gun: placed, then ridden, rather than held and fired directly like every other gun.
+// ---------------------------------------------------------------------------------------------------------
+
+const GATLING = GUNS.gatling_gun;
+
+/** A block "placed" at (5, 63, 5): faceLocation (0.5, 1, 0.5) is its top face, centred. */
+function interactWithBlock(p, overrides = {}) {
+    world.afterEvents.playerInteractWithBlock.emit({
+        player: p,
+        itemStack: fake.makeItemStack(p.holding),
+        block: { location: { x: 5, y: 63, z: 5 } },
+        blockFace: "Up",
+        faceLocation: { x: 0.5, y: 1, z: 0.5 },
+        isFirstEvent: true,
+        ...overrides
+    });
+}
+
+/** A player already manning a placed Gatling gun: riding its mount, never holding the item, ammo in reserve. */
+function manned(name = "Gunner") {
+    fake.reset();
+    resetGuns();
+    const p = fake.makePlayer(name, { location: { x: 1, y: 64, z: 2 } });
+    p.giveAmmo(AMMO[GATLING.ammo].itemId, 400);
+    p.ridingOn = fake.makeEntity({ typeId: GATLING.automatic.mountEntityId });
+    fake.advance(200);
+    overworld().played.length = 0;
+    return p;
+}
+
+test("right-clicking a block with the Gatling gun plants it there, facing the way you were, and takes it out of your hand", () => {
+    const { check, done } = checks();
+    const p = armed(GATLING, "placer", { selectedSlotIndex: 0 });
+    p.container.setItem(0, fake.makeItemStack(GATLING.itemId));   // the fake's `holding` triggers the swing/aim logic, but placement clears the real slot
+    p.setRotation({ x: 0, y: 123 });
+
+    interactWithBlock(p);
+
+    const placed = overworld().getEntities({ type: GATLING.automatic.mountEntityId });
+    check("one placed", placed.length === 1, String(placed.length));
+    check("at the interacted spot", placed[0].location.x === 5.5 && placed[0].location.y === 64 && placed[0].location.z === 5.5, JSON.stringify(placed[0]?.location));
+    check("facing the way the placer was facing", placed[0].getRotation().y === 123, JSON.stringify(placed[0]?.getRotation()));
+    check("gone from the slot it was placed from (max_stack_size 1: never a stack to shrink)", p.container.getItem(0) === undefined, String(p.container.getItem(0)?.typeId));
+    done();
+});
+
+test("holding it and clicking does nothing: it only fires once it's placed and ridden", () => {
+    const { check, done } = checks();
+    const p = armed(GATLING, "holder");
+    leftClick(p);
+    fake.advance(20);
+    check("no shot", !heardShot(GATLING), JSON.stringify(overworld().played));
+    done();
+});
+
+test("riding the placed gun and clicking fires it, and ramps up the more you keep clicking", () => {
+    const { check, done } = checks();
+    const p = manned();
+
+    leftClick(p);
+    check("the first click fires", heardShot(GATLING), JSON.stringify(overworld().played.map((x) => x.id)));
+
+    // Click every graceTicks (the fastest gap that still counts as "still cranking it") and watch the gate
+    // that actually lets a shot through shrink from fireRateTicksStart towards fireRateTicksSpunUp.
+    const gaps = [];
+    let lastCount = overworld().played.length;
+    for (let i = 0; i < GATLING.automatic.spinUpShots + 2; i++) {
+        fake.advance(GATLING.automatic.graceTicks);
+        leftClick(p);
+        const count = overworld().played.length;
+        if (count > lastCount) gaps.push(i);
+        lastCount = count;
+    }
+    check("it fires more often later in the burst than at the start (it's actually ramping)", gaps.length > 2, JSON.stringify(gaps));
+    done();
+});
+
+test("a gap longer than graceTicks resets the burst back to a cold start", () => {
+    const { check, done } = checks();
+    const p = manned();
+
+    for (let i = 0; i < GATLING.automatic.spinUpShots; i++) {
+        leftClick(p);
+        fake.advance(GATLING.automatic.graceTicks);
+    }
+
+    fake.advance(GATLING.automatic.graceTicks * 5);   // well past the grace window: cold again
+    overworld().played.length = 0;
+    leftClick(p);
+    check("(setup) that click fired", heardShot(GATLING));
+    overworld().played.length = 0;
+
+    fake.advance(GATLING.automatic.fireRateTicksSpunUp);   // long enough only for a spun-up gun to fire again
+    leftClick(p);
+    check("too soon for a cold gun: it did not fire again yet", !heardShot(GATLING), JSON.stringify(overworld().played));
+    done();
+});
+
+test("running dry while manning it reloads automatically from carried ammo, and firing resumes once it's full", () => {
+    const { check, done } = checks();
+    const p = manned();
+
+    // fireRateTicksStart, not the spun-up rate: the gate is always at its slowest at the start of a fresh
+    // burst, so waiting this long between every click guarantees each one actually lands a shot, however
+    // ramped up a shorter gap would have let it get.
+    for (let i = 0; i < GATLING.magazineSize; i++) {
+        leftClick(p);
+        fake.advance(GATLING.automatic.fireRateTicksStart);
+    }
+    overworld().played.length = 0;
+    leftClick(p);
+    check("a dry click, not a shot", p.privateSounds.some((s) => s.id === "random.click") && !heardShot(GATLING));
+    check("a reload starts", text(p).includes("Reloading"), text(p));
+
+    fake.advance(GATLING.reloadTicks + 2);
+    check("it actually refills (the reload finishes for a ridden gun, not just a held one)", text(p).includes(`${GATLING.magazineSize}/${GATLING.magazineSize}`), text(p));
+
+    overworld().played.length = 0;
+    leftClick(p);
+    check("fires again once reloaded", heardShot(GATLING));
+    done();
+});
+
+test("dismounting mid-reload doesn't finish it (same rule as swapping away from a held gun)", () => {
+    const { check, done } = checks();
+    const p = manned();
+    for (let i = 0; i < GATLING.magazineSize; i++) {
+        leftClick(p);
+        fake.advance(GATLING.automatic.fireRateTicksStart);   // always enough, whatever the current ramp
+    }
+    leftClick(p);   // starts the auto-reload
+    p.ridingOn = undefined;   // dismounted mid-reload
+    fake.advance(GATLING.reloadTicks + 5);
+    check("no refill", !text(p).includes("reloaded"), text(p));
+    done();
+});
+
+test("a system reset clears the burst state: the next click after a reset fires at a cold start's rate", () => {
+    const { check, done } = checks();
+    const p = manned();
+    for (let i = 0; i < GATLING.automatic.spinUpShots; i++) {
+        leftClick(p);
+        fake.advance(GATLING.automatic.graceTicks);
+    }
+
+    resetGuns();
+    leftClick(p);
+    check("(setup) fires right away (reset also clears the fire-rate timer itself)", heardShot(GATLING));
+    overworld().played.length = 0;
+
+    fake.advance(GATLING.automatic.fireRateTicksSpunUp);
+    leftClick(p);
+    check("still cold: too soon for a spun-up gun's rate", !heardShot(GATLING), JSON.stringify(overworld().played));
     done();
 });
 
