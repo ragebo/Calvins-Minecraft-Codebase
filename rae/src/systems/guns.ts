@@ -4,7 +4,7 @@ import {
     type EntityApplyDamageByProjectileOptions, type EntityApplyDamageOptions,
     EquipmentSlot, EntityDamageCause, EntitySwingSource
 } from "@minecraft/server";
-import { AMMO, GUNS, BULLET_ENTITY_ID, BULLET_LIFETIME_TICKS, HIT_WINDOW_TICKS, type AutomaticConfig, type GunConfig, type GunId, type MuzzleEffects, type SoundCue } from "../config/guns.js";
+import { AMMO, GUNS, BULLET_ENTITY_ID, BULLET_LIFETIME_TICKS, GATLING_AIM_PITCH_PROPERTY, HIT_WINDOW_TICKS, type AutomaticConfig, type GunConfig, type GunId, type MuzzleEffects, type SoundCue } from "../config/guns.js";
 import { AIM, TUMBLEWEED_ENTITY_ID } from "../config/balance.js";
 import { hideScope, showScope, zoomReset, zoomTo } from "../core/aim.js";
 import { registerSystem } from "../core/registry.js";
@@ -24,11 +24,11 @@ import { onTick } from "../core/tick.js";
  * after that does. Needing two clicks per shot is what actually slows these two down in practice; see
  * tryFire.
  *
- * The Gatling gun is manned, not held (config/guns.ts's automatic): a right-click with it against a block
- * places it as a rideable entity and consumes the item, and firing it is triggered by a swing while riding
- * that entity rather than a swing while holding an item. Every qualifying swing ramps its fire-rate gate up
- * a step (see revAutomatic) rather than firing at one fixed rate — the closest approximation of "hold to
- * fire" this engine allows, since there is no real held-button signal for a swing (see AutomaticConfig).
+ * The Gatling gun is manned, not held (config/guns.ts's automatic): right-clicking it (itemUse) places it
+ * as a rideable entity and consumes the item, and a swing while riding that entity toggles a self-sustaining
+ * fire loop on or off (see toggleAutomatic/fireAutomaticStep) rather than firing once per swing — there is no
+ * real held-button signal for a swing in this engine (confirmed: holding it doesn't even repeat the swing),
+ * so "hold to fire" is approximated as a toggle instead, the same fix already used for aiming.
  */
 
 const gunsByItemId = new Map<string, GunConfig>();
@@ -61,14 +61,6 @@ const loadedRounds = new Map<string, number>();
  */
 const needsPrimeKeys = new Set<string>();
 
-/**
- * An automatic gun's spin-up state: the tick of the last qualifying swing (any gap longer than
- * automatic.graceTicks resets the burst to cold) and how many consecutive swings have landed within that
- * window (capped at automatic.spinUpShots). See revAutomatic and AutomaticConfig's own doc comment.
- */
-const lastSwingTick = new Map<string, number>();
-const burstLevel = new Map<string, number>();
-
 function stateKey(player: Player, gunId: GunId): string {
     return `${player.id}:${gunId}`;
 }
@@ -80,9 +72,9 @@ function getMainhandItemTypeId(player: Player): string | undefined {
 
 /** The entity a player is currently riding, if any. `entityRidingOn` can throw ("This property can throw
  *  when used", per its own doc) — same guarded-read pattern already used for this component in aimprobe.ts. */
-function riddenTypeId(player: Player): string | undefined {
+function riddenEntity(player: Player): Entity | undefined {
     try {
-        return player.getComponent("minecraft:riding")?.entityRidingOn?.typeId;
+        return player.getComponent("minecraft:riding")?.entityRidingOn;
     } catch {
         return undefined;
     }
@@ -92,39 +84,13 @@ function riddenTypeId(player: Player): string | undefined {
  *  the one condition every "is this still the gun in use" check (delayed sound cues, a reload finishing)
  *  needs, since a held-item check alone is always false for a gun nobody ever holds. */
 function stillUsing(player: Player, gun: GunConfig): boolean {
-    if (gun.automatic) return riddenTypeId(player) === gun.automatic.mountEntityId;
+    if (gun.automatic) return riddenEntity(player)?.typeId === gun.automatic.mountEntityId;
     return getMainhandItemTypeId(player) === gun.itemId;
 }
 
-/**
- * Ramps an automatic gun's fire-rate gate from fireRateTicksStart towards fireRateTicksSpunUp as swings
- * keep landing within graceTicks of each other, and returns the resulting gap to gate this swing's own shot
- * against. Called on every qualifying swing while mounted, so the burst level (and with it, how "spun up"
- * the gun is) advances from real click frequency alone, whether or not this particular swing is itself due
- * to fire yet — see AutomaticConfig's own doc comment for why that's the point.
- */
-function revAutomatic(automatic: AutomaticConfig, key: string): number {
-
-    const now = system.currentTick;
-    const lastSwing = lastSwingTick.get(key) ?? -Infinity;
-    const raw = now - lastSwing <= automatic.graceTicks ? (burstLevel.get(key) ?? 0) + 1 : 1;
-    const level = Math.min(raw, automatic.spinUpShots);
-
-    burstLevel.set(key, level);
-    lastSwingTick.set(key, now);
-
-    const t = (level - 1) / Math.max(1, automatic.spinUpShots - 1);
-    return Math.round(automatic.fireRateTicksStart + (automatic.fireRateTicksSpunUp - automatic.fireRateTicksStart) * t);
-}
-
-/** An automatic gun's fire cue climbs in pitch with the current burst level, so it audibly "revs up". */
-function fireCuesFor(gun: GunConfig, key: string): readonly SoundCue[] {
-
-    if (!gun.automatic) return gun.sounds.fire;
-
-    const level = burstLevel.get(key) ?? 1;
-    const t = (level - 1) / Math.max(1, gun.automatic.spinUpShots - 1);
-
+/** An automatic gun's fire cue climbs in pitch with how far into the burst it is, so it audibly "revs up". */
+function fireCuesFor(gun: GunConfig, burstLevel: number, spinUpShots: number): readonly SoundCue[] {
+    const t = (burstLevel - 1) / Math.max(1, spinUpShots - 1);
     return gun.sounds.fire.map((cue) => ({ ...cue, pitch: cue.pitch + t * 0.5 }));
 }
 
@@ -221,6 +187,12 @@ function consumeAmmoFromInventory(player: Player, ammoItemId: string, amount: nu
     return amount - remaining;
 }
 
+/** The private click a player hears from their own empty gun, whether they pulled the trigger themselves or
+ *  an automatic gun's own loop found it empty — always paired with starting a reload. */
+function playDryClick(player: Player): void {
+    player.playSound("random.click", { volume: 0.5 });
+}
+
 function startReload(player: Player, gun: GunConfig): void {
 
     const key = stateKey(player, gun.id);
@@ -294,17 +266,13 @@ function tryFire(player: Player, gun: GunConfig): void {
         return;
     }
 
-    // An automatic gun's gate ramps with the current burst (revAutomatic), rather than staying fixed —
-    // this call always runs (and always advances the burst) for such a gun, whether or not the gap it
-    // returns actually lets this swing fire yet.
-    const requiredGap = gun.automatic ? revAutomatic(gun.automatic, key) : gun.fireRateTicks;
-    if (system.currentTick - lastAction < requiredGap) return;
+    if (system.currentTick - lastAction < gun.fireRateTicks) return;
 
     const loaded = getLoadedRounds(player, gun);
 
     if (loaded <= 0) {
         // Clicking an empty gun reloads it: on a horse there is no key to spare for it.
-        player.playSound("random.click", { volume: 0.5 });
+        playDryClick(player);
         startReload(player, gun);
         return;
     }
@@ -320,9 +288,83 @@ function tryFire(player: Player, gun: GunConfig): void {
         fireHitscan(player, gun);
     }
 
-    playCues(player, gun, fireCuesFor(gun, key));
+    playCues(player, gun, gun.sounds.fire);
 
     if (gun.primeTicks !== undefined) needsPrimeKeys.add(key);
+}
+
+/**
+ * An automatic gun's per-player run of its self-sustaining fire loop, started by toggleAutomatic. `burst`
+ * lives on the run itself (not a shared map) since nothing else needs to read it once the loop that owns it
+ * ends. `automatic` is pulled out once here rather than re-read through `gun.automatic!` everywhere below.
+ */
+interface GatlingRun {
+    readonly player: Player;
+    readonly gun: GunConfig;
+    readonly automatic: AutomaticConfig;
+    burst: number;
+}
+
+const gatlingRuns = new Map<string, GatlingRun>();
+
+/**
+ * A swing while riding an automatic gun's mount toggles its fire loop rather than firing once per swing:
+ * start it if it's not already running, stop it if it is. See AutomaticConfig's own doc comment for why a
+ * toggle, not a hold.
+ */
+function toggleAutomatic(player: Player, gun: GunConfig): void {
+
+    const key = stateKey(player, gun.id);
+
+    if (gatlingRuns.has(key)) {
+        gatlingRuns.delete(key);
+        return;
+    }
+
+    if (reloadingKeys.has(key) || !gun.automatic) return;
+
+    const run: GatlingRun = { player, gun, automatic: gun.automatic, burst: 0 };
+    gatlingRuns.set(key, run);
+    fireAutomaticStep(key, run);
+}
+
+/**
+ * One shot of a running Gatling loop, then reschedules itself at a shorter delay than last time (ramping
+ * fireRateTicksStart towards fireRateTicksSpunUp over automatic.spinUpShots consecutive shots) — entirely on
+ * its own timer, needing no further clicks, until something below stops it.
+ */
+function fireAutomaticStep(key: string, run: GatlingRun): void {
+
+    // Toggled off (a fresh run took this key, or it was stopped outright) since this step was scheduled.
+    if (gatlingRuns.get(key) !== run) return;
+
+    if (!run.player.isValid || riddenEntity(run.player)?.typeId !== run.automatic.mountEntityId) {
+        gatlingRuns.delete(key);
+        return;
+    }
+
+    const loaded = getLoadedRounds(run.player, run.gun);
+
+    if (loaded <= 0) {
+        gatlingRuns.delete(key);
+        playDryClick(run.player);
+        startReload(run.player, run.gun);
+        return;
+    }
+
+    setLoadedRounds(run.player, run.gun, loaded - 1);
+    showMuzzle(run.player, run.gun.effects);
+
+    if (run.gun.kind === "projectile") fireProjectile(run.player, run.gun);
+    else fireHitscan(run.player, run.gun);
+
+    run.burst = Math.min(run.burst + 1, run.automatic.spinUpShots);
+    playCues(run.player, run.gun, fireCuesFor(run.gun, run.burst, run.automatic.spinUpShots));
+
+    const t = (run.burst - 1) / Math.max(1, run.automatic.spinUpShots - 1);
+    const delay = Math.round(run.automatic.fireRateTicksStart + (run.automatic.fireRateTicksSpunUp - run.automatic.fireRateTicksStart) * t);
+
+    system.runTimeout(() => fireAutomaticStep(key, run), delay);
 }
 
 function fireProjectile(player: Player, gun: Extract<GunConfig, { kind: "projectile" }>): void {
@@ -598,8 +640,8 @@ world.afterEvents.playerSwingStart.subscribe((event) => {
         return;
     }
 
-    const mountedGun = gunsByMountEntityId.get(riddenTypeId(event.player) ?? "");
-    if (mountedGun) tryFire(event.player, mountedGun);
+    const mountedGun = gunsByMountEntityId.get(riddenEntity(event.player)?.typeId ?? "");
+    if (mountedGun) toggleAutomatic(event.player, mountedGun);
 });
 
 // ---- Aim -----------------------------------------------------------------------------------------------
@@ -689,22 +731,29 @@ world.afterEvents.itemUse.subscribe((event) => {
 
 // ---- Placing the Gatling gun -----------------------------------------------------------------------------
 //
-// The only carryable gun that is never held to fire: right-clicking it against a block plants it there,
-// facing the way the player was facing, and consumes one from the stack. Firing it from then on is the
-// swing-while-riding branch in the playerSwingStart handler above.
+// The only carryable gun that is never held to fire: right-clicking it (itemUse — the same event the aim
+// toggle above already uses, and already proven reliable in this codebase) plants it, facing the way the
+// player was facing, and consumes one from the stack. Where: a plain right-click carries no block/face
+// information of its own, so this raycasts from the player's own view exactly the way fireHitscan already
+// finds a shot's target, rather than depending on an unproven "which block did this land on" event field.
+// Firing it from then on is the swing-while-riding branch in the playerSwingStart handler above.
 
-world.afterEvents.playerInteractWithBlock.subscribe((event) => {
+world.afterEvents.itemUse.subscribe((event) => {
 
-    // isFirstEvent is false for the repeat events a held right-click sends; only the initial press places one.
-    if (!event.isFirstEvent) return;
-
-    const typeId = event.itemStack?.typeId ?? event.beforeItemStack?.typeId;
-    const gun = gunsByItemId.get(typeId ?? "");
+    const gun = gunsByItemId.get(event.itemStack.typeId);
     if (!gun?.automatic) return;
 
-    const player = event.player;
-    const at = blockWorldHitPoint(event.block.location, event.faceLocation);
+    const player = event.source;
+    const origin = player.getHeadLocation();
+    const direction = player.getViewDirection();
+    const hit = player.dimension.getBlockFromRay(origin, direction, { maxDistance: gun.automatic.placementRange });
 
+    if (!hit) {
+        player.sendMessage("§7Nothing in range to place it on.");
+        return;
+    }
+
+    const at = blockWorldHitPoint(hit.block.location, hit.faceLocation);
     const placed = player.dimension.spawnEntity(gun.automatic.mountEntityId, at);
     placed.setRotation({ x: 0, y: player.getRotation().y });
 
@@ -713,6 +762,43 @@ world.afterEvents.playerInteractWithBlock.subscribe((event) => {
     const slot = player.selectedSlotIndex;
     if (container && container.getItem(slot)?.typeId === gun.itemId) container.setItem(slot, undefined);
 });
+
+// ---- Tracking the rider's aim ----------------------------------------------------------------------------
+//
+// A manned Gatling gun turns to follow whoever is riding it, not just while firing. Yaw is the whole
+// entity's own rotation (it already turns the tripod and the turret together, which reads fine for a
+// swiveling mount); pitch is isolated to the "turret" bone alone via a client-synced entity property and a
+// resource-pack animation reading it (BountySys_RP/animations/gatling_gun.animation.json), the same
+// technique systems/tumbleweed.ts already uses for its own roll — the tripod itself never tips.
+//
+// Every tick, off the player list every other onTick handler already shares, rather than a dimension-wide
+// entity scan: cheap, since only ever a handful of players are ever riding one of these at once.
+
+let gatlingAimPropertyErrorReported = false;
+
+onTick("guns:gatling-aim", (ctx) => {
+
+    for (const player of ctx.players) {
+
+        const mount = riddenEntity(player);
+        if (!mount?.isValid) continue;
+
+        const mountedGun = gunsByMountEntityId.get(mount.typeId);
+        if (!mountedGun?.automatic) continue;
+
+        const rotation = player.getRotation();
+        mount.setRotation({ x: mount.getRotation().x, y: rotation.y });
+
+        try {
+            mount.setProperty(GATLING_AIM_PITCH_PROPERTY, Math.max(-90, Math.min(90, rotation.x)));
+        } catch (error) {
+            if (gatlingAimPropertyErrorReported) continue;
+            gatlingAimPropertyErrorReported = true;
+            console.warn(`[guns] setting ${GATLING_AIM_PITCH_PROPERTY} failed: ${error}`);
+        }
+    }
+
+}, { everyTicks: 1 });
 
 // ---- Reload key (Q) --------------------------------------------------------------------------------------
 
@@ -876,8 +962,7 @@ registerSystem({
         reloadingKeys.clear();
         loadedRounds.clear();
         needsPrimeKeys.clear();
-        lastSwingTick.clear();
-        burstLevel.clear();
+        gatlingRuns.clear();
         dropStates.clear();
         lastHit.clear();
         for (const id of [...aiming.keys()]) stopAim(id);

@@ -6,7 +6,9 @@
             "materials": { "default": "entity_alphatest" },
             "textures": { "default": "textures/entity/gatling_gun" },
             "geometry": { "default": "geometry.gatling_gun" },
-            "render_controllers": ["controller.render.default"]
+            "render_controllers": ["controller.render.default"],
+            "animations": { "aim": "animation.gatling_gun.aim" },
+            "scripts": { "animate": ["aim"] }
         }
     }
 }

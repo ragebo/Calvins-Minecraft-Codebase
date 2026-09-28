@@ -68,22 +68,23 @@ export interface AimConfig {
 
 /**
  * Set only on a gun that is manned, not held: no swing on this gun's itemId ever fires it (nothing ever
- * holds it — it is placed, then ridden), so `systems/guns.ts` instead fires it on a swing from whoever is
- * currently riding `mountEntityId`.
+ * holds it — it is placed, then ridden). Right-clicking it (itemUse, not while riding) places it; a swing
+ * while riding it toggles a self-sustaining fire loop on or off, rather than firing once per swing.
  *
- * There's no engine signal for "the trigger is still held down", only discrete swings, so sustained fire is
- * approximated from real click frequency instead: every qualifying swing "revs" the gun (moves it a step
- * from fireRateTicksStart towards fireRateTicksSpunUp, over spinUpShots consecutive swings each landing
- * within graceTicks of the last one) whether or not that swing's own shot is actually due yet. A gap longer
- * than graceTicks resets it to a cold start. This means clicking fast enough keeps it accelerating even
- * through swings that don't themselves produce a shot — the closest this engine gets to "hold to fire".
+ * There's no engine signal for "the trigger is still held down" — only discrete swings, and confirmed in a
+ * real playtest that holding the button doesn't even repeat those — so "hold to fire" from the original
+ * request is approximated as a toggle instead, the same fix already used for aiming and for the same root
+ * reason. Once started, the loop fires on its own timer, accelerating from fireRateTicksStart towards
+ * fireRateTicksSpunUp over spinUpShots consecutive shots, and keeps going — no more clicking needed — until
+ * a second swing toggles it off, the magazine runs dry, the rider dismounts, or the gun is removed.
  */
 export interface AutomaticConfig {
     readonly mountEntityId: string;
     readonly fireRateTicksStart: number;
     readonly fireRateTicksSpunUp: number;
     readonly spinUpShots: number;
-    readonly graceTicks: number;
+    /** How far away (blocks) a block can be and still be placed on. */
+    readonly placementRange: number;
 }
 
 export interface GunSounds {
@@ -170,6 +171,15 @@ export type GunConfig = ProjectileGunConfig | HitscanGunConfig;
 
 /** The placed, rideable Gatling gun. Same identifier for the carryable item and the placed entity — items and entities are separate registries, so this doesn't collide. */
 export const GATLING_GUN_ENTITY_ID = "bountysys:gatling_gun";
+
+/**
+ * A client-synced entity property (range [-90, 90], degrees) the placed Gatling gun declares: a
+ * resource-pack animation (BountySys_RP/animations/gatling_gun.animation.json) reads it via molang to pitch
+ * its "turret" bone (the receiver, barrels and crank) to match whoever is riding it, the same technique
+ * systems/tumbleweed.ts already uses for its own roll. Yaw needs no such property — the whole entity's own
+ * setRotation already turns the tripod and the turret together, which reads fine for a swiveling mount.
+ */
+export const GATLING_AIM_PITCH_PROPERTY = "bountysys:aim_pitch";
 
 export const GUNS: Record<GunId, GunConfig> = {
     revolver: {
@@ -350,10 +360,10 @@ export const GUNS: Record<GunId, GunConfig> = {
         aim: { fov: 65 },
         automatic: {
             mountEntityId: GATLING_GUN_ENTITY_ID,
-            fireRateTicksStart: 6,
+            fireRateTicksStart: 8,
             fireRateTicksSpunUp: 1,
             spinUpShots: 12,
-            graceTicks: 8
+            placementRange: 6
         },
         sounds: {
             fire: [

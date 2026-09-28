@@ -12,11 +12,18 @@
             },
             "bones": [
                 {
-                    "name": "gun",
+                    "name": "base",
                     "pivot": [0, 0, 0],
                     "cubes": [
                         {"origin":[-8,0,-8],"size":[16,2,16],"uv":{"north":{"uv":[1,0],"uv_size":[1,1]},"east":{"uv":[1,0],"uv_size":[1,1]},"south":{"uv":[1,0],"uv_size":[1,1]},"west":{"uv":[1,0],"uv_size":[1,1]},"up":{"uv":[1,0],"uv_size":[1,1]},"down":{"uv":[1,0],"uv_size":[1,1]}}},
-                        {"origin":[-3,2,-3],"size":[6,10,6],"uv":{"north":{"uv":[0,0],"uv_size":[1,1]},"east":{"uv":[0,0],"uv_size":[1,1]},"south":{"uv":[0,0],"uv_size":[1,1]},"west":{"uv":[0,0],"uv_size":[1,1]},"up":{"uv":[0,0],"uv_size":[1,1]},"down":{"uv":[0,0],"uv_size":[1,1]}}},
+                        {"origin":[-3,2,-3],"size":[6,10,6],"uv":{"north":{"uv":[0,0],"uv_size":[1,1]},"east":{"uv":[0,0],"uv_size":[1,1]},"south":{"uv":[0,0],"uv_size":[1,1]},"west":{"uv":[0,0],"uv_size":[1,1]},"up":{"uv":[0,0],"uv_size":[1,1]},"down":{"uv":[0,0],"uv_size":[1,1]}}}
+                    ]
+                },
+                {
+                    "name": "turret",
+                    "parent": "base",
+                    "pivot": [0, 15, -1],
+                    "cubes": [
                         {"origin":[-7,12,-6],"size":[14,6,10],"uv":{"north":{"uv":[2,0],"uv_size":[1,1]},"east":{"uv":[2,0],"uv_size":[1,1]},"south":{"uv":[2,0],"uv_size":[1,1]},"west":{"uv":[2,0],"uv_size":[1,1]},"up":{"uv":[2,0],"uv_size":[1,1]},"down":{"uv":[2,0],"uv_size":[1,1]}}},
                         {"origin":[-1,18,-20],"size":[2,2,14],"uv":{"north":{"uv":[3,0],"uv_size":[1,1]},"east":{"uv":[3,0],"uv_size":[1,1]},"south":{"uv":[3,0],"uv_size":[1,1]},"west":{"uv":[3,0],"uv_size":[1,1]},"up":{"uv":[3,0],"uv_size":[1,1]},"down":{"uv":[3,0],"uv_size":[1,1]}}},
                         {"origin":[3,16,-20],"size":[2,2,14],"uv":{"north":{"uv":[3,0],"uv_size":[1,1]},"east":{"uv":[3,0],"uv_size":[1,1]},"south":{"uv":[3,0],"uv_size":[1,1]},"west":{"uv":[3,0],"uv_size":[1,1]},"up":{"uv":[3,0],"uv_size":[1,1]},"down":{"uv":[3,0],"uv_size":[1,1]}}},

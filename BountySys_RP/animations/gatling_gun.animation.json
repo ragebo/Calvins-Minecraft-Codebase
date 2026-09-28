@@ -1,0 +1,13 @@
+{
+    "format_version": "1.10.0",
+    "animations": {
+        "animation.gatling_gun.aim": {
+            "loop": true,
+            "bones": {
+                "turret": {
+                    "rotation": ["query.property('bountysys:aim_pitch')", 0, 0]
+                }
+            }
+        }
+    }
+}
