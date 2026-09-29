@@ -85,6 +85,10 @@ export interface AutomaticConfig {
     readonly spinUpShots: number;
     /** How far away (blocks) a block can be and still be placed on. */
     readonly placementRange: number;
+    /** The model's barrels turn this many degrees per tick while firing, ramping the same way the fire rate
+     *  does (see fireRateTicksStart/SpunUp) — cold at the first shot, fastest once fully spun up. */
+    readonly spinDegreesStart: number;
+    readonly spinDegreesSpunUp: number;
 }
 
 export interface GunSounds {
@@ -175,11 +179,21 @@ export const GATLING_GUN_ENTITY_ID = "bountysys:gatling_gun";
 /**
  * A client-synced entity property (range [-90, 90], degrees) the placed Gatling gun declares: a
  * resource-pack animation (BountySys_RP/animations/gatling_gun.animation.json) reads it via molang to pitch
- * its "turret" bone (the receiver, barrels and crank) to match whoever is riding it, the same technique
- * systems/tumbleweed.ts already uses for its own roll. Yaw needs no such property — the whole entity's own
- * setRotation already turns the tripod and the turret together, which reads fine for a swiveling mount.
+ * its "turret" bone (the receiver and the crank — "barrels" is a further child bone, see
+ * GATLING_BARREL_SPIN_PROPERTY, and pitches along with it for free) to match whoever is riding it, the same
+ * technique systems/tumbleweed.ts already uses for its own roll. Yaw needs no such property — the whole
+ * entity's own setRotation already turns every bone together, which reads fine for a swiveling mount.
  */
 export const GATLING_AIM_PITCH_PROPERTY = "bountysys:aim_pitch";
+
+/**
+ * A client-synced entity property (range [0, 360), degrees) the "barrels" bone's own rotation reads via the
+ * same animation file, around its own length (so the cluster spins like a real Gatling gun's) rather than
+ * the pitch axis "turret" uses. Driven only while the gun is actively firing (config/guns.ts's
+ * spinDegreesStart/SpunUp); left wherever it stopped the rest of the time, same as a real one would coast to
+ * a stop wherever it happened to be facing.
+ */
+export const GATLING_BARREL_SPIN_PROPERTY = "bountysys:barrel_spin";
 
 export const GUNS: Record<GunId, GunConfig> = {
     revolver: {
@@ -361,9 +375,11 @@ export const GUNS: Record<GunId, GunConfig> = {
         automatic: {
             mountEntityId: GATLING_GUN_ENTITY_ID,
             fireRateTicksStart: 8,
-            fireRateTicksSpunUp: 1,
+            fireRateTicksSpunUp: 2,
             spinUpShots: 12,
-            placementRange: 6
+            placementRange: 6,
+            spinDegreesStart: 12,
+            spinDegreesSpunUp: 40
         },
         sounds: {
             fire: [

@@ -5,7 +5,7 @@ import { fake, system, world, load, checks, strip, leftClick, rightClick, pressQ
 // so does clicking an empty gun. Every event sequence here is the one the real game sent (content log, 2026-09-20:
 // docs/test-cards/AIM-SPIKE.md), in the same order. Nothing in it depends on sneaking, which a horse takes.
 
-const { GUNS, AMMO, GATLING_AIM_PITCH_PROPERTY } = await load("config/guns.js");
+const { GUNS, AMMO, GATLING_AIM_PITCH_PROPERTY, GATLING_BARREL_SPIN_PROPERTY } = await load("config/guns.js");
 const { AIM } = await load("config/balance.js");
 await load("systems/guns.js");
 const { listSystems } = await load("core/registry.js");
@@ -861,6 +861,60 @@ test("aim tracking stops cleanly once the rider dismounts, no error", () => {
     let threw = null;
     try { fake.advance(5); } catch (e) { threw = e; }
     check("nothing thrown", threw === null, threw ? String(threw) : "");
+    done();
+});
+
+/** The forward rotation from `prev` to `next`, correct even across a 360 -> 0 wrap, as long as the real
+ *  per-tick step is well under 180 degrees (true here: spinDegreesSpunUp tops out at 40). */
+const wrappedDelta = (next, prev) => ((next - prev) % 360 + 360) % 360;
+
+test("the barrels spin while firing, and the per-tick rate ramps up the same way the fire rate does", () => {
+    const { check, done } = checks();
+    const p = manned();
+    const mount = p.ridingOn;
+
+    leftClick(p);
+    const early = mount.getProperty(GATLING_BARREL_SPIN_PROPERTY) ?? 0;
+    fake.advance(1);
+    const earlyDelta = wrappedDelta(mount.getProperty(GATLING_BARREL_SPIN_PROPERTY), early);
+    check("spinning from the very first tick of firing", earlyDelta > 0, String(earlyDelta));
+
+    fake.advance(ticksFor(GATLING.automatic.spinUpShots + 3));   // well into the spun-up part of the burst
+    const late = mount.getProperty(GATLING_BARREL_SPIN_PROPERTY);
+    fake.advance(1);
+    const lateDelta = wrappedDelta(mount.getProperty(GATLING_BARREL_SPIN_PROPERTY), late);
+
+    check("(setup) actually spun up (well past spinUpShots by now)", shotsFired().length > GATLING.automatic.spinUpShots, String(shotsFired().length));
+    check("later ticks turn the barrels faster than the first tick, same ramp as the fire rate", lateDelta > earlyDelta, `${earlyDelta} -> ${lateDelta}`);
+    done();
+});
+
+test("the barrel-spin property stays within [0, 360) even after many full turns' worth of firing", () => {
+    const { check, done } = checks();
+    const p = manned();
+    const mount = p.ridingOn;
+
+    leftClick(p);
+    fake.advance(ticksFor(GATLING.magazineSize + GATLING.automatic.spinUpShots + 5));   // the whole magazine, several turns' worth of spin at this rate
+
+    const synced = mount.getProperty(GATLING_BARREL_SPIN_PROPERTY);
+    check("wrapped into [0, 360), not left to grow unbounded (setProperty throws outside a property's declared range in the real game)", typeof synced === "number" && synced >= 0 && synced < 360, String(synced));
+    done();
+});
+
+test("the barrels stop advancing once firing stops, coasting to a halt instead of snapping back to 0", () => {
+    const { check, done } = checks();
+    const p = manned();
+    const mount = p.ridingOn;
+
+    leftClick(p);
+    fake.advance(ticksFor(5));
+    leftClick(p);   // the second click stops the loop
+    const stoppedAt = mount.getProperty(GATLING_BARREL_SPIN_PROPERTY);
+    check("(setup) it had actually spun somewhere before stopping", typeof stoppedAt === "number" && stoppedAt > 0, String(stoppedAt));
+
+    fake.advance(50);   // aim tracking (yaw/pitch) keeps running every tick regardless; only the spin should freeze
+    check("frozen exactly where it stopped, not reset to 0 and not still advancing", mount.getProperty(GATLING_BARREL_SPIN_PROPERTY) === stoppedAt, `${stoppedAt} -> ${mount.getProperty(GATLING_BARREL_SPIN_PROPERTY)}`);
     done();
 });
 

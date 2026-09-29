@@ -222,7 +222,12 @@ further clicks at all, until a second swing, an empty magazine, or a dismount st
 While mounted, the gun also turns to track whoever is riding it: yaw is just the whole entity's own rotation
 (set every tick to the rider's), and pitch is isolated to the model's "turret" bone alone (so the tripod never
 tips) via a client-synced entity property (`bountysys:aim_pitch`) a resource-pack animation reads through
-molang — the same technique `systems/tumbleweed.ts` uses for its own roll.
+molang — the same technique `systems/tumbleweed.ts` uses for its own roll. A third bone, `barrels` (the five
+barrels and their muzzle caps, parented to `turret` so it still inherits the pitch), spins around its own
+length while a fire loop is active — a second client-synced property (`bountysys:barrel_spin`), advanced every
+tick by the same burst-ramped amount the fire rate itself uses and wrapped modulo 360, driving the same
+animation file. It's left alone the instant nothing is firing, so the barrels coast to a stop wherever they
+were rather than snapping back to 0.
 
 ### Game menu
 

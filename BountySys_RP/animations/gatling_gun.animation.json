@@ -6,6 +6,9 @@
             "bones": {
                 "turret": {
                     "rotation": ["query.property('bountysys:aim_pitch')", 0, 0]
+                },
+                "barrels": {
+                    "rotation": [0, 0, "query.property('bountysys:barrel_spin')"]
                 }
             }
         }

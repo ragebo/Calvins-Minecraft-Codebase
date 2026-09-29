@@ -6,18 +6,20 @@
 // Same technique as scripts/gen-train-model.mjs (read that file's own header first): a handful of boxes, and
 // a texture that is one flat colour per texel, so no art has to be drawn and a colour change is one line
 // here. To use a hand-made Blockbench model instead, replace `gatling_gun.geo.json` (keep the geometry
-// identifier `geometry.gatling_gun`, and the "base"/"turret" bone names systems/guns.ts's animation targets)
-// and the texture, and stop running this script.
+// identifier `geometry.gatling_gun`, and the "base"/"turret"/"barrels" bone names systems/guns.ts's
+// animation targets) and the texture, and stop running this script.
 //
-// Units are model pixels, 16 to a block. Two bones, so the gun can pitch up and down to follow whoever is
-// riding it without tipping the tripod it's planted on:
+// Units are model pixels, 16 to a block. Three bones:
 //   - "base": the wooden plate and post. Never rotates.
-//   - "turret": the brass receiver, the five barrels, their muzzle caps and the crank — everything that
-//     should visibly aim — parented to "base", pivoting where a real gun would hinge (the receiver's
-//     vertical centre). systems/guns.ts drives this bone's pitch via a client-synced entity property
-//     (BountySys_RP/animations/gatling_gun.animation.json reads it via molang), the same technique
-//     systems/tumbleweed.ts already uses for its own roll; yaw needs no such property, since the whole
-//     entity's own setRotation already turns both bones together.
+//   - "turret": the brass receiver and the crank, parented to "base", pivoting where a real gun would hinge
+//     (the receiver's vertical centre) so it can pitch up and down to follow whoever is riding it, without
+//     tipping the tripod. Driven by a client-synced entity property (systems/guns.ts, via
+//     BountySys_RP/animations/gatling_gun.animation.json), the same technique systems/tumbleweed.ts already
+//     uses for its own roll.
+//   - "barrels": the five barrels and their muzzle caps, parented to "turret" (so they inherit its pitch),
+//     pivoting on the barrel circle's own centre so they can spin around their own length while firing — a
+//     second, independent client-synced property drives this one.
+// Yaw needs no property at all: the whole entity's own setRotation already turns every bone together.
 // The barrels point forward (-Z, the way Bedrock models face); the seat systems/guns.ts's rideable
 // component defines sits just behind and above the receiver, roughly where a gunner would stand to crank it.
 // `test/assets.test.mjs` runs `buildGeometry()` and `buildPng()` and fails when the committed files are not what it makes.
@@ -46,11 +48,15 @@ const BASE = [
     [-3, 2, -3, 6, 10, 6, "wood"]
 ];
 
-/** Everything that visibly aims, pivoting around TURRET_PIVOT (below) for pitch. */
+/** Pitches with the barrels, but never spins: the receiver housing and its crank. */
 const TURRET = [
-    // Receiver: the brass block the barrels and the crank attach to.
     [-7, 12, -6, 14, 6, 10, "brass"],
-    // Five barrels ringing the receiver's centre, all pointing forward out of its front (-Z) face.
+    // Crank handle on the side, for the "you spin it up" read.
+    [7, 13, -2, 3, 3, 2, "darkIron"]
+];
+
+/** Spins around its own length (the Z axis) while firing, ringing BARRELS_PIVOT's centre. */
+const BARRELS = [
     [-1, 18, -20, 2, 2, 14, "iron"],
     [3, 16, -20, 2, 2, 14, "iron"],
     [-5, 16, -20, 2, 2, 14, "iron"],
@@ -61,13 +67,15 @@ const TURRET = [
     [3, 16, -21, 2, 2, 1, "darkIron"],
     [-5, 16, -21, 2, 2, 1, "darkIron"],
     [2, 12, -21, 2, 2, 1, "darkIron"],
-    [-4, 12, -21, 2, 2, 1, "darkIron"],
-    // Crank handle on the side, for the "you spin it up" read.
-    [7, 13, -2, 3, 3, 2, "darkIron"]
+    [-4, 12, -21, 2, 2, 1, "darkIron"]
 ];
 
 /** The receiver's own vertical and depth centre: where a real gun's elevation hinge would sit. */
 const TURRET_PIVOT = [0, 15, -1];
+/** The barrel circle's own centre: pitches along with TURRET_PIVOT (it's a child of "turret"), spins around
+ *  this axis independently of it. The exact Z doesn't affect how a Z-axis spin looks, only where along the
+ *  barrels' own length the (immaterial) axis line sits. */
+const BARRELS_PIVOT = [0, 15, -6];
 
 const FACES = ["north", "east", "south", "west", "up", "down"];
 
@@ -95,7 +103,8 @@ export function buildGeometry() {
             },
             bones: [
                 { name: "base", pivot: [0, 0, 0], cubes: cubesFor(BASE) },
-                { name: "turret", parent: "base", pivot: TURRET_PIVOT, cubes: cubesFor(TURRET) }
+                { name: "turret", parent: "base", pivot: TURRET_PIVOT, cubes: cubesFor(TURRET) },
+                { name: "barrels", parent: "turret", pivot: BARRELS_PIVOT, cubes: cubesFor(BARRELS) }
             ]
         }]
     };
@@ -107,8 +116,8 @@ export function renderGeometry() {
     const bones = geometry["minecraft:geometry"][0].bones;
 
     // Each bone's real cubes are pulled out and replaced with a unique placeholder before stringifying, then
-    // spliced back in as pre-indented one-line-per-cube text — the placeholder's own name keeps the two
-    // bones' replacements from colliding with each other.
+    // spliced back in as pre-indented one-line-per-cube text — the placeholder's own name keeps the bones'
+    // replacements from colliding with each other.
     const cubeLines = bones.map((bone) => bone.cubes.map((cube) => " ".repeat(24) + JSON.stringify(cube)).join(",\n"));
     bones.forEach((bone) => { bone.cubes = [`@@CUBES_${bone.name}@@`]; });
 

@@ -4,7 +4,7 @@ import {
     type EntityApplyDamageByProjectileOptions, type EntityApplyDamageOptions,
     EquipmentSlot, EntityDamageCause, EntitySwingSource
 } from "@minecraft/server";
-import { AMMO, GUNS, BULLET_ENTITY_ID, BULLET_LIFETIME_TICKS, GATLING_AIM_PITCH_PROPERTY, HIT_WINDOW_TICKS, type AutomaticConfig, type GunConfig, type GunId, type MuzzleEffects, type SoundCue } from "../config/guns.js";
+import { AMMO, GUNS, BULLET_ENTITY_ID, BULLET_LIFETIME_TICKS, GATLING_AIM_PITCH_PROPERTY, GATLING_BARREL_SPIN_PROPERTY, HIT_WINDOW_TICKS, type AutomaticConfig, type GunConfig, type GunId, type MuzzleEffects, type SoundCue } from "../config/guns.js";
 import { AIM, TUMBLEWEED_ENTITY_ID } from "../config/balance.js";
 import { hideScope, showScope, zoomReset, zoomTo } from "../core/aim.js";
 import { registerSystem } from "../core/registry.js";
@@ -766,15 +766,31 @@ world.afterEvents.itemUse.subscribe((event) => {
 // ---- Tracking the rider's aim ----------------------------------------------------------------------------
 //
 // A manned Gatling gun turns to follow whoever is riding it, not just while firing. Yaw is the whole
-// entity's own rotation (it already turns the tripod and the turret together, which reads fine for a
-// swiveling mount); pitch is isolated to the "turret" bone alone via a client-synced entity property and a
-// resource-pack animation reading it (BountySys_RP/animations/gatling_gun.animation.json), the same
-// technique systems/tumbleweed.ts already uses for its own roll — the tripod itself never tips.
+// entity's own rotation (it already turns every bone together, which reads fine for a swiveling mount);
+// pitch is isolated to the "turret" bone alone via a client-synced entity property and a resource-pack
+// animation reading it (BountySys_RP/animations/gatling_gun.animation.json), the same technique
+// systems/tumbleweed.ts already uses for its own roll — the tripod itself never tips. The same animation
+// also spins the "barrels" bone — a child of "turret", so it pitches along for free — around its own length
+// while a fire loop is actively running, ramping the same way the fire rate itself does; it simply stops
+// advancing (not resets) once nothing is firing, coasting to a stop wherever it happened to be, same as a
+// real one would.
 //
 // Every tick, off the player list every other onTick handler already shares, rather than a dimension-wide
 // entity scan: cheap, since only ever a handful of players are ever riding one of these at once.
 
-let gatlingAimPropertyErrorReported = false;
+let gatlingPropertyErrorReported = false;
+
+/** A bad property write here must never break aim tracking for everyone else riding one; each broken
+ *  property name is reported once, not once per tick per rider. */
+function setGatlingProperty(mount: Entity, property: string, value: number): void {
+    try {
+        mount.setProperty(property, value);
+    } catch (error) {
+        if (gatlingPropertyErrorReported) return;
+        gatlingPropertyErrorReported = true;
+        console.warn(`[guns] setting ${property} failed: ${error}`);
+    }
+}
 
 onTick("guns:gatling-aim", (ctx) => {
 
@@ -788,14 +804,16 @@ onTick("guns:gatling-aim", (ctx) => {
 
         const rotation = player.getRotation();
         mount.setRotation({ x: mount.getRotation().x, y: rotation.y });
+        setGatlingProperty(mount, GATLING_AIM_PITCH_PROPERTY, Math.max(-90, Math.min(90, rotation.x)));
 
-        try {
-            mount.setProperty(GATLING_AIM_PITCH_PROPERTY, Math.max(-90, Math.min(90, rotation.x)));
-        } catch (error) {
-            if (gatlingAimPropertyErrorReported) continue;
-            gatlingAimPropertyErrorReported = true;
-            console.warn(`[guns] setting ${GATLING_AIM_PITCH_PROPERTY} failed: ${error}`);
-        }
+        const run = gatlingRuns.get(stateKey(player, mountedGun.id));
+        if (!run) continue;   // not currently firing: leave the barrels wherever they stopped
+
+        const t = (run.burst - 1) / Math.max(1, run.automatic.spinUpShots - 1);
+        const step = run.automatic.spinDegreesStart + (run.automatic.spinDegreesSpunUp - run.automatic.spinDegreesStart) * t;
+        const spin = mount.getProperty(GATLING_BARREL_SPIN_PROPERTY);
+        const next = ((typeof spin === "number" ? spin : 0) + step) % 360;
+        setGatlingProperty(mount, GATLING_BARREL_SPIN_PROPERTY, next);
     }
 
 }, { everyTicks: 1 });
