@@ -13,7 +13,7 @@ The director can also queue, apply cooldowns, announce and pick an event by weig
 - A stopwatch.
 - Places (run `/tp @s <x> <y> <z>`):
   - **fort**: `-17 70 -52` (area x -30..-4, y 69..79, z -65..-39)
-  - **ranch**: `-286 69 -53` (area x -295..-277, y 68..83, z -66..-41). Anyone standing inside counts as a raider, tagged or not.
+  - **ranch**: `-286 69 -53` (area x -295..-277, y 68..83, z -66..-41). Only an `outlaw`-tagged, non-eliminated player standing inside counts as a raider (ARCH-12 fixed this to match the raid's own heal loop and chat wording — see its card; before that fix, any non-eliminated player counted, law included).
   - **outside**: anywhere well clear of both areas, for example your world spawn.
 - Between sections run `/scriptevent rae:reset` (expect "All systems reset.") so the next one starts from a free slot.
 
@@ -28,7 +28,7 @@ Wherever a step says "no errors": no chat line starting `[EVENT ERROR]`, `[TICK 
 | A1 | Load the world. Run `/scriptevent rae:debug`. | The `Systems:` line lists `director` and no longer lists `event-lock`. The `Events:` line still lists `bounty:fort`, `bounty:ranch` and `bounty:train` (and the other public ids). |
 | A2 | At **fort**, run `/scriptevent bounty:fort`. | "Raid started! 1 player(s)." and the first wave spawns (2 pillagers, 1 vindicator for one player). |
 | A3 | Walk out to **outside**. | Within a second: "[DEBUG] Fort raid ended" (red) and the mobs vanish. |
-| A4 | At **ranch**, run `/scriptevent bounty:ranch`. | "Ranch raid started!", then "Raid Started! 1 outlaw(s).", and 2 pillagers spawn. |
+| A4 | Tag yourself `/tag @s add outlaw` (needed since ARCH-12 — see setup above), then at **ranch**, run `/scriptevent bounty:ranch`. | "Ranch raid started!", then "Raid Started! 1 outlaw(s).", and 2 pillagers spawn. |
 | A5 | Walk out to **outside**. | Within a second: "Raid ended early." and the defenders vanish. |
 | A6 | Run `/scriptevent bounty:train`. | "The train is moving out!", "The bridge has been destroyed!", and the train hops along the track. |
 
