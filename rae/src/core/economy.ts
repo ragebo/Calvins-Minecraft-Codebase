@@ -69,13 +69,21 @@ export function clearBounty(target: Target): void {
 // HEALTH CHECK
 // ---------------------------------------------------
 
-/** Call once at startup. Reports missing objectives instead of failing quietly. */
-export function verifyScoreboards(): boolean {
+/** Which of the two required scoreboard objectives are absent right now. Pure: no logging, no side effect. */
+export function missingScoreboards(): readonly string[] {
 
     const missing: string[] = [];
 
     if (!coins()) missing.push("coins");
     if (!bounty()) missing.push("bounty");
+
+    return missing;
+}
+
+/** Call once at startup. Reports missing objectives instead of failing quietly. */
+export function verifyScoreboards(): boolean {
+
+    const missing = missingScoreboards();
 
     if (missing.length > 0) {
         error("economy", `Missing scoreboard objectives: ${missing.join(", ")}`);
