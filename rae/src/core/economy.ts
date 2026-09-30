@@ -1,4 +1,5 @@
 import { world, type Player, type ScoreboardIdentity } from "@minecraft/server";
+import { error } from "./log.js";
 
 /**
  * Fixes the scattered-economy problem from V1.
@@ -77,9 +78,7 @@ export function verifyScoreboards(): boolean {
     if (!bounty()) missing.push("bounty");
 
     if (missing.length > 0) {
-        world.sendMessage(
-            `§c[ECONOMY] Missing scoreboard objectives: ${missing.join(", ")}`
-        );
+        error("economy", `Missing scoreboard objectives: ${missing.join(", ")}`);
         return false;
     }
 

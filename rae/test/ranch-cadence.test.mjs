@@ -30,7 +30,14 @@ overworld.runCommand = (command) => { log.push({ tick: fake.tick, command }); re
 
 const chat = () => fake.chat.map(strip);
 const defenders = () => overworld.getEntities({ tags: ["ranch_defender"] });
-const errors = () => fake.chat.filter((m) => m.includes("§c["));
+
+// core/log's error() reports a failure to the console (and to an operator), not to
+// world.sendMessage/fake.chat any more, so errors() reads console.error instead.
+const consoleErrors = [];
+const realConsoleError = console.error;
+console.error = (...args) => consoleErrors.push(args.join(" "));
+process.on("exit", () => { console.error = realConsoleError; });
+const errors = () => consoleErrors;
 const unlockCommand = `setblock ${RANCH_SAFE_TRIGGER.x} ${RANCH_SAFE_TRIGGER.y} ${RANCH_SAFE_TRIGGER.z} redstone_block`;
 const regenCommand = `effect @s regeneration ${RANCH.regenTicks} 0 true`;
 const healTicks = () => log.filter((l) => l.command === regenCommand).map((l) => l.tick);
@@ -61,6 +68,7 @@ function scene() {
     for (const name of ["raids", "director"]) listSystems().find((s) => s.name === name).reset();
     fake.advanceTo(Math.ceil(fake.tick / PASS) * PASS + 7);
     log.length = 0;
+    consoleErrors.length = 0;
 }
 
 const startRaid = () => { const t0 = fake.tick; system.afterEvents.scriptEventReceive.emit({ id: "bounty:ranch" }); return t0; };

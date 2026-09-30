@@ -3,6 +3,7 @@ import { JAIL_SITES } from "../config/world.js";
 import { registerSystem } from "../core/registry.js";
 import { onDeath, onScriptEvent, onSpawn } from "../core/events.js";
 import { addCoins, getBounty, clearBounty } from "../core/economy.js";
+import { error } from "../core/log.js";
 import { getRecord, recordOf, getJailSite, setJailSite, syncTags, update, updateById } from "../core/state.js";
 import { prisoners } from "../core/players.js";
 
@@ -66,7 +67,7 @@ onDeath("jail:capture", 100, (ctx) => {
     const deadIdentity: ScoreboardIdentity | undefined = dead.scoreboardIdentity;
 
     if (!deadIdentity) {
-        ctx.killer.sendMessage("§c[DEBUG] Could not get dead outlaw's scoreboard identity.");
+        error("jail", "Could not get a dead outlaw's scoreboard identity.");
         return;
     }
 

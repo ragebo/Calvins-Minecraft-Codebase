@@ -18,7 +18,14 @@ const isJail = (spot) => JAIL_SITES.some((s) => sameSpot(s.jail, spot));
 const isOutlawSpawn = (spot) => OUTLAW_SPAWNS.some((s) => sameSpot(s, spot));
 const chat = () => fake.chat.map(strip);
 const said = (text) => chat().some((m) => m.includes(text));
-const errorLines = () => fake.chat.filter((m) => m.includes("§c["));         // [DEATH ERROR], [SPAWN ERROR], [RESET ERROR], ...
+
+// core/log's error() reports a handler failure to the console (and to an operator), not to
+// world.sendMessage/fake.chat any more, so "no handler failed" is now read from console.error.
+const consoleErrors = [];
+const realConsoleError = console.error;
+console.error = (...args) => consoleErrors.push(args.join(" "));
+process.on("exit", () => { console.error = realConsoleError; });
+const errorLines = () => consoleErrors;                                     // [economy-rules], [main], [registry], [events], ...
 const coinsOf = (name) => world.scoreboard.getObjective("coins").getScore(name) ?? 0;
 const bountyOf = (name) => world.scoreboard.getObjective("bounty").getScore(name) ?? 0;
 const droppedItems = () => fake.entities.filter((e) => e.typeId === "minecraft:item").length;
@@ -74,6 +81,7 @@ function scene(...specs) {
     for (const player of players) emitSpawn(player, true);
     for (const player of players) { player.teleports.length = 0; player.messages.length = 0; }
     fake.chat.length = 0;
+    consoleErrors.length = 0;
     return players;
 }
 

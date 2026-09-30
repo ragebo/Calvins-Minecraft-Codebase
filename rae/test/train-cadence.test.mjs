@@ -60,7 +60,14 @@ function structureCommands() {
 const at = (tick) => structureCommands().filter((c) => c.tick === tick);
 const chat = () => fake.chat.map(strip);
 const guards = () => overworld.getEntities({ tags: ["train_guard"] });
-const errors = () => fake.chat.filter((m) => m.includes("§c["));
+
+// core/log's error() reports a failure to the console (and to an operator), not to
+// world.sendMessage/fake.chat any more, so errors() reads console.error instead.
+const consoleErrors = [];
+const realConsoleError = console.error;
+console.error = (...args) => consoleErrors.push(args.join(" "));
+process.on("exit", () => { console.error = realConsoleError; });
+const errors = () => consoleErrors;
 
 /** A quiet world with the train system reset, started from a tick that is off both the 10 and the 20 grid. */
 function scene() {
@@ -69,6 +76,7 @@ function scene() {
     for (const name of ["train", "director"]) listSystems().find((s) => s.name === name).reset();
     fake.advanceTo(Math.ceil(fake.tick / 20) * 20 + 3);
     log.length = 0;
+    consoleErrors.length = 0;
 }
 
 function startRobbery() {
@@ -200,7 +208,7 @@ test("a robbery that breaks stops itself, frees the lock and reports it", () => 
     } finally {
         overworld.spawnEntity = realSpawn;
     }
-    check("the failure is reported", chat().some((m) => m.startsWith("[TRAIN ERROR] Robbery stopped:") && m.includes("boom")), chat().join(" | "));
+    check("the failure is reported", errors().some((m) => m.startsWith("[train] Robbery stopped:") && m.includes("boom")), errors().join(" | "));
     check("the lock is released", activeEvent() === null);
 
     const before = structureCommands().length;

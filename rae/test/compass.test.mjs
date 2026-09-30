@@ -251,12 +251,23 @@ test("errors: one broken player doesn't stop others, and reports are throttled",
     const broken = fake.makePlayer("Broken", { tags: ["law"], holding: COMPASS });
     broken.getViewDirection = () => { throw new Error("boom"); };
 
-    const okCount = sheriff.actionBar.length;
-    pass(); pass(); pass();
-    check("one broken player doesn't stop others", sheriff.actionBar.length === okCount + 3);
-    check("repeat errors are throttled to one message", fake.chat.filter((m) => m.includes("COMPASS ERROR")).length === 1, JSON.stringify(fake.chat));
-    advance(201);
-    pass();
-    check("error reports resume after the throttle window", fake.chat.filter((m) => m.includes("COMPASS ERROR")).length === 2);
+    // core/log's error() reports to the console (and to an operator), not to world.sendMessage, so
+    // the throttle is now observed through console.error rather than fake.chat.
+    const errors = [];
+    const originalError = console.error;
+    console.error = (...args) => errors.push(args.join(" "));
+
+    try {
+        const okCount = sheriff.actionBar.length;
+        pass(); pass(); pass();
+        check("one broken player doesn't stop others", sheriff.actionBar.length === okCount + 3);
+        check("repeat errors are throttled to one message", errors.filter((m) => m.includes("[compass]")).length === 1, JSON.stringify(errors));
+        check("nothing is broadcast to chat any more", fake.chat.length === 0, JSON.stringify(fake.chat));
+        advance(201);
+        pass();
+        check("error reports resume after the throttle window", errors.filter((m) => m.includes("[compass]")).length === 2, JSON.stringify(errors));
+    } finally {
+        console.error = originalError;
+    }
     done();
 });

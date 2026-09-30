@@ -1,4 +1,5 @@
 import { world } from "@minecraft/server";
+import { error } from "./log.js";
 
 /**
  * Fixes the reset bug from V1.
@@ -45,10 +46,11 @@ export function resetAllSystems(): void {
 
     // Then let each system clear its own internal state.
     for (const system of systems) {
+        const name = system.name;
         try {
             system.reset();
-        } catch (error) {
-            world.sendMessage(`§c[RESET ERROR] ${system.name}: ${error}`);
+        } catch (err) {
+            error("registry", `${name}: ${err}`);
         }
     }
 }

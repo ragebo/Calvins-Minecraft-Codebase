@@ -1,3 +1,4 @@
+import { error } from "./log.js";
 import { registerPersistable } from "./persist.js";
 import { resetAllSystems } from "./registry.js";
 
@@ -77,9 +78,9 @@ function transition(to: Phase, reason?: EndReason): boolean {
 
         try {
             listener.fn(change);
-        } catch (error) {
+        } catch (err) {
             // A broken subscriber must not stop the round or the other subscribers.
-            console.error(`[round] a ${to} subscriber threw: ${error}`);
+            error("round", `a ${to} subscriber threw: ${err}`);
         }
     }
 
@@ -121,7 +122,7 @@ export function resetRound(): void {
         phase = "IDLE";
         for (const listener of [...listeners]) {
             if (listener.on !== "*" && listener.on !== "IDLE") continue;
-            try { listener.fn(change); } catch (error) { console.error(`[round] an IDLE subscriber threw: ${error}`); }
+            try { listener.fn(change); } catch (err) { error("round", `an IDLE subscriber threw: ${err}`); }
         }
     }
 

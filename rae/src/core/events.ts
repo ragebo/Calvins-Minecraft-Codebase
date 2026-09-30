@@ -1,4 +1,5 @@
 import { world, system, type Entity, type Player } from "@minecraft/server";
+import { error } from "./log.js";
 
 /**
  * Fixes the scattered-subscriber problem from V1.
@@ -103,8 +104,8 @@ world.afterEvents.playerSpawn.subscribe((event) => {
     }
 });
 
-function reportHandlerError(kind: string, name: string, error: unknown): void {
-    world.sendMessage(`§c[${kind} ERROR] ${name}: ${error}`);
+function reportHandlerError(kind: string, name: string, err: unknown): void {
+    error("events", `${kind} ${name}: ${err}`);
 }
 
 /**

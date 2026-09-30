@@ -35,10 +35,21 @@ test("startup announces itself and reports no errors when the scoreboards exist"
     fake.reset();
     fake.addObjective("coins");
     fake.addObjective("bounty");
-    fake.advance(1);                                   // main.ts schedules its startup message with system.run
+
+    // core/log's error() reports a failure to the console, not to world.sendMessage/fake.chat any
+    // more, so "no errors" is checked there too now, alongside the (still valid) chat check.
+    const errors = [];
+    const originalError = console.error;
+    console.error = (...args) => errors.push(args.join(" "));
+    try {
+        fake.advance(1);                                // main.ts schedules its startup message with system.run
+    } finally {
+        console.error = originalError;
+    }
     const chat = fake.chat.map(strip);
     assert.ok(chat.some((m) => m.includes("RAE loaded")), `chat was: ${chat.join(" | ")}`);
     assert.ok(!fake.chat.some((m) => m.includes("§c[")), `unexpected error in chat: ${fake.chat.join(" | ")}`);
+    assert.ok(errors.length === 0, `unexpected console errors: ${errors.join(" | ")}`);
 });
 
 test("rae:debug lists the registered systems", () => {
@@ -51,6 +62,16 @@ test("rae:debug lists the registered systems", () => {
 
 test("missing scoreboards are reported by name", () => {
     fake.reset();
-    system.afterEvents.scriptEventReceive.emit({ id: "rae:debug", sourceEntity: undefined, message: "" });
-    assert.ok(fake.chat.map(strip).some((m) => m.includes("Missing scoreboard objectives") && m.includes("coins")));
+
+    // verifyScoreboards() now reports through core/log's error() (console, plus an operator), not
+    // world.sendMessage/fake.chat.
+    const errors = [];
+    const originalError = console.error;
+    console.error = (...args) => errors.push(args.join(" "));
+    try {
+        system.afterEvents.scriptEventReceive.emit({ id: "rae:debug", sourceEntity: undefined, message: "" });
+    } finally {
+        console.error = originalError;
+    }
+    assert.ok(errors.some((m) => m.includes("Missing scoreboard objectives") && m.includes("coins")));
 });

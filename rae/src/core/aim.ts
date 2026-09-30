@@ -1,5 +1,6 @@
 import { system, type Player } from "@minecraft/server";
 import { AIM } from "../config/balance.js";
+import { warn } from "./log.js";
 import { clearTitle, showTitle } from "./ui.js";
 
 /**
@@ -17,7 +18,7 @@ const reported = new Set<string>();
 function report(what: string, error: unknown): void {
     if (reported.has(what)) return;
     reported.add(what);
-    console.warn(`[aim] ${what} failed: ${error}`);
+    warn("aim", `${what} failed: ${error}`);
 }
 
 /**

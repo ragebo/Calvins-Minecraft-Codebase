@@ -3,6 +3,7 @@ import { COMPASS } from "../config/balance.js";
 import { registerSystem } from "../core/registry.js";
 import { onTick } from "../core/tick.js";
 import { getBounty } from "../core/economy.js";
+import { error } from "../core/log.js";
 import { setActionBar } from "../core/ui.js";
 import { relativeBearing, bearingBar } from "../logic/bearing.js";
 
@@ -170,12 +171,13 @@ onTick("compass", () => {
 
             setActionBar(player, "compass", renderReadout(player, getMode(player)));
 
-        } catch (error) {
+        } catch (err) {
             // Runs several times a second — throttle so a persistent
-            // failure can't flood chat.
+            // failure can't flood the console (and an operator's chat).
             if (system.currentTick - lastErrorTick > 200) {
                 lastErrorTick = system.currentTick;
-                world.sendMessage(`§c[COMPASS ERROR] ${player.name}: ${error}`);
+                const name = player.name;
+                error("compass", `${name}: ${err}`);
             }
         }
     }

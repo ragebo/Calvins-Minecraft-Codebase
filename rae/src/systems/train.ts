@@ -6,6 +6,7 @@ import { onDeath } from "../core/events.js";
 import { onTick } from "../core/tick.js";
 import { addCoins } from "../core/economy.js";
 import { registerEvent, finishEvent } from "../core/director.js";
+import { error } from "../core/log.js";
 
 /**
  * Name of the structure saved with /structure save. Not a tunable
@@ -63,9 +64,9 @@ function placeTrainAt(point: Vector3): void {
         dimension.runCommand(
             `structure load "${TRAIN_STRUCTURE}" ${point.x} ${point.y} ${point.z}`
         );
-    } catch (error) {
-        world.sendMessage(`§c[TRAIN ERROR] Could not load structure "${TRAIN_STRUCTURE}": ${error}`);
-        world.sendMessage(`§c[TRAIN ERROR] Check that you saved it with /structure save ${TRAIN_STRUCTURE}`);
+    } catch (err) {
+        error("train", `Could not load structure "${TRAIN_STRUCTURE}": ${err}`);
+        error("train", `Check that you saved it with /structure save ${TRAIN_STRUCTURE}`);
     }
 }
 
@@ -80,8 +81,8 @@ function backupTrackAt(index: number, point: Vector3): void {
             `structure save "${BACKUP_PREFIX}${index}" ${point.x} ${point.y} ${point.z} ` +
             `${point.x + TRAIN_SIZE.x - 1} ${point.y + TRAIN_SIZE.y - 1} ${point.z + TRAIN_SIZE.z - 1} memory`
         );
-    } catch (error) {
-        world.sendMessage(`§c[TRAIN ERROR] Could not back up track at stop ${index}: ${error}`);
+    } catch (err) {
+        error("train", `Could not back up track at stop ${index}: ${err}`);
     }
 }
 
@@ -93,8 +94,8 @@ function restoreTrackAt(index: number, point: Vector3 | undefined): void {
 
     try {
         dimension.runCommand(`structure load "${BACKUP_PREFIX}${index}" ${point.x} ${point.y} ${point.z}`);
-    } catch (error) {
-        world.sendMessage(`§c[TRAIN ERROR] Could not restore track at stop ${index}: ${error}`);
+    } catch (err) {
+        error("train", `Could not restore track at stop ${index}: ${err}`);
     }
 }
 
@@ -111,14 +112,14 @@ function fillVaultChest(): void {
         const block = dimension.getBlock(TRAIN_VAULT_CHEST);
 
         if (!block) {
-            world.sendMessage("§c[TRAIN ERROR] No block found at the vault chest location.");
+            error("train", "No block found at the vault chest location.");
             return;
         }
 
         const inventory = block.getComponent("minecraft:inventory");
 
         if (!inventory || !inventory.container) {
-            world.sendMessage("§c[TRAIN ERROR] VAULT_CHEST does not point at a container block.");
+            error("train", "VAULT_CHEST does not point at a container block.");
             return;
         }
 
@@ -128,8 +129,8 @@ function fillVaultChest(): void {
 
         world.sendMessage("§6The vault chest is full of gold!");
 
-    } catch (error) {
-        world.sendMessage(`§c[TRAIN ERROR] Could not fill the vault chest: ${error}`);
+    } catch (err) {
+        error("train", `Could not fill the vault chest: ${err}`);
     }
 }
 
@@ -188,8 +189,8 @@ function backupBridge(): void {
             `${BRIDGE_AREA.min.x} ${BRIDGE_AREA.min.y} ${BRIDGE_AREA.min.z} ` +
             `${BRIDGE_AREA.max.x} ${BRIDGE_AREA.max.y} ${BRIDGE_AREA.max.z} memory`
         );
-    } catch (error) {
-        world.sendMessage(`§c[TRAIN ERROR] Could not back up the bridge: ${error}`);
+    } catch (err) {
+        error("train", `Could not back up the bridge: ${err}`);
     }
 }
 
@@ -215,8 +216,8 @@ function explodeBridge(): void {
 
         world.sendMessage("§4The bridge has been destroyed!");
 
-    } catch (error) {
-        world.sendMessage(`§c[TRAIN ERROR] Could not destroy the bridge: ${error}`);
+    } catch (err) {
+        error("train", `Could not destroy the bridge: ${err}`);
     }
 }
 
@@ -227,8 +228,8 @@ function restoreBridge(): void {
     try {
         dimension.runCommand(`structure load "${BRIDGE_BACKUP}" ${BRIDGE_AREA.min.x} ${BRIDGE_AREA.min.y} ${BRIDGE_AREA.min.z}`);
         world.sendMessage("§7The bridge has been rebuilt.");
-    } catch (error) {
-        world.sendMessage(`§c[TRAIN ERROR] Could not rebuild the bridge: ${error}`);
+    } catch (err) {
+        error("train", `Could not rebuild the bridge: ${err}`);
     }
 }
 
@@ -328,13 +329,13 @@ export function startTrainRobbery(): boolean {
             backupTrackAt(currentStop, TRAIN_PATH[currentStop]);
             placeTrainAt(TRAIN_PATH[currentStop]);
 
-        } catch (error) {
+        } catch (err) {
 
             trainActive = false;
             stopTrainLoop?.();
             finishEvent("train");
 
-            world.sendMessage(`§c[TRAIN ERROR] Robbery stopped: ${error}`);
+            error("train", `Robbery stopped: ${err}`);
         }
 
     }, { everyTicks: TRAIN.moveIntervalTicks });

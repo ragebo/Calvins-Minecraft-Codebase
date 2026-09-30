@@ -5,6 +5,7 @@ import { registerSystem } from "../core/registry.js";
 import { onScriptEvent } from "../core/events.js";
 import { onTick } from "../core/tick.js";
 import { addCoins, clearBounty } from "../core/economy.js";
+import { error } from "../core/log.js";
 import { getRecord, getJailSite, update } from "../core/state.js";
 import { prisoners } from "../core/players.js";
 
@@ -55,7 +56,7 @@ function getLawNear(point: Vector3, radius: number): Player[] {
 function openJailDoor(doorTrigger: Vector3 | null): void {
 
     if (!doorTrigger) {
-        world.sendMessage("§c[JAILBREAK ERROR] No door trigger point for the current jail.");
+        error("jailbreak", "No door trigger point for the current jail.");
         return;
     }
 
@@ -65,8 +66,8 @@ function openJailDoor(doorTrigger: Vector3 | null): void {
         dimension.runCommand(
             `setblock ${doorTrigger.x} ${doorTrigger.y} ${doorTrigger.z} redstone_block`
         );
-    } catch (error) {
-        world.sendMessage(`§c[JAILBREAK ERROR] Could not open the door: ${error}`);
+    } catch (err) {
+        error("jailbreak", `Could not open the door: ${err}`);
     }
 }
 
@@ -86,8 +87,8 @@ function succeedBreakout(rescuerIds: readonly string[], jailLocation: Vector3, d
         try {
             addCoins(player, JAILBREAK.rescueReward);
             player.sendMessage(`§a+${JAILBREAK.rescueReward} coins for the rescue!`);
-        } catch (error) {
-            world.sendMessage(`§c[JAILBREAK ERROR] Could not reward ${player.name}: ${error}`);
+        } catch (err) {
+            error("jailbreak", `Could not reward ${player.name}: ${err}`);
         }
     }
 
@@ -107,8 +108,8 @@ function succeedBreakout(rescuerIds: readonly string[], jailLocation: Vector3, d
                 "§eYou've been freed! Get away from the jail before law catches you."
             );
 
-        } catch (error) {
-            world.sendMessage(`§c[JAILBREAK ERROR] Could not free ${prisoner.name}: ${error}`);
+        } catch (err) {
+            error("jailbreak", `Could not free ${prisoner.name}: ${err}`);
         }
     }
 
@@ -138,8 +139,8 @@ function failBreakout(): void {
             });
 
             player.sendMessage("§cYou feel weakened from the failed attempt.");
-        } catch (error) {
-            world.sendMessage(`§c[JAILBREAK ERROR] Could not apply weakness to ${player.name}: ${error}`);
+        } catch (err) {
+            error("jailbreak", `Could not apply weakness to ${player.name}: ${err}`);
         }
     }
 
@@ -201,8 +202,8 @@ function showSliderChallenge(player: Player): void {
 
         resolveLockpickAttempt(player, response.formValues![0] as number);
 
-    }).catch((error) => {
-        world.sendMessage(`§c[JAILBREAK ERROR] Slider failed for ${player.name}: ${error}`);
+    }).catch((err) => {
+        error("jailbreak", `Slider failed for ${player.name}: ${err}`);
     });
 }
 
@@ -251,8 +252,8 @@ function resolveLockpickAttempt(player: Player, sliderValue: number): void {
 
         try {
             player.playSound(PING_SOUND, { pitch, volume: 1 });
-        } catch (error) {
-            world.sendMessage(`§c[JAILBREAK ERROR] Could not play ping for ${player.name}: ${error}`);
+        } catch (err) {
+            error("jailbreak", `Could not play ping for ${player.name}: ${err}`);
         }
 
         player.sendMessage("§7...no luck. Listen closely and try again.");
@@ -263,8 +264,8 @@ function resolveLockpickAttempt(player: Player, sliderValue: number): void {
     // Hit.
     try {
         player.playSound(SUCCESS_SOUND, { pitch: 1, volume: 1 });
-    } catch (error) {
-        world.sendMessage(`§c[JAILBREAK ERROR] Could not play success sound for ${player.name}: ${error}`);
+    } catch (err) {
+        error("jailbreak", `Could not play success sound for ${player.name}: ${err}`);
     }
 
     sweetSpotTarget = null; // next attempt rolls a fresh target
@@ -324,14 +325,14 @@ onTick("jailbreak:escort", (ctx) => {
 
         try {
             player.addEffect("weakness", JAILBREAK.escortEffectTicks, { amplifier: 0, showParticles: false });
-        } catch (error) {
-            world.sendMessage(`§c[JAILBREAK ERROR] Could not apply weakness to ${player.name}: ${error}`);
+        } catch (err) {
+            error("jailbreak", `Could not apply weakness to ${player.name}: ${err}`);
         }
 
         try {
             player.addEffect("slowness", JAILBREAK.escortEffectTicks, { amplifier: 0, showParticles: false });
-        } catch (error) {
-            world.sendMessage(`§c[JAILBREAK ERROR] Could not apply slowness to ${player.name}: ${error}`);
+        } catch (err) {
+            error("jailbreak", `Could not apply slowness to ${player.name}: ${err}`);
         }
     }
 });

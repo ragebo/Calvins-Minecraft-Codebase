@@ -3,6 +3,7 @@ import { RAIDS } from "../config/balance.js";
 import { onDeath } from "./events.js";
 import { onTick } from "./tick.js";
 import { addCoins } from "./economy.js";
+import { error } from "./log.js";
 import { announce, format } from "./ui.js";
 
 /**
@@ -168,10 +169,8 @@ function spawnWave(config: RaidConfig, waveIndex: number, playerCount: number): 
                     showParticles: false
                 });
 
-            } catch (error) {
-                world.sendMessage(
-                    `§c[RAID ERROR] ${config.id} could not spawn ${entry.type}: ${error}`
-                );
+            } catch (err) {
+                error("raid", `${config.id} could not spawn ${entry.type}: ${err}`);
             }
         }
     }
@@ -284,7 +283,7 @@ export function startRaid(id: string): void {
     const entry = raids.get(id);
 
     if (!entry) {
-        world.sendMessage(`§c[RAID ERROR] Unknown raid: ${id}`);
+        error("raid", `Unknown raid: ${id}`);
         return;
     }
 

@@ -1,6 +1,7 @@
 import { system, type Player } from "@minecraft/server";
 import { FormCancelationReason } from "@minecraft/server-ui";
 import { MENU } from "../config/balance.js";
+import { warn } from "./log.js";
 
 /**
  * Showing a form to a player, the way every system should.
@@ -27,7 +28,7 @@ function report(error: unknown): void {
     const text = String(error);
     if (reported.has(text)) return;
     reported.add(text);
-    console.warn(`[forms] showing a form failed: ${text}`);
+    warn("forms", `showing a form failed: ${text}`);
 }
 
 const wait = (ticks: number): Promise<void> => new Promise((resolve) => { system.runTimeout(resolve, ticks); });

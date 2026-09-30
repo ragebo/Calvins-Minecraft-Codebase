@@ -202,10 +202,20 @@ test("a reset after a player who used the spike has left reports no error", () =
     q.remove();
     fake.chat.length = 0;
 
+    // core/registry's reset failure now goes through core/log's error() (console, plus an
+    // operator), not world.sendMessage/fake.chat, so "no error" is checked via console.error.
+    const errors = [];
+    const originalError = console.error;
+    console.error = (...args) => errors.push(args.join(" "));
+
     let threw = false;
-    try { resetAllSystems(); fake.advance(A.scopeClearDelayTicks + 2); } catch { threw = true; }
+    try {
+        try { resetAllSystems(); fake.advance(A.scopeClearDelayTicks + 2); } catch { threw = true; }
+    } finally {
+        console.error = originalError;
+    }
     check("it does not throw, not even when the delayed clear comes due after the player left", !threw);
-    check("and the reset reports no error (the registry sends one to chat when a system fails)", !fake.chat.some((m) => /RESET ERROR/.test(m)), fake.chat.join("|"));
+    check("and the reset reports no error (core/log's error() would have logged one for a system that failed)", !errors.some((m) => /\[registry\]/.test(m)), errors.join("|"));
     check("the player who is still here is unaffected", p.isValid);
 
     // A player who switches the scope off and leaves before the delayed clear comes due.
