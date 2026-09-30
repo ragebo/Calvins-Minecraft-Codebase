@@ -4,6 +4,7 @@ import { registerSystem } from "../core/registry.js";
 import { onTick } from "../core/tick.js";
 import { getBounty } from "../core/economy.js";
 import { error } from "../core/log.js";
+import { lawPlayers } from "../core/players.js";
 import { playFor } from "../core/sound.js";
 import { setActionBar } from "../core/ui.js";
 import { relativeBearing, bearingBar } from "../logic/bearing.js";
@@ -164,7 +165,7 @@ let lastErrorTick = -Infinity;
 
 onTick("compass", () => {
 
-    for (const player of world.getPlayers({ tags: ["law"], excludeTags: ["eliminated"] })) {
+    for (const player of lawPlayers()) {
 
         try {
 

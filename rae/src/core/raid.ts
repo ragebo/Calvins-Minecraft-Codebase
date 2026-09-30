@@ -5,6 +5,7 @@ import { onTick } from "./tick.js";
 import { addCoins } from "./economy.js";
 import { error } from "./log.js";
 import { announce, format } from "./ui.js";
+import { players as allPlayers, alivePlayers, aliveOutlaws } from "./players.js";
 
 /**
  * Fixes the duplication problem from V1.
@@ -84,7 +85,7 @@ function inside(loc: Vector3, area: Area): boolean {
 }
 
 function everyone(): readonly Player[] {
-    return world.getAllPlayers();
+    return allPlayers();
 }
 
 /** An eliminated player is a spectator now: they never count towards a raid, wherever they stand. */
@@ -92,12 +93,18 @@ function isEliminated(player: Player): boolean {
     return player.hasTag("eliminated");
 }
 
+/**
+ * Alive players inside `area`, optionally narrowed to outlaws. Pairs core/players.ts's cached,
+ * per-tick role queries with the area check this module owns, so raid code gets the same caching
+ * every other query in core/players.ts already gets, without duplicating the eliminated/role logic.
+ */
+export function alivePlayersIn(query: { area: Area; outlawsOnly?: boolean }): Player[] {
+    const candidates = query.outlawsOnly ? aliveOutlaws() : alivePlayers();
+    return candidates.filter((player) => inside(player.location, query.area));
+}
+
 function participantsOf(config: RaidConfig): Player[] {
-    return everyone().filter((player) =>
-        !isEliminated(player) &&
-        (!config.outlawsOnly || player.hasTag("outlaw")) &&
-        inside(player.location, config.area)
-    );
+    return alivePlayersIn({ area: config.area, outlawsOnly: config.outlawsOnly });
 }
 
 /** Why a player who is not eliminated doesn't count, one clause per axis: "y 68.5 is outside 69 to 79". */

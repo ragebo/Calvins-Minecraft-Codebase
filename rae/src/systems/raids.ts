@@ -1,4 +1,4 @@
-import { world, type Player, type Entity, type Vector3 } from "@minecraft/server";
+import { world, type Entity, type Vector3 } from "@minecraft/server";
 import {
     FORT_AREA, FORT_SPAWNS, FORT_REWARD_CHEST,
     RANCH_AREA, RANCH_LOWER_SPAWNS, RANCH_UPPER_SPAWNS, RANCH_SAFE_TRIGGER
@@ -7,7 +7,7 @@ import { FORT, RANCH, LOOT } from "../config/balance.js";
 import { registerSystem } from "../core/registry.js";
 import { onDeath } from "../core/events.js";
 import { onTick } from "../core/tick.js";
-import { registerRaid, resetAllRaids, startRaid, isRaidActive, reportWhyNoOneIsInside } from "../core/raid.js";
+import { registerRaid, resetAllRaids, startRaid, isRaidActive, reportWhyNoOneIsInside, alivePlayersIn } from "../core/raid.js";
 import { addCoins } from "../core/economy.js";
 import { error } from "../core/log.js";
 import { registerEvent, finishEvent } from "../core/director.js";
@@ -113,13 +113,6 @@ function insideRanch(loc: Vector3): boolean {
     );
 }
 
-function getRaidersInRanch(): Player[] {
-    return world.getAllPlayers().filter((player) =>
-        !player.hasTag("eliminated") &&
-        insideRanch(player.location)
-    );
-}
-
 function spawnRanchDefender(type: string, location: Vector3): Entity {
     const dimension = world.getDimension("overworld");
     const mob = dimension.spawnEntity(type, location);
@@ -148,7 +141,7 @@ function unlockRanchSafe(): void {
 
 function spawnRanchWave(wave: number): void {
 
-    const raiders = getRaidersInRanch();
+    const raiders = alivePlayersIn({ area: RANCH_AREA, outlawsOnly: true });
     const count = raiders.length;
 
     const pillagers = 1 + Math.ceil(count * 1);
@@ -196,7 +189,7 @@ onTick("ranch:heal", (ctx) => {
  */
 export function startRanchRaid(): boolean {
 
-    const raiders = getRaidersInRanch();
+    const raiders = alivePlayersIn({ area: RANCH_AREA, outlawsOnly: true });
 
     ranchRaidActive = true;
 
@@ -218,7 +211,7 @@ export function startRanchRaid(): boolean {
     // timer below is in these passes, so the 20 must stay 20.
     stopRanchLoop = onTick("ranch:raid", () => {
 
-        const currentRaiders = getRaidersInRanch();
+        const currentRaiders = alivePlayersIn({ area: RANCH_AREA, outlawsOnly: true });
 
         if (currentRaiders.length === 0) {
             world.sendMessage("§cRaid ended early.");
