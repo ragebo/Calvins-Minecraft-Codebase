@@ -6,6 +6,7 @@ import { onScriptEvent } from "../core/events.js";
 import { onTick } from "../core/tick.js";
 import { addCoins, clearBounty } from "../core/economy.js";
 import { error } from "../core/log.js";
+import { playFor } from "../core/sound.js";
 import { getRecord, getJailSite, update } from "../core/state.js";
 import { prisoners } from "../core/players.js";
 
@@ -250,11 +251,7 @@ function resolveLockpickAttempt(player: Player, sliderValue: number): void {
         const proximity = Math.max(0, 1 - dist / 50); // 0 (far) to 1 (very close)
         const pitch = 0.5 + proximity * 1.5; // 0.5 (low/cold) to 2.0 (high/hot)
 
-        try {
-            player.playSound(PING_SOUND, { pitch, volume: 1 });
-        } catch (err) {
-            error("jailbreak", `Could not play ping for ${player.name}: ${err}`);
-        }
+        playFor(player, { id: PING_SOUND, pitch, volume: 1 });
 
         player.sendMessage("§7...no luck. Listen closely and try again.");
         showSliderChallenge(player);
@@ -262,11 +259,7 @@ function resolveLockpickAttempt(player: Player, sliderValue: number): void {
     }
 
     // Hit.
-    try {
-        player.playSound(SUCCESS_SOUND, { pitch: 1, volume: 1 });
-    } catch (err) {
-        error("jailbreak", `Could not play success sound for ${player.name}: ${err}`);
-    }
+    playFor(player, { id: SUCCESS_SOUND, pitch: 1, volume: 1 });
 
     sweetSpotTarget = null; // next attempt rolls a fresh target
 

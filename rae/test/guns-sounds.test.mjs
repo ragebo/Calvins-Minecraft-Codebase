@@ -163,7 +163,10 @@ test("reload edge cases", () => {
     done();
 });
 
-test("a broken cue can never break firing, and is reported once", () => {
+// The bad-cue dedup/no-repeat behavior itself now belongs to core/sound.ts (this file's playCues just
+// delegates to it) and is tested directly, in detail, in sound.test.mjs — this test keeps only the
+// gun-integration guarantee: a broken cue in a real gun's config can't stop the shot or its other cues.
+test("a broken cue can never break firing", () => {
     const { check, done } = checks();
     const gun = GUNS.revolver;
     const p = armed(gun, "badcue");
@@ -178,7 +181,6 @@ test("a broken cue can never break firing, and is reported once", () => {
     gun.sounds.fire[0].pitch = original;
 
     check("a bad cue doesn't throw out of the shot", threw === null, threw ? String(threw) : "");
-    check("the bad cue is reported exactly once, not on every shot", fake.chat.filter((m) => m.includes("[GUN SOUND ERROR]") && m.includes("firework.blast")).length === 1, JSON.stringify(fake.chat));
     check("the other layers of that shot still played both times", overworld().played.filter((x) => x.id === "random.explode").length === 2);
     done();
 });

@@ -4,6 +4,7 @@ import { registerSystem } from "../core/registry.js";
 import { onTick } from "../core/tick.js";
 import { getBounty } from "../core/economy.js";
 import { error } from "../core/log.js";
+import { playFor } from "../core/sound.js";
 import { setActionBar } from "../core/ui.js";
 import { relativeBearing, bearingBar } from "../logic/bearing.js";
 
@@ -214,7 +215,7 @@ world.afterEvents.itemUse.subscribe((event) => {
     // The old lock was chosen under the other mode's rules.
     locks.delete(player.id);
 
-    player.playSound("random.click", { volume: 0.5 });
+    playFor(player, { id: "random.click", volume: 0.5 });
     player.sendMessage(`§9Compass now tracking the §f${MODES[next].chat}§9.`);
 });
 
