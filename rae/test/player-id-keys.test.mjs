@@ -9,6 +9,7 @@ import { fake, world, system, fakeUi, load, checks, strip, leftClick, pressQ } f
 // that passes either way, so a failure points at the key and not at the scenario.
 
 const { listSystems } = await load("core/registry.js");
+const state = await load("core/state.js");
 const resetSystem = (name) => listSystems().find((s) => s.name === name).reset();
 const PAIRS = [["different names (control)", "Alice", "Bob"], ["the same name", "Dup", "Dup"]];
 
@@ -145,6 +146,11 @@ const sneakUse = (p) => { p.isSneaking = true; useCompass(p); p.isSneaking = fal
 function trackers(nameA, nameB) {
     fake.reset();
     resetSystem("compass");
+    // Ids "a"/"b" are reused from the guns section above. core/players.ts's queries now read
+    // core/state.ts's records (not raw tags), and those records are keyed by id and outlive
+    // fake.reset(); without clearing them, a stale record from an earlier "a"/"b" player (created
+    // with no role tags) would shadow these ones' actual "law" tag.
+    state.clearRecords();
     const a = fake.makePlayer(nameA, { id: "a", tags: ["law"], holding: COMPASS, location: { x: 0, y: 64, z: 0 } });
     const b = fake.makePlayer(nameB, { id: "b", tags: ["law"], holding: COMPASS, location: { x: 200, y: 64, z: 0 } });
     const nearA = fake.makePlayer("NearA", { tags: ["outlaw"], location: { x: 10, y: 64, z: 0 } });

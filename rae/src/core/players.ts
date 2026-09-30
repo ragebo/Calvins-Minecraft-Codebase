@@ -50,6 +50,11 @@ export function players(): readonly Player[] {
     return everyone();
 }
 
+/** Everyone still in the round, whatever their role (or none yet). */
+export function alivePlayers(): readonly Player[] {
+    return ask("alive", (r) => !r.eliminated);
+}
+
 /** Law players who are still in the round. */
 export function lawPlayers(): readonly Player[] {
     return ask("law", (r) => r.role === "law" && !r.eliminated);

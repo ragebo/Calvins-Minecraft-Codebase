@@ -8,7 +8,7 @@ import { addCoins, clearBounty } from "../core/economy.js";
 import { error } from "../core/log.js";
 import { playFor } from "../core/sound.js";
 import { getRecord, getJailSite, update } from "../core/state.js";
-import { prisoners } from "../core/players.js";
+import { lawPlayers, prisoners } from "../core/players.js";
 
 /**
  * Flip to true while testing solo. Normally a player who's currently
@@ -43,10 +43,7 @@ function getOnlinePlayers(): Player[] {
 }
 
 function getLawNear(point: Vector3, radius: number): Player[] {
-    return getOnlinePlayers().filter((player) => {
-        const record = getRecord(player);
-        return record.role === "law" && !record.eliminated && distance(player.location, point) <= radius;
-    });
+    return lawPlayers().filter((player) => distance(player.location, point) <= radius);
 }
 
 /**

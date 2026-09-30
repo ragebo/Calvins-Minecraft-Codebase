@@ -75,6 +75,10 @@ function scene(...specs) {
     round.resetRound();   // does what resetAllSystems() did, plus puts the round into ACTIVE (the
     round.startRound();   // death/spawn scenarios below simulate a round already in progress
     round.beginActive();
+    // core/players.ts caches its player-list snapshot per system.currentTick, which fake.reset()
+    // does not advance; landing on a tick it has never cached for (before any player from this
+    // scene exists) keeps a previous test's now-gone players from leaking into that cache.
+    fake.advance(1);
     fake.addObjective("coins");
     fake.addObjective("bounty");
     const players = specs.map(([name, options]) => fake.makePlayer(name, options));

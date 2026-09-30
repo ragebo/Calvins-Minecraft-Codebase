@@ -5,6 +5,7 @@ import { fake, load, checks } from "./helpers.mjs";
 const state = await load("core/state.js");
 const round = await load("core/round.js");
 const roster = await load("core/players.js");
+const raid = await load("core/raid.js");
 const persist = await load("core/persist.js");
 const { resetAllSystems } = await load("core/registry.js");
 
@@ -179,6 +180,7 @@ test("players: each query answers from the records", () => {
     fake.advance(1);
     const { check, done } = checks();
     check("everyone", roster.players().length === 5);
+    check("alivePlayers excludes eliminated of any role", names(roster.alivePlayers()) === "Free,Jailed,Sheriff", names(roster.alivePlayers()));
     check("law = alive law", names(roster.lawPlayers()) === "Sheriff", names(roster.lawPlayers()));
     check("outlaws = all outlaws", names(roster.outlaws()) === "Free,Jailed,Out");
     check("aliveOutlaws excludes eliminated", names(roster.aliveOutlaws()) === "Free,Jailed");
@@ -191,7 +193,7 @@ test("players: the player list is fetched once per tick, however many queries ru
     roster5();
     fake.advance(1);
     fake.calls.getAllPlayers = 0;
-    roster.lawPlayers(); roster.freeOutlaws(); roster.spectators(); roster.aliveOutlaws(); roster.players();
+    roster.lawPlayers(); roster.freeOutlaws(); roster.spectators(); roster.aliveOutlaws(); roster.alivePlayers(); roster.players();
     assert.equal(fake.calls.getAllPlayers, 1);
     fake.advance(1);
     roster.lawPlayers();
@@ -204,6 +206,30 @@ test("players: an answer is recomputed after a state change in the same tick", (
     assert.equal(names(roster.freeOutlaws()), "Free");
     state.update(r.free, { inJail: true });
     assert.equal(names(roster.freeOutlaws()), "", "jailing the free outlaw is visible immediately");
+    assert.equal(names(roster.alivePlayers()), "Free,Jailed,Sheriff");
+    state.update(r.sheriff, { eliminated: true });
+    assert.equal(names(roster.alivePlayers()), "Free,Jailed", "eliminating the sheriff drops them from alivePlayers immediately");
+});
+
+// ---------------------------------------------------------------------------
+// core/raid: alivePlayersIn pairs core/players.ts's cached role queries with an area check
+// ---------------------------------------------------------------------------
+
+test("raid: alivePlayersIn filters the cached roster by area, and by outlaw role when asked", () => {
+    fake.reset(); state.clearRecords();
+    const AREA = { min: { x: 0, y: 0, z: 0 }, max: { x: 10, y: 10, z: 10 } };
+    fake.makePlayer("SheriffIn", { tags: ["law"], location: { x: 5, y: 5, z: 5 } });
+    fake.makePlayer("OutlawIn", { tags: ["outlaw"], location: { x: 1, y: 1, z: 1 } });
+    fake.makePlayer("OutlawOut", { tags: ["outlaw"], location: { x: 50, y: 5, z: 5 } });
+    fake.makePlayer("DeadIn", { tags: ["outlaw", "eliminated"], location: { x: 2, y: 2, z: 2 } });
+    fake.advance(1);
+
+    const { check, done } = checks();
+    check("no filter: alive players of any role, inside the area", names(raid.alivePlayersIn({ area: AREA })) === "OutlawIn,SheriffIn", names(raid.alivePlayersIn({ area: AREA })));
+    check("outlawsOnly: law is excluded even though inside", names(raid.alivePlayersIn({ area: AREA, outlawsOnly: true })) === "OutlawIn", names(raid.alivePlayersIn({ area: AREA, outlawsOnly: true })));
+    check("outside the area never counts, outlaw or not", !names(raid.alivePlayersIn({ area: AREA })).includes("OutlawOut"));
+    check("eliminated never counts even inside and even as an outlaw", !names(raid.alivePlayersIn({ area: AREA, outlawsOnly: true })).includes("DeadIn"));
+    done();
 });
 
 // ---------------------------------------------------------------------------
