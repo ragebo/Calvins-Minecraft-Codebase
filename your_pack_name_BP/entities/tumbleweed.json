@@ -9,8 +9,8 @@
             "properties": {
                 "bountysys:roll": {
                     "type": "float",
-                    "range": [0, 360],
-                    "default": 0,
+                    "range": [0.0, 360.0],
+                    "default": 0.0,
                     "client_sync": true
                 }
             }

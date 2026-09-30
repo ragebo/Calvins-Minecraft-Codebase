@@ -58,8 +58,29 @@ three smaller fixes:
 3. **Max fire rate slowed slightly.** `fireRateTicksSpunUp` went from 1 tick to 2 — the fastest possible gap
    between shots doubled, everything else about the ramp (`fireRateTicksStart` 8, `spinUpShots` 12) unchanged.
 
-Packs: behavior pack **0.1.31**, resource pack **1.0.26** — the model gained a third bone, the entity gained
-the barrel-spin property alongside the existing aim-pitch one, and the seat moved.
+**v3.1 hotfix**, from the very next playtest of v3: the seat still sat a little too far forward (`position`'s
+Z nudged from `0.3` to `0.45` — the model's front faces -Z, so a bigger +Z pulls the rider further back off
+the front), and — far more important — **the barrels never moved at all, not even a twitch.** The content log
+explains why, and it isn't a resource-pack or animation bug: `bountysys:aim_pitch` failed to load entirely --
+`Error loading property 'bountysys:aim_pitch': 'default' value does not match the specified type 'float'` --
+which took the whole properties block down with it (`Error loading Actor Properties`), so `bountysys:barrel_spin`
+never had a property to write to either, and every `setProperty` call for both threw at runtime
+(`Property "bountysys:aim_pitch" does not exist on Entity...`, logged once and suppressed after that). Neither
+property's own JSON changed in a way that could explain this — `aim_pitch` has looked like this since v2, which
+demonstrably worked. The decisive clue: `bountysys:tumbleweed`'s unrelated, untouched `bountysys:roll` property
+failed with the *exact same message* in the same log, and that one was confirmed working in the 2026-09-27
+playtest. Something in the game itself (almost certainly an engine update between then and now) started
+rejecting a bare integer (`0`) as a `"default"` for a `"type": "float"` property, wanting an explicit decimal
+(`0.0`) instead. Fixed by writing every float property's `default` and `range` bounds as explicit decimals in
+both `gatling_gun.json` and `tumbleweed.json` — a JSON-literal-formatting fix only, identical numeric values,
+no script or animation change. Side effect worth knowing: this means **aim-pitch tracking has been silently
+broken since the moment you started testing v3** (the entity kept turning in yaw, so it still looked like it
+was following you, but the turret's own up/down tilt was doing nothing) — this fix restores it too, and it's
+worth specifically re-checking now, not just the barrels. It also quietly fixes tumbleweed rolling, which broke
+the same way and the same day, entirely unrelated to anything Gatling-gun-specific.
+
+Packs: behavior pack **0.1.32**, resource pack **1.0.26** (unchanged this round — this fix is BP-only, no
+model/animation/script changes).
 
 `npm test` drives the whole thing through the fake tick loop: placing it now via a mocked raycast (and the
 "nothing in range" case), that holding it still does nothing, that one click starts a loop that keeps firing
