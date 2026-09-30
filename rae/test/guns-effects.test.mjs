@@ -32,6 +32,7 @@ function armed(gun) {
     p.giveAmmo(AMMO[gun.ammo].itemId, 64);
     fake.advance(200);
     overworld().particles.length = 0;
+    overworld().blocks.clear();
     return p;
 }
 
@@ -139,7 +140,7 @@ test("a pellet that hits a block ends at the block", () => {
     done();
 });
 
-test("every other gun shows its muzzle smoke and nothing else: no trail and no impact puffs", () => {
+test("every other gun shows its own muzzle smoke/flash and nothing else: no trail and no impact puffs", () => {
     const { check, done } = checks();
     for (const gun of others) {
         const p = armed(gun);
@@ -150,7 +151,7 @@ test("every other gun shows its muzzle smoke and nothing else: no trail and no i
 
         check(`${gun.id}: exactly its configured muzzle particles`, particles.map((q) => q.id).join() === fx.muzzle.join(), particles.map((q) => q.id).join());
         check(`${gun.id}: at the barrel`, particles.every((q) => near(q.location.x, expected.x) && near(q.location.y, expected.y) && near(q.location.z, expected.z)), JSON.stringify(particles.map((q) => q.location)));
-        check(`${gun.id}: smoke, and only smoke`, particles.length > 0 && particles.every((q) => q.id === "minecraft:basic_smoke_particle"), particles.map((q) => q.id).join());
+        check(`${gun.id}: only smoke and flash, no trail or impact puff`, particles.length > 0 && particles.every((q) => q.id === "minecraft:basic_smoke_particle" || q.id === "minecraft:basic_flame_particle"), particles.map((q) => q.id).join());
     }
     done();
 });
@@ -161,6 +162,95 @@ test("every gun, the shotguns included, has muzzle smoke", () => {
         check(`${gun.id}: at least one smoke particle at the muzzle`, gun.effects.muzzle.some((id) => id.includes("smoke")), gun.effects.muzzle.join());
         check(`${gun.id}: the muzzle is in front of the player, not inside them`, gun.effects.muzzleDistance > 0.3 && gun.effects.muzzleDistance < 3, String(gun.effects.muzzleDistance));
     }
+    done();
+});
+
+// ---------------------------------------------------------------------------------------------------------
+// Muzzle light: opt-in per gun (config/guns.ts's MuzzleLight doc explains why only slow-firing guns get
+// it). A real light-emitting block, not a particle -- so it has to never displace something already
+// there, and never clear anything but its own flash.
+// ---------------------------------------------------------------------------------------------------------
+
+const REVOLVER_MUZZLE_BLOCK = { x: 1, y: 65, z: 3 };   // HEAD (1, 65.6, 2) + 1 block along +Z, y - 0.2, floored
+
+test("a gun with muzzleLight briefly turns the muzzle into a real light, then clears it back to air", () => {
+    const { check, done } = checks();
+    const gun = GUNS.revolver;
+    check("(setup) this gun actually has muzzleLight configured", gun.effects.muzzleLight !== undefined);
+    const p = armed(gun);
+    const dim = overworld();
+
+    leftClick(p);
+    check("the muzzle block is now the configured light level", dim.getBlock(REVOLVER_MUZZLE_BLOCK).typeId === `minecraft:light_block_${gun.effects.muzzleLight.level}`, dim.getBlock(REVOLVER_MUZZLE_BLOCK).typeId);
+
+    fake.advance(gun.effects.muzzleLight.ticks);
+    check("cleared back to air once its time is up", dim.getBlock(REVOLVER_MUZZLE_BLOCK).typeId === "minecraft:air", dim.getBlock(REVOLVER_MUZZLE_BLOCK).typeId);
+    done();
+});
+
+test("a gun without muzzleLight never touches a block at all", () => {
+    const { check, done } = checks();
+    const gun = GUNS.pistol;
+    check("(setup) this gun has no muzzleLight configured", gun.effects.muzzleLight === undefined);
+    const p = armed(gun);
+    const dim = overworld();
+
+    leftClick(p);
+    fake.advance(10);
+    check("dim.blocks is still empty: nothing was ever set", dim.blocks.size === 0, JSON.stringify([...dim.blocks.entries()]));
+    done();
+});
+
+test("never displaces a real block already at the muzzle", () => {
+    const { check, done } = checks();
+    const gun = GUNS.revolver;
+    const p = armed(gun);
+    const dim = overworld();
+    dim.getBlock(REVOLVER_MUZZLE_BLOCK).setType("minecraft:stone");   // something real is already there
+
+    leftClick(p);
+    check("still stone: the light flash refused to overwrite a real block", dim.getBlock(REVOLVER_MUZZLE_BLOCK).typeId === "minecraft:stone", dim.getBlock(REVOLVER_MUZZLE_BLOCK).typeId);
+    done();
+});
+
+test("doesn't clear a block that changed after the flash placed it (a real build, or another overlapping flash)", () => {
+    const { check, done } = checks();
+    const gun = GUNS.revolver;
+    const p = armed(gun);
+    const dim = overworld();
+
+    leftClick(p);
+    check("(setup) the light was placed", dim.getBlock(REVOLVER_MUZZLE_BLOCK).typeId === `minecraft:light_block_${gun.effects.muzzleLight.level}`);
+
+    dim.getBlock(REVOLVER_MUZZLE_BLOCK).setType("minecraft:cobblestone");   // something else changed it before the clear fires
+    fake.advance(gun.effects.muzzleLight.ticks);
+    check("left alone: the stale clear did not stomp the new block", dim.getBlock(REVOLVER_MUZZLE_BLOCK).typeId === "minecraft:cobblestone", dim.getBlock(REVOLVER_MUZZLE_BLOCK).typeId);
+    done();
+});
+
+test("a bad light-block id is reported once through core/log and never breaks firing", () => {
+    const { check, done } = checks();
+    const gun = GUNS.revolver;
+    const p = armed(gun);
+    const dim = overworld();
+    const original = dim.getBlock;
+    const badId = `minecraft:light_block_${gun.effects.muzzleLight.level}`;
+
+    dim.getBlock = (location) => {
+        const real = original.call(dim, location);
+        return { ...real, setType(typeId) { if (typeId === badId) throw new Error(`unknown block ${typeId}`); real.setType(typeId); } };
+    };
+
+    let threw = null;
+    try {
+        leftClick(p); fake.advance(gun.fireRateTicks);          // shot 1
+        leftClick(p); fake.advance(gun.primeTicks);              // prime click, no shot
+        leftClick(p);                                             // shot 2
+    } catch (e) { threw = e; }
+    dim.getBlock = original;
+
+    check("nothing thrown", threw === null, threw ? String(threw) : "");
+    check("the bad id is reported once via core/log, not once per shot", warnings.filter((w) => w.includes(`[gun effects] ${badId} failed`)).length === 1, warnings.join("|"));
     done();
 });
 

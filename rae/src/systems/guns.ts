@@ -4,7 +4,7 @@ import {
     type EntityApplyDamageByProjectileOptions, type EntityApplyDamageOptions,
     EquipmentSlot, EntityDamageCause, EntitySwingSource
 } from "@minecraft/server";
-import { AMMO, GUNS, BULLET_ENTITY_ID, BULLET_LIFETIME_TICKS, GATLING_AIM_PITCH_PROPERTY, GATLING_BARREL_SPIN_PROPERTY, HIT_WINDOW_TICKS, type AutomaticConfig, type GunConfig, type GunId, type MuzzleEffects, type SoundCue } from "../config/guns.js";
+import { AMMO, GUNS, BULLET_ENTITY_ID, BULLET_LIFETIME_TICKS, GATLING_AIM_PITCH_PROPERTY, GATLING_BARREL_SPIN_PROPERTY, HIT_WINDOW_TICKS, type AutomaticConfig, type GunConfig, type GunId, type MuzzleEffects, type MuzzleLight, type SoundCue } from "../config/guns.js";
 import { AIM, TUMBLEWEED_ENTITY_ID } from "../config/balance.js";
 import { hideScope, showScope, zoomReset, zoomTo } from "../core/aim.js";
 import { warn } from "../core/log.js";
@@ -399,7 +399,40 @@ function pointAlong(origin: Vector3, direction: Vector3, distance: number): Vect
     return { x: origin.x + direction.x * distance, y: origin.y + direction.y * distance, z: origin.z + direction.z * distance };
 }
 
-/** What every gun shows at the muzzle as it fires: smoke, and a flash where the gun has one (config/guns.ts effects). */
+const reportedLightErrors = new Set<string>();
+
+/**
+ * config/guns.ts's MuzzleLight doc explains why this is opt-in per gun. Rounds `at` down to the block
+ * it falls in and, only if that block is currently air, sets it to an invisible light_block for
+ * `light.ticks` before clearing it back to air — never displacing a real block, and never clearing
+ * anything that isn't still its own light block (a real block placed there in the meantime, or a
+ * second overlapping flash at the same spot, is left alone rather than risked).
+ */
+function flashMuzzleLight(dimension: Dimension, at: Vector3, light: MuzzleLight): void {
+
+    const location = { x: Math.floor(at.x), y: Math.floor(at.y), z: Math.floor(at.z) };
+    const typeId = `minecraft:light_block_${light.level}`;
+
+    const block = dimension.getBlock(location);
+    if (!block || block.typeId !== "minecraft:air") return;
+
+    try {
+        block.setType(typeId);
+    } catch (error) {
+        if (reportedLightErrors.has(typeId)) return;
+        reportedLightErrors.add(typeId);
+        warn("gun effects", `${typeId} failed: ${error}`);
+        return;
+    }
+
+    system.runTimeout(() => {
+        const current = dimension.getBlock(location);
+        if (current?.typeId === typeId) current.setType("minecraft:air");
+    }, light.ticks);
+}
+
+/** What every gun shows at the muzzle as it fires: smoke, a flash where the gun has one, and — for a gun
+ *  with muzzleLight set — a brief real light too (config/guns.ts effects). */
 function showMuzzle(player: Player, fx: MuzzleEffects): void {
 
     const origin = player.getHeadLocation();
@@ -409,6 +442,7 @@ function showMuzzle(player: Player, fx: MuzzleEffects): void {
     const at = { x: muzzle.x, y: muzzle.y - 0.2, z: muzzle.z };
 
     for (const id of fx.muzzle) spawnEffect(player.dimension, id, at);
+    if (fx.muzzleLight) flashMuzzleLight(player.dimension, at, fx.muzzleLight);
 }
 
 /**

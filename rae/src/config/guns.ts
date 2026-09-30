@@ -141,6 +141,26 @@ export interface MuzzleEffects {
     readonly muzzle: readonly string[];
     /** How far in front of the eyes the muzzle is, in blocks. */
     readonly muzzleDistance: number;
+    /** Experimental: also make the muzzle a real light source for a moment, not just a particle. */
+    readonly muzzleLight?: MuzzleLight;
+}
+
+/**
+ * Briefly turns the muzzle into a real light source: a temporary, invisible `minecraft:light_block_<level>`
+ * placed at the shot and cleared back to air after `ticks` (systems/guns.ts's flashMuzzleLight). Particles
+ * don't cast light in this engine, and there is no dynamic-light scripting call — a light-emitting BLOCK is
+ * the only way to actually light the surroundings, and placing or clearing one costs a real lighting
+ * recalculation. That cost is why this is opt-in per gun rather than added to every one: only revolver and
+ * semi_rifle set it, since both have an enforced slow cadence (primeTicks roughly doubles their real
+ * interval between shots) — a gun that can re-fire every couple of ticks with no human bottleneck (the
+ * Gatling gun) would churn that cost far too often. It's also never let overwrite a real block, only ever
+ * placed into air and only ever cleared back to air by the flash that placed it.
+ */
+export interface MuzzleLight {
+    /** 0-15, matching light_block_0..15 (15 is brightest). */
+    readonly level: number;
+    /** How long the light stays before flashMuzzleLight clears it. */
+    readonly ticks: number;
 }
 
 /**
@@ -226,8 +246,9 @@ export const GUNS: Record<GunId, GunConfig> = {
         damage: 4,
         projectileSpeed: 5,
         effects: {
-            muzzle: ["minecraft:basic_smoke_particle", "minecraft:basic_smoke_particle", "minecraft:basic_smoke_particle"],
-            muzzleDistance: 1
+            muzzle: ["minecraft:basic_flame_particle", "minecraft:basic_smoke_particle", "minecraft:basic_smoke_particle", "minecraft:basic_smoke_particle"],
+            muzzleDistance: 1,
+            muzzleLight: { level: 15, ticks: 3 }
         }
     },
     pistol: {
@@ -254,7 +275,7 @@ export const GUNS: Record<GunId, GunConfig> = {
         damage: 6,
         projectileSpeed: 5,
         effects: {
-            muzzle: ["minecraft:basic_smoke_particle", "minecraft:basic_smoke_particle"],
+            muzzle: ["minecraft:basic_flame_particle", "minecraft:basic_smoke_particle", "minecraft:basic_smoke_particle"],
             muzzleDistance: 1
         }
     },
@@ -284,7 +305,7 @@ export const GUNS: Record<GunId, GunConfig> = {
         damage: 14,
         projectileSpeed: 25,
         effects: {
-            muzzle: ["minecraft:basic_smoke_particle", "minecraft:basic_smoke_particle", "minecraft:basic_smoke_particle", "minecraft:basic_smoke_particle"],
+            muzzle: ["minecraft:basic_flame_particle", "minecraft:basic_flame_particle", "minecraft:basic_smoke_particle", "minecraft:basic_smoke_particle", "minecraft:basic_smoke_particle", "minecraft:basic_smoke_particle"],
             muzzleDistance: 1.2
         }
     },
@@ -317,8 +338,9 @@ export const GUNS: Record<GunId, GunConfig> = {
         damage: 6,
         projectileSpeed: 5,
         effects: {
-            muzzle: ["minecraft:basic_smoke_particle", "minecraft:basic_smoke_particle", "minecraft:basic_smoke_particle"],
-            muzzleDistance: 1.2
+            muzzle: ["minecraft:basic_flame_particle", "minecraft:basic_flame_particle", "minecraft:basic_smoke_particle", "minecraft:basic_smoke_particle", "minecraft:basic_smoke_particle"],
+            muzzleDistance: 1.2,
+            muzzleLight: { level: 15, ticks: 3 }
         }
     },
     pump_shotgun: {
@@ -401,6 +423,7 @@ export const GUNS: Record<GunId, GunConfig> = {
         projectileSpeed: 5,
         effects: {
             muzzle: [
+                "minecraft:basic_flame_particle", "minecraft:basic_flame_particle",
                 "minecraft:basic_smoke_particle", "minecraft:basic_smoke_particle",
                 "minecraft:basic_smoke_particle", "minecraft:basic_smoke_particle"
             ],

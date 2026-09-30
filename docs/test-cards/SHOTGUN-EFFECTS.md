@@ -2,7 +2,7 @@
 
 Not an ARCH task: added on request. Guns now show their shot with vanilla particles.
 
-**Every gun** shows **muzzle smoke** just in front of the barrel and a little below the eyes: 2 puffs from the pistol, 3 from the revolver and the semi-auto rifle, 4 from the bolt-action. The shotguns also have a muzzle flash (two flame particles).
+**Every gun** shows a **muzzle flash and smoke** just in front of the barrel and a little below the eyes. Since [MUZZLE-LIGHT.md](MUZZLE-LIGHT.md) (2026-09-29), every gun has at least one flame particle in the mix, not just the shotguns — see that card for the flash addition and the two guns that also become a brief real light source.
 
 **The shotguns** are hitscan, so there is no bullet to watch. They also draw:
 
@@ -29,7 +29,7 @@ The whole session's content log had **no script errors or warnings**, but it was
 | 2 | Fire it at a wall a few blocks away. | The embers stop at the wall, with a puff of smoke where the pellets hit. |
 | 3 | Fire it at a mob. | Puffs where the pellets land on it, and it takes the damage as before. |
 | 4 | Fire the double-barrel. | The same, with its wider spread. |
-| 5 | Fire the revolver, the pistol, the semi-auto and the bolt-action. | A puff of smoke at the barrel each time (the bolt-action the biggest), no flash, no trail. |
+| 5 | Fire the revolver, the pistol, the semi-auto and the bolt-action. | A flash and smoke at the barrel each time (the bolt-action the biggest puff), no trail — see MUZZLE-LIGHT.md for the revolver's and repeater's extra real light. |
 | 6 | Fire from a horse, and while aimed (tap right-click). | The same effects. |
 
 ## What to tell me

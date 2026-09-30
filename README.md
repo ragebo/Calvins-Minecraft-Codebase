@@ -182,12 +182,25 @@ revolver) never has a follow-up shot silently vanish. It only knows about damage
 themselves dealt, so a shot arriving right after some unrelated hit (a fall, a punch) is a
 narrower, unfixed edge of the same rule.
 
-Every gun shows muzzle smoke
+Every gun shows a muzzle flash and smoke
 when it fires, and, having no bullet to watch, a shotgun shot is also drawn with vanilla
-particles (a muzzle flash, an ember trail along every pellet, a puff where one ends):
+particles (an ember trail along every pellet, a puff where one ends):
 `effects` per gun in `config/guns.ts`, `docs/test-cards/SHOTGUN-EFFECTS.md`. Use only
 particles that work when spawned bare (`basic_crit_particle` needs a `direction` and floods
 the log).
+
+Two guns, the revolver and the repeater, also briefly turn their muzzle into a real light
+source (`effects.muzzleLight` in `config/guns.ts`) — a temporary, invisible
+`minecraft:light_block_<0-15>` placed where the shot fires and cleared back to air a few
+ticks later (`flashMuzzleLight` in `systems/guns.ts`), never overwriting a real block and
+never clearing anything but its own flash. Particles don't cast light in this engine and
+there's no dynamic-light scripting call, so a light-emitting block is the only way to
+actually light the surroundings — and placing or clearing one costs a real lighting
+recalculation, which is why this is opt-in and, for now, only on the two guns with an
+enforced slow cadence (`primeTicks` roughly doubles their real interval between shots). The
+Gatling gun and every other fast-firing gun deliberately don't get it: see
+`docs/test-cards/MUZZLE-LIGHT.md` for what to watch for (feel and any lag) before it's
+considered for anything faster.
 
 Every gun is a flat 2D item held like a tool (`minecraft:hand_equipped`) with its own
 texture (`BountySys_RP/textures/items/<gun>.png`, 16x16, mapped in

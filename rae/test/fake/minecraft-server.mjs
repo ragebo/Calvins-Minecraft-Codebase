@@ -106,7 +106,16 @@ function makeDimension(id) {
         spawnItem(stack, location) { return fake.makeEntity({ typeId: "minecraft:item", location, dimension: dim }); },
         createExplosion(location, radius, options) { dim.explosions.push({ location, radius, options }); return true; },
         fillBlocks(volume, permutation) { dim.filled.push({ volume, permutation }); },
-        getBlock() { return undefined; },
+        // Sparse: an untouched location reads as air, like a real world. Keyed by whole-number
+        // coordinates only (callers that care about sub-block position round first, same as the game).
+        blocks: new Map(),
+        getBlock(location) {
+            const key = `${Math.floor(location.x)},${Math.floor(location.y)},${Math.floor(location.z)}`;
+            return {
+                typeId: dim.blocks.get(key) ?? "minecraft:air",
+                setType(typeId) { dim.blocks.set(key, typeId); }
+            };
+        },
         getBlockFromRay() { return undefined; },
         getEntitiesFromRay() { return []; },
         // An ordinary, non-desert biome by default; a test that needs a specific one replaces this.
