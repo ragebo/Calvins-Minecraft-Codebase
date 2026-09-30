@@ -9,6 +9,7 @@ import { AIM, TUMBLEWEED_ENTITY_ID } from "../config/balance.js";
 import { hideScope, showScope, zoomReset, zoomTo } from "../core/aim.js";
 import { warn } from "../core/log.js";
 import { registerSystem } from "../core/registry.js";
+import { playFor, playSequence } from "../core/sound.js";
 import { onTick } from "../core/tick.js";
 
 /**
@@ -95,43 +96,15 @@ function fireCuesFor(gun: GunConfig, burstLevel: number, spinUpShots: number): r
     return gun.sounds.fire.map((cue) => ({ ...cue, pitch: cue.pitch + t * 0.5 }));
 }
 
-const reportedSoundErrors = new Set<string>();
-
-function playCue(player: Player, cue: SoundCue): void {
-
-    try {
-        // Positional, so everyone nearby hears it — not just the shooter.
-        player.dimension.playSound(cue.id, player.location, { volume: cue.volume, pitch: cue.pitch });
-    } catch (error) {
-        // A bad cue must never break firing, and it would repeat on
-        // every shot, so report each broken id once.
-        if (!reportedSoundErrors.has(cue.id)) {
-            reportedSoundErrors.add(cue.id);
-            world.sendMessage(`§c[GUN SOUND ERROR] ${cue.id}: ${error}`);
-        }
-    }
-}
-
 /**
- * Delayed cues re-check that the player is still around and still
- * holding this gun, so swapping away or disconnecting mid-reload
- * doesn't leave sounds playing for a weapon nobody is using.
+ * Every gun sound carries: everyone nearby should hear a shot or a reload, not just the shooter, so
+ * this always plays positionally (core/sound.ts's playAt, via playSequence's `positional` option). A
+ * delayed cue re-checks stillUsing — the one condition every gun already needs — so swapping away,
+ * dismounting, or disconnecting mid-reload doesn't leave sounds playing for a weapon nobody is using
+ * any more. A bad cue is caught and reported by core/sound.ts itself; this file no longer needs to know.
  */
 function playCues(player: Player, gun: GunConfig, cues: readonly SoundCue[]): void {
-
-    for (const cue of cues) {
-
-        if (!cue.delayTicks) {
-            playCue(player, cue);
-            continue;
-        }
-
-        system.runTimeout(() => {
-            if (!player.isValid) return;
-            if (!stillUsing(player, gun)) return;
-            playCue(player, cue);
-        }, cue.delayTicks);
-    }
+    playSequence(player, cues, { positional: true, shouldPlay: () => stillUsing(player, gun) });
 }
 
 /** Rounds currently chambered. A freshly given gun reads as full. */
@@ -191,7 +164,7 @@ function consumeAmmoFromInventory(player: Player, ammoItemId: string, amount: nu
 /** The private click a player hears from their own empty gun, whether they pulled the trigger themselves or
  *  an automatic gun's own loop found it empty — always paired with starting a reload. */
 function playDryClick(player: Player): void {
-    player.playSound("random.click", { volume: 0.5 });
+    playFor(player, { id: "random.click", volume: 0.5 });
 }
 
 function startReload(player: Player, gun: GunConfig): void {
