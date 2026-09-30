@@ -214,12 +214,16 @@ for (const running of IDS) {
     test(`a round reset while ${running} runs frees the slot for every event`, () => {
         const { check, done } = checks();
         for (const wanted of IDS) {
-            scene();
+            const people = scene();
             const first = request(running);
             check(`(setup) ${running} starts`, started(running, first), JSON.stringify(first));
             check(`(setup) ${wanted} is refused while ${running} runs`, refused(request(wanted)));
 
             resetAllSystems();
+            // A round reset strips every role tag, ranchGuy's "outlaw" included, the way a real reset
+            // does ahead of the next round's role assignment. This test only cares that the event slot
+            // is freed, so put the tag back rather than model a full role assignment here.
+            people.ranchGuy.tags.add("outlaw");
 
             const then = request(wanted);
             check(`${wanted} starts after the reset`, started(wanted, then), JSON.stringify(then));
