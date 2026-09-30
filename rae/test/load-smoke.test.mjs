@@ -6,6 +6,22 @@ import { fake, system, world, load, checks, strip } from "./helpers.mjs";
 await load("main.js");
 const { listSystems } = await load("core/registry.js");
 const { listScriptEvents } = await load("core/events.js");
+const { AMMO, GUNS } = await load("config/guns.js");
+const { TRAIN_STRUCTURE } = await load("config/world.js");
+
+// Everything main.ts's load hook now checks (core/preflight.ts) beyond the two scoreboards:
+// every gun/ammo item id, and the train structure. Kept as a list here (not hardcoded ids) so a
+// new gun in config/guns.ts does not silently break this test.
+const ALL_GUN_ITEM_IDS = [...Object.values(AMMO).map((a) => a.itemId), ...Object.values(GUNS).map((g) => g.itemId)];
+
+/** A world set up so core/preflight.ts's runPreflightChecks() finds nothing wrong. */
+function fakeReadyWorld() {
+    fake.reset();
+    fake.addObjective("coins");
+    fake.addObjective("bounty");
+    fake.structures.add(TRAIN_STRUCTURE);
+    for (const id of ALL_GUN_ITEM_IDS) fake.itemTypes.add(id);
+}
 
 // These ids are wired to command blocks in the world. They are a PUBLIC API:
 // a refactor may add ids but must never rename or drop one without approval.
@@ -32,9 +48,7 @@ test("the public script-event ids are all still registered", () => {
 });
 
 test("startup announces itself and reports no errors when the scoreboards exist", () => {
-    fake.reset();
-    fake.addObjective("coins");
-    fake.addObjective("bounty");
+    fakeReadyWorld();
 
     // core/log's error() reports a failure to the console, not to world.sendMessage/fake.chat any
     // more, so "no errors" is checked there too now, alongside the (still valid) chat check.

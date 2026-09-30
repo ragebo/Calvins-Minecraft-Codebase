@@ -1,5 +1,5 @@
 import { world, system, BlockVolume, BlockPermutation, type Vector3 } from "@minecraft/server";
-import { TRAIN_START, TRAIN_END, TRAIN_SIZE, TRAIN_VAULT_CHEST, BRIDGE_AREA } from "../config/world.js";
+import { TRAIN_START, TRAIN_END, TRAIN_SIZE, TRAIN_STRUCTURE, TRAIN_VAULT_CHEST, BRIDGE_AREA } from "../config/world.js";
 import { TRAIN, LOOT } from "../config/balance.js";
 import { registerSystem } from "../core/registry.js";
 import { onDeath } from "../core/events.js";
@@ -8,11 +8,6 @@ import { addCoins } from "../core/economy.js";
 import { registerEvent, finishEvent } from "../core/director.js";
 import { error } from "../core/log.js";
 
-/**
- * Name of the structure saved with /structure save. Not a tunable
- * number, so it stays local rather than in config/balance.ts.
- */
-const TRAIN_STRUCTURE = "mystructure:train";
 const BACKUP_PREFIX = "mystructure:track_backup_";
 const BRIDGE_BACKUP = "mystructure:bridge_backup";
 

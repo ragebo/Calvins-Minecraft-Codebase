@@ -11,6 +11,27 @@ import type { Vector3 } from "@minecraft/server";
 export const WORLD_SCHEMA_VERSION = 1;
 
 // ---------------------------------------------------
+// BUILD LIMITS
+// ---------------------------------------------------
+
+/**
+ * The Overworld's build-limit Y range in this engine build: a Y coordinate outside it cannot be
+ * a real in-world location. -64..320 is the standard Bedrock Overworld height since the 1.18
+ * "Caves & Cliffs Part 2" expansion (384 total blocks), unchanged since.
+ *
+ * Checked against this project's own installed engine (2026-09-29) rather than assumed: neither
+ * `Dimension.heightRange`'s type in rae/node_modules/@minecraft/server/index.d.ts (a runtime
+ * `NumberRange` with `min`/`max` fields, no default value documented there) nor the installed
+ * vanilla behavior/resource packs (behavior_packs/vanilla_1.26.52 in the game's own data folder
+ * ships only manifest.json/contents.json — no readable dimension definition; it is packed in an
+ * opaque archive, same as vanilla's entity and item defs) state this number in the clear. So this
+ * value is NOT read verbatim from either source — it is the documented default for this engine
+ * line, and nothing checked here contradicts it. If a world this addon runs on ever uses a
+ * non-default height, update this constant.
+ */
+export const OVERWORLD_Y_BOUNDS = { min: -64, max: 320 } as const;
+
+// ---------------------------------------------------
 // SPAWNS
 // ---------------------------------------------------
 
@@ -94,6 +115,14 @@ export const FORT_REWARD_CHEST: Vector3 = { x: -8, y: 70, z: -52 };
 // ---------------------------------------------------
 // TRAIN ROBBERY
 // ---------------------------------------------------
+
+/**
+ * Name of the structure saved with /structure save. Checkable at load (core/preflight.ts): it
+ * has to exist ahead of time, unlike its backup-structure siblings in systems/train.ts
+ * (BACKUP_PREFIX, BRIDGE_BACKUP), which the addon's own save calls create at runtime and so
+ * would always be missing on a fresh world — those stay local, not here.
+ */
+export const TRAIN_STRUCTURE = "mystructure:train";
 
 export const TRAIN_START: Vector3 = { x: -284, y: 94, z: -269 };
 export const TRAIN_END: Vector3 = { x: -241, y: 94, z: -269 };

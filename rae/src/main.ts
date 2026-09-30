@@ -4,6 +4,7 @@ import { verifyScoreboards } from "./core/economy.js";
 import { onScriptEvent, onSpawn, listScriptEvents } from "./core/events.js";
 import { resetGame } from "./core/game.js";
 import { error } from "./core/log.js";
+import { runPreflightChecks } from "./core/preflight.js";
 import { listSystems } from "./core/registry.js";
 import { onTick } from "./core/tick.js";
 import { pickRandom } from "./systems/roles.js";
@@ -47,7 +48,7 @@ onScriptEvent("rae:reset", () => resetGame());
 
 system.run(() => {
     world.sendMessage("§aRAE loaded.");
-    verifyScoreboards();
+    runPreflightChecks();
 });
 
 // ---------------------------------------------------
