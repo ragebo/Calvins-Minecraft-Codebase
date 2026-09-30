@@ -27,7 +27,7 @@ rae/src/main.ts    imports + debug commands              docs/test-cards/   one 
 1. Layers point down: `config <- logic <- core <- systems`. `src/logic/` has no game imports.
 2. Systems never import each other, only `core/` contracts and events.
 3. Numbers and coordinates live only in `config/`.
-4. Mutable game state lives in `core/state` (once it exists), not in module variables or tags. Tags are output for command targeting.
+4. Mutable game state lives in `core/state`, not in module variables or tags. Tags are output for command targeting.
 5. One writer per channel: `core/ui` (title/action bar/chat), `core/sound`, `core/log`, `core/director` (events).
 6. A system self-registers with `registerSystem`; adding one edits no shared file.
 7. Every change ships a machine-checkable test.
@@ -35,7 +35,7 @@ rae/src/main.ts    imports + debug commands              docs/test-cards/   one 
 ## How you work
 
 - You are in your own git worktree on branch `task/<ID>`. Commit there. **Never push, tag, or touch other branches.**
-- Edit only the paths in your brief ("allowed paths"). **Never edit:** manifests (`*/manifest.json`), `README.md`, `MIGRATION.md`, `rae/package.json`, `rae/package-lock.json`, `rae/test/fake/*`, `rae/scripts/*`, `.github/`, `CLAUDE.md`, unless your brief names the file. If you need one changed, say so in your report.
+- Edit only the paths in your brief ("allowed paths"). **Never edit:** manifests (`*/manifest.json`), `README.md`, `ARCHITECTURE.md`, `MIGRATION.md`, `rae/package.json`, `rae/package-lock.json`, `rae/test/fake/*`, `rae/scripts/*`, `.github/`, `CLAUDE.md`, unless your brief names the file. If you need one changed, say so in your report.
 - **Public script-event ids are an API** (command blocks in the world call them): `bounty:start_round`, `bounty:teleport`, `bounty:fort`, `bounty:ranch`, `bounty:train`, `bounty:escape`, `bounty:lockpick`, `bounty:test_capture`, `rae:adopt`, `rae:aim_spike`, `rae:debug`, `rae:log_debug`, `rae:menu`, `rae:probe_damage`, `rae:reset`, `rae:tumbleweed`, and the train recorder `rae:train_mark`, `rae:train_station`, `rae:train_undo`, `rae:train_clear`, `rae:train_loop`, `rae:train_info`, `rae:train_show`, `rae:train_spike`. Never rename or remove one. (`rae:log_debug` is registered directly on the raw engine signal by `core/log.ts`, not through `core/events.ts`'s `onScriptEvent`/`listScriptEvents` registry — log.ts cannot import `core/events.ts` — so it is real but does not show up in `rae:debug`'s event list.)
 - Write **characterization tests before refactoring** anything whose behavior you touch (tick cadences, death-handler order, round flow, jail rotation, compass output), watch them pass on the old code, then refactor.
 - **Definition of done:** `npm run check` clean, `npm test` green, `npm run check:legacy` not raised, diff inside allowed paths, and a manual test card at `docs/test-cards/<ID>.md`: numbered in-game steps, expected result, and the content-log line to look for. For risky logic, break it on purpose (a mutation) and confirm a test fails.
