@@ -13,6 +13,19 @@ smallest per-shot value on purpose, since it can fire every 2 ticks once spun up
 many small shakes stacking at that rate should already read as a sustained rumble, where a bolt-action-sized
 shake that often would be nauseating rather than punchy.
 
+**GUN-03 HOTFIX, after the first real playtest: "the recoil looks pretty awful."** Found the likely cause in
+`Camera.addShake`'s own documentation, not guessed: every call queues an *independent* shake event, with
+intensities summed while they overlap. `shakeCamera` never stopped the previous shot's shake before starting
+a new one, so firing again before the last shake had finished decaying stacked a fresh shake on top of one
+still playing — every shot after the first was compounding, not resetting, which would read as chaotic rather
+than a clean per-shot punch. Fixed with `Camera.stopShaking()`, called right before every `addShake` now, so
+each shot always starts from a clean, fully-reset camera. The actual intensity/duration numbers are
+unchanged this round, on purpose — isolating this one fix lets the next playtest say clearly whether
+stacking was the real problem, rather than also wondering whether a magnitude change helped. If it still
+looks bad with clean, non-stacking shakes, that points at the shake *character* itself (unavoidably random,
+not a directional kick) rather than the stacking, which would be the signal to drop recoil entirely instead
+of continuing to tune it.
+
 **GUN-07, hit markers and a kill cue.** Landing a shot now plays a sound to the shooter alone (never
 positionally — nobody else should hear it) and flashes a short action-bar line: `HIT` normally, `KILL` in
 red if that shot was lethal. Both guns' damage paths (hitscan's `fireHitscan`, every projectile's
@@ -42,7 +55,8 @@ continuously while holding a gun (or riding the Gatling gun), switching to a `Re
 while a reload is in progress. The chat lines are unchanged — this is in addition, not a replacement.
 
 `npm test` covers: every gun's shake matches its own configured intensity/duration, including the Gatling
-gun's automatic loop; a landed shot plays the hit marker and posts `HIT`, a lethal one plays the kill marker
+gun's automatic loop; a second shot stops the first shake before adding its own, not stacking onto it; a
+landed shot plays the hit marker and posts `HIT`, a lethal one plays the kill marker
 and posts `KILL` instead, a miss posts neither, and a bystander never hears the shooter's own marker; the
 ammo readout shows the right name and count for every held gun and for the mounted Gatling gun, drops by one
 after firing, shows a live countdown while reloading and returns to the full count once the reload actually
@@ -82,8 +96,9 @@ sounds and the engine's own camera API, no asset needed).
 
 ## What to tell me
 
-1. Does the recoil read as a believable kick, or does it feel more like random jitter? Is the relative
-   ranking (bolt-action strongest, pistol/Gatling weakest) right, or does something need rebalancing?
+1. **The one that matters most right now:** is the recoil noticeably smoother after the stopShaking fix, or
+   does it still look bad? If it's still bad, say so plainly — the next step would be dropping recoil
+   entirely rather than keep tuning numbers on a mechanism that fundamentally doesn't look right.
 2. Is the hit marker's sound and `HIT`/`KILL` text clear enough to notice mid-fight without being annoying
    on a gun that fires often?
 3. Is the ammo readout positioned/legible well, and does it ever visibly fight with the compass (it shouldn't

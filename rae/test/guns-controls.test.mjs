@@ -1047,6 +1047,20 @@ test("every held gun shakes the shooter's camera on each shot, matching its own 
     done();
 });
 
+test("each shot stops any shake already running before starting its own, so rapid shots don't stack into a mess", () => {
+    const { check, done } = checks();
+    const gun = GUNS.pistol;   // no priming: both clicks are real shots
+    const p = armed(gun);
+
+    leftClick(p);
+    check("(setup) the first shot shook once, nothing stopped yet (none was running)", p.camera.shakes.length === 1 && p.camera.stopShakeCalls === 1, `shakes=${p.camera.shakes.length} stops=${p.camera.stopShakeCalls}`);
+
+    fake.advance(gun.fireRateTicks);
+    leftClick(p);
+    check("the second shot stopped the first shake before adding its own", p.camera.stopShakeCalls === 2 && p.camera.shakes.length === 2, `shakes=${p.camera.shakes.length} stops=${p.camera.stopShakeCalls}`);
+    done();
+});
+
 test("the Gatling gun shakes the camera on every shot of its own automatic loop too", () => {
     const { check, done } = checks();
     const gun = GUNS.gatling_gun;

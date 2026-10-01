@@ -97,10 +97,19 @@ export function flashHitMarker(player: Player, options: { readonly restoreScope:
     }, AIM.hitMarkerFlashTicks);
 }
 
-/** A brief rotational camera shake (GUN-03's recoil). `intensity` is 0-4 (the engine's own cap on
- *  Camera.addShake); `duration` is in seconds. */
+/**
+ * A brief rotational camera shake (GUN-03's recoil). `intensity` is 0-4 (the engine's own cap on
+ * Camera.addShake); `duration` is in seconds.
+ *
+ * Stops whatever shake is already running first: addShake queues a new, independent shake event every time
+ * it's called, with intensities summed while they overlap (its own doc says so). Firing again before the
+ * last shot's shake had finished decaying was stacking a fresh shake on top of one still playing, which is
+ * very likely what the first real playtest saw as "not smooth" rather than a clean per-shot punch — every
+ * shot after the first was compounding, not resetting.
+ */
 export function shakeCamera(player: Player, shake: { readonly intensity: number; readonly duration: number }): void {
     try {
+        player.camera.stopShaking();
         player.camera.addShake({ type: CameraShakeType.Rotational, intensity: shake.intensity, duration: shake.duration });
     } catch (error) {
         report("shake", error);

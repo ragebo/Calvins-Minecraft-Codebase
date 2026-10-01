@@ -239,12 +239,14 @@ function makePlayer(name, options = {}) {
         selectedSlotIndex: options.selectedSlotIndex ?? 0,
         // What is in the off-hand slot (a type id) or null. Tests set it to act out an off-hand swap.
         offhand: options.offhand ?? null,
-        // player.camera: setFov/addShake record what they were given, or throw fake.cameraError.
+        // player.camera: setFov/addShake/stopShaking record what they were given, or throw fake.cameraError.
         camera: {
             fovCalls: [],
             shakes: [],
+            stopShakeCalls: 0,
             setFov(o) { guard(player); if (fake.cameraError) throw new Error(fake.cameraError); player.camera.fovCalls.push(o); },
-            addShake(o) { guard(player); if (fake.cameraError) throw new Error(fake.cameraError); player.camera.shakes.push(o); }
+            addShake(o) { guard(player); if (fake.cameraError) throw new Error(fake.cameraError); player.camera.shakes.push(o); },
+            stopShaking() { guard(player); if (fake.cameraError) throw new Error(fake.cameraError); player.camera.stopShakeCalls++; }
         },
         container,
         permission: options.permission ?? PlayerPermissionLevel.Member,
