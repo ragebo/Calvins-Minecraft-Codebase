@@ -1,22 +1,22 @@
-import { system, CameraShakeType, type Player } from "@minecraft/server";
+import { system, type Player } from "@minecraft/server";
 import { AIM } from "../config/balance.js";
 import { warn } from "./log.js";
 import { clearTitle, showTitle } from "./ui.js";
 
 /**
- * What a gun does to the screen: zoom the camera, put a scope overlay over it, (GUN-03) briefly shake it for
- * recoil, and (GUN-07, a spike) briefly flash a hit-marker overlay. One place, so the guns and the
- * measurement spike (systems/aimprobe.ts) do it the same way.
+ * What a gun does to the screen: zoom the camera, put a scope overlay over it, and (GUN-07, a spike) briefly
+ * flash a hit-marker overlay. One place, so the guns and the measurement spike (systems/aimprobe.ts) do it
+ * the same way.
  *
  * Measured in the real game (2026-09-20, docs/test-cards/AIM-SPIKE.md): Camera.setFov zooms smoothly and setFov()
  * puts the view back; the overlay is a HUD image (BountySys_RP/ui) that shows while the HUD's title text equals
  * AIM.scopeTitle.
  *
- * Recoil is a Camera.addShake, not a literal "kick the view up and ease it back": there is no confirmed API
- * that forces a real connected player's own look direction (Entity.setRotation's own doc only promises body
- * rotation "for most mobs", and a player's camera is otherwise client-controlled), while addShake is an
- * engine feature built and documented for exactly this kind of per-shot camera feedback. Rotational, not
- * positional, since recoil is a view punch, not the camera physically moving.
+ * (GUN-03's recoil lived here too for a while — Camera.addShake, with Camera.stopShaking() before each shot
+ * so rapid fire didn't stack shakes into a mess. Still looked bad after that fix, per a real playtest, so it
+ * was removed outright rather than keep tuning a mechanism whose fundamentally random character was the
+ * actual problem, not the stacking. See git history (core/aim.ts's shakeCamera, config/guns.ts's
+ * RecoilConfig) if it's ever worth trying again with a different approach.)
  *
  * The hit marker reuses the scope's own title-text switch technique (there is no other way to toggle a HUD
  * image: a custom entity property can only be declared on an entity this addon's own behavior pack defines,
@@ -95,23 +95,4 @@ export function flashHitMarker(player: Player, options: { readonly restoreScope:
         if (options.restoreScope) showScope(player);
         else clearTitleSafely(player);
     }, AIM.hitMarkerFlashTicks);
-}
-
-/**
- * A brief rotational camera shake (GUN-03's recoil). `intensity` is 0-4 (the engine's own cap on
- * Camera.addShake); `duration` is in seconds.
- *
- * Stops whatever shake is already running first: addShake queues a new, independent shake event every time
- * it's called, with intensities summed while they overlap (its own doc says so). Firing again before the
- * last shot's shake had finished decaying was stacking a fresh shake on top of one still playing, which is
- * very likely what the first real playtest saw as "not smooth" rather than a clean per-shot punch — every
- * shot after the first was compounding, not resetting.
- */
-export function shakeCamera(player: Player, shake: { readonly intensity: number; readonly duration: number }): void {
-    try {
-        player.camera.stopShaking();
-        player.camera.addShake({ type: CameraShakeType.Rotational, intensity: shake.intensity, duration: shake.duration });
-    } catch (error) {
-        report("shake", error);
-    }
 }

@@ -1,30 +1,24 @@
-# GUN-FEEDBACK test card: recoil, hit markers, and an ammo/reload readout
+# GUN-FEEDBACK test card: hit markers and an ammo/reload readout (recoil tried and removed)
 
 Three backlog items (GUN-03, GUN-07, GUN-09), built together on request right after MUZZLE-LIGHT.md's
 muzzle flash: all three are about what firing *tells the shooter*, not what a bystander sees.
 
-**GUN-03, recoil.** Every shot now shakes the shooter's camera (`core/aim.ts`'s new `shakeCamera`, wrapping
-`Camera.addShake`), scaled per gun by `config/guns.ts`'s new `recoil: { intensity, duration }`. This is a
-camera *shake*, not a literal "the view kicks up and eases back": this engine has no confirmed scripting
-call that forces a real connected player's own look direction (a player's camera is otherwise
-client-controlled), while `Camera.addShake` is a real, documented engine feature built for exactly this kind
-of per-shot feedback. The bolt-action rifle gets the biggest single-shot punch; the Gatling gun gets the
-smallest per-shot value on purpose, since it can fire every 2 ticks once spun up with no human bottleneck —
-many small shakes stacking at that rate should already read as a sustained rumble, where a bolt-action-sized
-shake that often would be nauseating rather than punchy.
-
-**GUN-03 HOTFIX, after the first real playtest: "the recoil looks pretty awful."** Found the likely cause in
-`Camera.addShake`'s own documentation, not guessed: every call queues an *independent* shake event, with
-intensities summed while they overlap. `shakeCamera` never stopped the previous shot's shake before starting
-a new one, so firing again before the last shake had finished decaying stacked a fresh shake on top of one
-still playing — every shot after the first was compounding, not resetting, which would read as chaotic rather
-than a clean per-shot punch. Fixed with `Camera.stopShaking()`, called right before every `addShake` now, so
-each shot always starts from a clean, fully-reset camera. The actual intensity/duration numbers are
-unchanged this round, on purpose — isolating this one fix lets the next playtest say clearly whether
-stacking was the real problem, rather than also wondering whether a magnitude change helped. If it still
-looks bad with clean, non-stacking shakes, that points at the shake *character* itself (unavoidably random,
-not a directional kick) rather than the stacking, which would be the signal to drop recoil entirely instead
-of continuing to tune it.
+**GUN-03, recoil — tried, then removed.** Every shot briefly shook the shooter's camera (`core/aim.ts`'s
+`shakeCamera`, wrapping `Camera.addShake`), scaled per gun by `config/guns.ts`'s `recoil: { intensity,
+duration }`. Always a camera *shake*, not a literal "the view kicks up and eases back": this engine has no
+confirmed scripting call that forces a real connected player's own look direction, while `Camera.addShake` is
+a real, documented feature built for per-shot camera feedback — the closest available primitive, not a true
+directional kick. First real playtest: "it actually plays pretty well but the recoil looks pretty awful."
+Found a real, concrete cause before touching anything: `Camera.addShake`'s own docs say every call queues an
+*independent* shake event with intensities summed while they overlap, and `shakeCamera` never stopped the
+previous shot's shake before starting a new one — firing again before the last shake had decayed stacked a
+fresh one on top, compounding rather than resetting. Fixed with `Camera.stopShaking()` before every new
+shake, deliberately leaving the intensity/duration numbers untouched to isolate whether stacking alone was
+the problem. Second playtest, with clean non-stacking shakes: still looked bad. That confirmed the shake's
+own fundamentally random character — not the stacking — was the real issue, exactly the risk flagged when it
+was first built, so recoil was removed outright rather than keep tuning a mechanism that doesn't look right
+at its core. `core/aim.ts`'s own header comment and git history (the `shakeCamera`/`RecoilConfig` commits)
+have the detail if a different approach is ever worth trying.
 
 **GUN-07, hit markers and a kill cue.** Landing a shot now plays a sound to the shooter alone (never
 positionally — nobody else should hear it) and flashes a short action-bar line: `HIT` normally, `KILL` in
@@ -54,9 +48,7 @@ distracting is exactly what this spike needs played to find out.
 continuously while holding a gun (or riding the Gatling gun), switching to a `Reloading... Ns` countdown
 while a reload is in progress. The chat lines are unchanged — this is in addition, not a replacement.
 
-`npm test` covers: every gun's shake matches its own configured intensity/duration, including the Gatling
-gun's automatic loop; a second shot stops the first shake before adding its own, not stacking onto it; a
-landed shot plays the hit marker and posts `HIT`, a lethal one plays the kill marker
+`npm test` covers: a landed shot plays the hit marker and posts `HIT`, a lethal one plays the kill marker
 and posts `KILL` instead, a miss posts neither, and a bystander never hears the shooter's own marker; the
 ammo readout shows the right name and count for every held gun and for the mounted Gatling gun, drops by one
 after firing, shows a live countdown while reloading and returns to the full count once the reload actually
@@ -67,13 +59,13 @@ by skipping an invalid player before doing any work, the same guard `guns:gatlin
 hit-marker HUD files hang together (the texture exists, the title-text binding matches `config/balance.ts`,
 the generated image matches what's committed), and a landed hit flashes the marker and restores the title
 correctly afterward — to a proper clear when the shooter wasn't aiming, or back to the scope switch when
-they were. None of this can say whether the shake actually feels like recoil, whether the hit marker reads
-clearly in the heat of a fight, whether the readout is positioned/sized well, or whether the crosshair marker
-is even visible/legible at its current size — that's what this card is for.
+they were. None of this can say whether the hit marker reads clearly in the heat of a fight, whether the
+readout is positioned/sized well, or whether the crosshair marker is even visible/legible at its current
+size — that's what this card is for.
 
-Behavior pack **0.1.34**, resource pack **1.0.27** (the crosshair marker needs a new texture and UI file;
-everything else here — `Camera.addShake`, the hit/kill sounds, the action-bar text — is built from vanilla
-sounds and the engine's own camera API, no asset needed).
+Behavior pack **0.1.37**, resource pack **1.0.27** (the crosshair marker needs a new texture and UI file;
+everything else here — the hit/kill sounds, the action-bar text — is built from vanilla sounds, no asset
+needed).
 
 ## Steps
 
@@ -82,43 +74,37 @@ sounds and the engine's own camera API, no asset needed).
 
 | # | Do | Expect |
 |---|---|---|
-| 1 | Fire the bolt-action rifle, then the pistol, back to back. | Both kick the camera, but the bolt-action's kick should feel noticeably bigger — it's configured as the strongest. |
-| 2 | Hold any gun and watch the action bar without doing anything else. | `<gun name> \| n/max` shows continuously, not just right after firing. |
-| 3 | Fire a few times, watching the count. | The number drops by one each shot, refreshing within a fraction of a second. |
-| 4 | Empty the magazine (or press Q early) to start a reload. | The line switches to `Reloading <gun>... Ns`, counting down; once it finishes, it jumps back to the full count. |
-| 5 | Shoot a mob or another player without killing it. | A short, distinct sound only you hear, and a brief `HIT` on your action bar. |
-| 6 | Finish it off. | A different, more pronounced sound, and `KILL` instead of `HIT`, in red. |
-| 7 | Have someone stand near you while you get a hit marker. | They should hear and see nothing from your hit marker — it's private to you. |
-| 8 | Place and ride the Gatling gun, then fire it for a few seconds. | The ammo readout shows the Gatling gun's own name and count while mounted, and the recoil shake should feel like a steady rumble rather than individual kicks once it's spun up. |
-| 9 | Shoot a mob or player without aiming through a scope. | A small white X-shaped mark flashes right over your crosshair for a fraction of a second, then disappears. |
-| 10 | Aim the bolt-action rifle through its scope, then land a hit while still looking through it. | The scope overlay should blink off for an instant, show the X mark, then come back — note whether that blink is barely noticeable or actually distracting. |
-| 11 | Land several hits in quick succession. | Each one re-flashes the marker; it shouldn't get stuck on, flicker randomly, or fail to show on a later hit. |
+| 1 | Hold any gun and watch the action bar without doing anything else. | `<gun name> \| n/max` shows continuously, not just right after firing. |
+| 2 | Fire a few times, watching the count. | The number drops by one each shot, refreshing within a fraction of a second. |
+| 3 | Empty the magazine (or press Q early) to start a reload. | The line switches to `Reloading <gun>... Ns`, counting down; once it finishes, it jumps back to the full count. |
+| 4 | Shoot a mob or another player without killing it. | A short, distinct sound only you hear, and a brief `HIT` on your action bar. |
+| 5 | Finish it off. | A different, more pronounced sound, and `KILL` instead of `HIT`, in red. |
+| 6 | Have someone stand near you while you get a hit marker. | They should hear and see nothing from your hit marker — it's private to you. |
+| 7 | Place and ride the Gatling gun, then fire it for a few seconds. | The ammo readout shows the Gatling gun's own name and count while mounted. |
+| 8 | Shoot a mob or player without aiming through a scope. | A small white X-shaped mark flashes right over your crosshair for a fraction of a second, then disappears. |
+| 9 | Aim the bolt-action rifle through its scope, then land a hit while still looking through it. | The scope overlay should blink off for an instant, show the X mark, then come back — note whether that blink is barely noticeable or actually distracting. |
+| 10 | Land several hits in quick succession. | Each one re-flashes the marker; it shouldn't get stuck on, flicker randomly, or fail to show on a later hit. |
 
 ## What to tell me
 
-1. **The one that matters most right now:** is the recoil noticeably smoother after the stopShaking fix, or
-   does it still look bad? If it's still bad, say so plainly — the next step would be dropping recoil
-   entirely rather than keep tuning numbers on a mechanism that fundamentally doesn't look right.
-2. Is the hit marker's sound and `HIT`/`KILL` text clear enough to notice mid-fight without being annoying
+1. Is the hit marker's sound and `HIT`/`KILL` text clear enough to notice mid-fight without being annoying
    on a gun that fires often?
-3. Is the ammo readout positioned/legible well, and does it ever visibly fight with the compass (it shouldn't
+2. Is the ammo readout positioned/legible well, and does it ever visibly fight with the compass (it shouldn't
    — you can't hold a compass and a gun at once, but say so if it ever looks wrong)?
-4. Anything broken: a shake that lingers oddly, a hit marker that fires without a real hit (or vice versa), a
-   readout that gets stuck on the wrong number or never clears.
-5. Is the crosshair X mark big/bright enough to notice, or too subtle? Is the scope-blink trade-off (step 10)
+3. Anything broken: a hit marker that fires without a real hit (or vice versa), a readout that gets stuck on
+   the wrong number or never clears.
+4. Is the crosshair X mark big/bright enough to notice, or too subtle? Is the scope-blink trade-off (step 9)
    acceptable, or does it need the fuller fix (showing both the scope and the marker at once, which needs a
    small multi-state title scheme instead of the simple two-switch version built here)?
 
 ## Content log
 
-Must not appear: `[aim] shake failed`, `[gun effects] hit marker failed`, `[guns] ammo readout for ...`, any
-error naming `rae_hit_marker`, or any `[Scripting][error]` line.
+Must not appear: `[gun effects] hit marker failed`, `[guns] ammo readout for ...`, any error naming
+`rae_hit_marker`, or any `[Scripting][error]` line.
 
 ## Not checked
 
-Whether the recoil, the hit marker (sound, text, and now the crosshair mark), and the readout actually *feel*
-good together — amount, timing, size — is unseen until played. The camera shake, and the hit-marker's reuse
-of the scope's title-switch trick for a SECOND, independently-flashed image, have never been used anywhere in
-this codebase before this round, so their real-game behavior (does the shake stack sensibly across rapid
-shots, does the title hand-off between the marker and the scope look clean or glitchy) is genuinely new
-ground.
+Whether the hit marker (sound, text, and the crosshair mark) and the readout actually *feel* good together —
+amount, timing, size — is unseen until played. The hit-marker's reuse of the scope's title-switch trick for a
+SECOND, independently-flashed image has never been used anywhere in this codebase before this round, so
+whether the title hand-off between the marker and the scope looks clean or glitchy is genuinely new ground.

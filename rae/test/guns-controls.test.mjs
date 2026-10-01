@@ -545,7 +545,7 @@ test("a camera that refuses never breaks aiming or firing, and is reported once"
 
     check("nothing is thrown", threw === null, threw ? String(threw) : "");
     check("the shots still fire", heardShot(gun));
-    check("reported once each for zoom, reset and the shot's own recoil shake, not on every attempt", warnings.filter((w) => w.startsWith("[aim] zoom failed")).length === 1 && warnings.filter((w) => w.startsWith("[aim] zoom reset failed")).length === 1 && warnings.filter((w) => w.startsWith("[aim] shake failed")).length === 1, warnings.join("|"));
+    check("reported once each for zoom and reset, not on every aim", warnings.filter((w) => w.startsWith("[aim] zoom failed")).length === 1 && warnings.filter((w) => w.startsWith("[aim] zoom reset failed")).length === 1, warnings.join("|"));
     done();
 });
 
@@ -1030,63 +1030,10 @@ test("the barrels stop advancing once firing stops, coasting to a halt instead o
     done();
 });
 
-// ---------------------------------------------------------------------------------------------------------
-// GUN-03: recoil. core/aim.ts's shakeCamera (Camera.addShake) fires on every shot, scaled per gun by
-// config/guns.ts's recoil. A shake, not a literal forced view angle -- see core/aim.ts's own doc for why.
-// ---------------------------------------------------------------------------------------------------------
-
-test("every held gun shakes the shooter's camera on each shot, matching its own recoil config", () => {
-    const { check, done } = checks();
-    for (const gun of heldGuns) {
-        const p = armed(gun);
-        leftClick(p);
-        check(`${gun.id}: exactly one shake`, p.camera.shakes.length === 1, String(p.camera.shakes.length));
-        const shake = p.camera.shakes[0];
-        check(`${gun.id}: rotational, matching the configured intensity and duration`, shake?.type === "Rotational" && shake?.intensity === gun.recoil.intensity && shake?.duration === gun.recoil.duration, JSON.stringify(shake));
-    }
-    done();
-});
-
-test("each shot stops any shake already running before starting its own, so rapid shots don't stack into a mess", () => {
-    const { check, done } = checks();
-    const gun = GUNS.pistol;   // no priming: both clicks are real shots
-    const p = armed(gun);
-
-    leftClick(p);
-    check("(setup) the first shot shook once, nothing stopped yet (none was running)", p.camera.shakes.length === 1 && p.camera.stopShakeCalls === 1, `shakes=${p.camera.shakes.length} stops=${p.camera.stopShakeCalls}`);
-
-    fake.advance(gun.fireRateTicks);
-    leftClick(p);
-    check("the second shot stopped the first shake before adding its own", p.camera.stopShakeCalls === 2 && p.camera.shakes.length === 2, `shakes=${p.camera.shakes.length} stops=${p.camera.stopShakeCalls}`);
-    done();
-});
-
-test("the Gatling gun shakes the camera on every shot of its own automatic loop too", () => {
-    const { check, done } = checks();
-    const gun = GUNS.gatling_gun;
-    const p = manned();
-
-    leftClick(p);   // starts the self-sustaining loop
-    fake.advance(ticksFor(4));
-
-    check("at least a few shakes landed, one per shot fired", p.camera.shakes.length >= 3, String(p.camera.shakes.length));
-    check("every one matches the Gatling gun's own (small) recoil value", p.camera.shakes.every((s) => s.type === "Rotational" && s.intensity === gun.recoil.intensity && s.duration === gun.recoil.duration), JSON.stringify(p.camera.shakes));
-    done();
-});
-
 test("the ammo readout shows while manning the Gatling gun too, not just while holding a gun in hand", () => {
     const { check, done } = checks();
     const p = manned();
     check("a readout line with the Gatling gun's own name and a full magazine", ammoLine(p)?.includes(GATLING.displayName) && ammoLine(p)?.includes(`${GATLING.magazineSize}/${GATLING.magazineSize}`), ammoLine(p));
-    done();
-});
-
-test("recoil config sanity: every gun's intensity is within the engine's own 0-4 cap, and duration is a real, short amount of time", () => {
-    const { check, done } = checks();
-    for (const gun of guns) {
-        check(`${gun.id}: intensity is positive and at most 4`, gun.recoil.intensity > 0 && gun.recoil.intensity <= 4, String(gun.recoil.intensity));
-        check(`${gun.id}: duration is a positive fraction of a second, not a lingering shake`, gun.recoil.duration > 0 && gun.recoil.duration <= 0.5, String(gun.recoil.duration));
-    }
     done();
 });
 

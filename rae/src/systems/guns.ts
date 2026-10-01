@@ -6,7 +6,7 @@ import {
 } from "@minecraft/server";
 import { AMMO, GUNS, BULLET_ENTITY_ID, BULLET_LIFETIME_TICKS, GATLING_AIM_PITCH_PROPERTY, GATLING_BARREL_SPIN_PROPERTY, HIT_MARKER_SOUND, HIT_WINDOW_TICKS, KILL_MARKER_SOUND, type AutomaticConfig, type GunConfig, type GunId, type MuzzleEffects, type MuzzleLight, type SoundCue } from "../config/guns.js";
 import { AIM, TUMBLEWEED_ENTITY_ID } from "../config/balance.js";
-import { flashHitMarker, hideScope, shakeCamera, showScope, zoomReset, zoomTo } from "../core/aim.js";
+import { flashHitMarker, hideScope, showScope, zoomReset, zoomTo } from "../core/aim.js";
 import { error, warn } from "../core/log.js";
 import { registerSystem } from "../core/registry.js";
 import { playFor, playSequence } from "../core/sound.js";
@@ -262,7 +262,6 @@ function tryFire(player: Player, gun: GunConfig): void {
     setLoadedRounds(player, gun, loaded - 1);
 
     showMuzzle(player, gun.effects);
-    shakeCamera(player, gun.recoil);
 
     if (gun.kind === "projectile") {
         fireProjectile(player, gun);
@@ -336,7 +335,6 @@ function fireAutomaticStep(key: string, run: GatlingRun): void {
 
     setLoadedRounds(run.player, run.gun, loaded - 1);
     showMuzzle(run.player, run.gun.effects);
-    shakeCamera(run.player, run.gun.recoil);
 
     if (run.gun.kind === "projectile") fireProjectile(run.player, run.gun);
     else fireHitscan(run.player, run.gun);

@@ -12,7 +12,6 @@
 export const EquipmentSlot = { Mainhand: "Mainhand", Offhand: "Offhand", Head: "Head", Chest: "Chest", Legs: "Legs", Feet: "Feet" };
 export const EntitySwingSource = { Attack: "Attack", Build: "Build", DropItem: "DropItem", Event: "Event", Interact: "Interact", Mine: "Mine", None: "None", Place: "Place", Throw: "Throw", Use: "Use" };
 export const EntityDamageCause = { entityAttack: "entityAttack", projectile: "projectile", fall: "fall", override: "override" };
-export const CameraShakeType = { Positional: "Positional", Rotational: "Rotational" };
 export const PlayerPermissionLevel = { Visitor: 0, Member: 1, Operator: 2, Custom: 3 };
 export const StructureSaveMode = { Memory: "Memory", World: "World" };
 export class BlockVolume { constructor(from, to) { this.from = from; this.to = to; } }
@@ -239,14 +238,10 @@ function makePlayer(name, options = {}) {
         selectedSlotIndex: options.selectedSlotIndex ?? 0,
         // What is in the off-hand slot (a type id) or null. Tests set it to act out an off-hand swap.
         offhand: options.offhand ?? null,
-        // player.camera: setFov/addShake/stopShaking record what they were given, or throw fake.cameraError.
+        // player.camera: setFov records what it was given, or throws fake.cameraError.
         camera: {
             fovCalls: [],
-            shakes: [],
-            stopShakeCalls: 0,
-            setFov(o) { guard(player); if (fake.cameraError) throw new Error(fake.cameraError); player.camera.fovCalls.push(o); },
-            addShake(o) { guard(player); if (fake.cameraError) throw new Error(fake.cameraError); player.camera.shakes.push(o); },
-            stopShaking() { guard(player); if (fake.cameraError) throw new Error(fake.cameraError); player.camera.stopShakeCalls++; }
+            setFov(o) { guard(player); if (fake.cameraError) throw new Error(fake.cameraError); player.camera.fovCalls.push(o); }
         },
         container,
         permission: options.permission ?? PlayerPermissionLevel.Member,

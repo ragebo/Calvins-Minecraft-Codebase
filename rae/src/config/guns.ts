@@ -126,20 +126,6 @@ interface BaseGunConfig {
     /** Smoke (and flame) at the muzzle. Hitscan guns add a trail and impact puffs on top (GunEffects). */
     readonly effects: MuzzleEffects;
     readonly sounds: GunSounds;
-    /** The camera shake fired on every shot (core/aim.ts's shakeCamera) — see RecoilConfig. */
-    readonly recoil: RecoilConfig;
-}
-
-/**
- * GUN-03. `intensity` (0-4, the engine's own cap) and `duration` (seconds) are passed straight through to
- * Camera.addShake — see core/aim.ts's own doc for why a shake, not a literal forced view angle. Scaled per
- * gun so a slow, heavy-hitting gun (the bolt-action) punches harder than a pistol, and so the Gatling gun's
- * own very fast rate uses a small per-shot value — many small shakes stacking while it's spun up already
- * reads as a sustained rumble; a bolt-action-sized shake at that rate would be nauseating, not punchy.
- */
-export interface RecoilConfig {
-    readonly intensity: number;
-    readonly duration: number;
 }
 
 export interface ProjectileGunConfig extends BaseGunConfig {
@@ -263,8 +249,7 @@ export const GUNS: Record<GunId, GunConfig> = {
             muzzle: ["minecraft:basic_flame_particle", "minecraft:basic_smoke_particle", "minecraft:basic_smoke_particle", "minecraft:basic_smoke_particle"],
             muzzleDistance: 1,
             muzzleLight: { level: 15, ticks: 3 }
-        },
-        recoil: { intensity: 0.6, duration: 0.15 }
+        }
     },
     pistol: {
         id: "pistol",
@@ -292,8 +277,7 @@ export const GUNS: Record<GunId, GunConfig> = {
         effects: {
             muzzle: ["minecraft:basic_flame_particle", "minecraft:basic_smoke_particle", "minecraft:basic_smoke_particle"],
             muzzleDistance: 1
-        },
-        recoil: { intensity: 0.4, duration: 0.12 }
+        }
     },
     bolt_rifle: {
         id: "bolt_rifle",
@@ -323,8 +307,7 @@ export const GUNS: Record<GunId, GunConfig> = {
         effects: {
             muzzle: ["minecraft:basic_flame_particle", "minecraft:basic_flame_particle", "minecraft:basic_smoke_particle", "minecraft:basic_smoke_particle", "minecraft:basic_smoke_particle", "minecraft:basic_smoke_particle"],
             muzzleDistance: 1.2
-        },
-        recoil: { intensity: 1.0, duration: 0.2 }
+        }
     },
     semi_rifle: {
         id: "semi_rifle",
@@ -358,8 +341,7 @@ export const GUNS: Record<GunId, GunConfig> = {
             muzzle: ["minecraft:basic_flame_particle", "minecraft:basic_flame_particle", "minecraft:basic_smoke_particle", "minecraft:basic_smoke_particle", "minecraft:basic_smoke_particle"],
             muzzleDistance: 1.2,
             muzzleLight: { level: 15, ticks: 3 }
-        },
-        recoil: { intensity: 0.7, duration: 0.15 }
+        }
     },
     pump_shotgun: {
         id: "pump_shotgun",
@@ -401,8 +383,7 @@ export const GUNS: Record<GunId, GunConfig> = {
             trail: "minecraft:basic_flame_particle",
             trailSpacing: 2,
             impact: "minecraft:basic_smoke_particle"
-        },
-        recoil: { intensity: 0.9, duration: 0.18 }
+        }
     },
     gatling_gun: {
         id: "gatling_gun",
@@ -447,11 +428,7 @@ export const GUNS: Record<GunId, GunConfig> = {
                 "minecraft:basic_smoke_particle", "minecraft:basic_smoke_particle"
             ],
             muzzleDistance: 1.4
-        },
-        // Fires far faster than every other gun once spun up (every 2 ticks) with no human bottleneck, so
-        // this is deliberately the smallest value here: many small shakes stacking while it's firing already
-        // reads as a sustained rumble, and a bigger per-shot value at this rate would be nauseating, not punchy.
-        recoil: { intensity: 0.25, duration: 0.08 }
+        }
     },
     double_barrel_shotgun: {
         id: "double_barrel_shotgun",
@@ -490,8 +467,7 @@ export const GUNS: Record<GunId, GunConfig> = {
             trail: "minecraft:basic_flame_particle",
             trailSpacing: 2,
             impact: "minecraft:basic_smoke_particle"
-        },
-        recoil: { intensity: 1.1, duration: 0.2 }
+        }
     }
 };
 
