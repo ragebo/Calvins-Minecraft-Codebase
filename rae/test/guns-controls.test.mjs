@@ -491,7 +491,7 @@ test("a camera that refuses never breaks aiming or firing, and is reported once"
 
     check("nothing is thrown", threw === null, threw ? String(threw) : "");
     check("the shots still fire", heardShot(gun));
-    check("reported once each for zoom and reset, not on every aim", warnings.filter((w) => w.startsWith("[aim] zoom failed")).length === 1 && warnings.filter((w) => w.startsWith("[aim] zoom reset failed")).length === 1, warnings.join("|"));
+    check("reported once each for zoom, reset and the shot's own recoil shake, not on every attempt", warnings.filter((w) => w.startsWith("[aim] zoom failed")).length === 1 && warnings.filter((w) => w.startsWith("[aim] zoom reset failed")).length === 1 && warnings.filter((w) => w.startsWith("[aim] shake failed")).length === 1, warnings.join("|"));
     done();
 });
 
@@ -660,6 +660,64 @@ test("a system reset forgets a half-seen drop", () => {
     resetGuns();
     world.afterEvents.playerSwingStart.emit({ swingSource: "DropItem", heldItemStack: stack, player: p });
     check("the swing after a reset does not complete the old drop", dropped.isValid);
+    done();
+});
+
+// ---------------------------------------------------------------------------------------------------------
+// GUN-09: the ammo/reload readout. Chat was too slow to read in a fight, so this reads the same loaded-
+// rounds/reload state the chat lines already track and posts it to the action bar instead (core/ui.ts),
+// refreshed every few ticks the way compass.ts's own readout already is.
+// ---------------------------------------------------------------------------------------------------------
+
+const ammoLine = (p) => p.actionBar.filter((line) => /\d+\/\d+|Reloading/.test(line)).at(-1);
+
+test("holding a gun posts its name and loaded/max to the action bar, for every held gun", () => {
+    const { check, done } = checks();
+    for (const gun of heldGuns) {
+        const p = armed(gun);
+        const line = ammoLine(p);
+        check(`${gun.id}: a readout line was posted`, line !== undefined, JSON.stringify(p.actionBar));
+        check(`${gun.id}: shows the gun's name and a full magazine`, line?.includes(gun.displayName) && line?.includes(`${gun.magazineSize}/${gun.magazineSize}`), line);
+    }
+    done();
+});
+
+test("firing drops the loaded count shown, and reloading shows a countdown that reaches the full count again", () => {
+    const { check, done } = checks();
+    const gun = GUNS.pistol;   // no priming, simplest case
+    const p = armed(gun);
+
+    leftClick(p);
+    fake.advance(8);   // (n+1)*everyTicks for the readout's own 4-tick cadence: guarantees it ran regardless of phase
+    check("down by one after firing", ammoLine(p)?.includes(`${gun.magazineSize - 1}/${gun.magazineSize}`), ammoLine(p));
+
+    pressQ(p);
+    fake.advance(8);
+    const duringReload = ammoLine(p);
+    check("shows a reloading line, not a plain count, while reloading", duringReload?.includes("Reloading") && duringReload?.includes(gun.displayName), duringReload);
+
+    fake.advance(gun.reloadTicks + 8);
+    check("back to a full magazine once the reload actually finishes", ammoLine(p)?.includes(`${gun.magazineSize}/${gun.magazineSize}`), ammoLine(p));
+    done();
+});
+
+test("nothing is posted for a player holding something that isn't a gun", () => {
+    const { check, done } = checks();
+    fake.reset();
+    resetGuns();
+    const p = fake.makePlayer("Bystander", { holding: "minecraft:stick", location: { x: 1, y: 64, z: 2 } });
+    fake.advance(20);
+    check("no ammo/reload line for a non-gun item", ammoLine(p) === undefined, JSON.stringify(p.actionBar));
+    done();
+});
+
+test("the readout never throws for a player who becomes invalid between ticks", () => {
+    const { check, done } = checks();
+    const p = armed(GUNS.pistol);
+    p.isValid = false;   // the player disconnects while still "holding" the gun as far as the fake knows
+    let threw = null;
+    try { fake.advance(50); } catch (e) { threw = e; }
+    check("nothing thrown", threw === null, threw ? String(threw) : "");
     done();
 });
 
@@ -915,6 +973,52 @@ test("the barrels stop advancing once firing stops, coasting to a halt instead o
 
     fake.advance(50);   // aim tracking (yaw/pitch) keeps running every tick regardless; only the spin should freeze
     check("frozen exactly where it stopped, not reset to 0 and not still advancing", mount.getProperty(GATLING_BARREL_SPIN_PROPERTY) === stoppedAt, `${stoppedAt} -> ${mount.getProperty(GATLING_BARREL_SPIN_PROPERTY)}`);
+    done();
+});
+
+// ---------------------------------------------------------------------------------------------------------
+// GUN-03: recoil. core/aim.ts's shakeCamera (Camera.addShake) fires on every shot, scaled per gun by
+// config/guns.ts's recoil. A shake, not a literal forced view angle -- see core/aim.ts's own doc for why.
+// ---------------------------------------------------------------------------------------------------------
+
+test("every held gun shakes the shooter's camera on each shot, matching its own recoil config", () => {
+    const { check, done } = checks();
+    for (const gun of heldGuns) {
+        const p = armed(gun);
+        leftClick(p);
+        check(`${gun.id}: exactly one shake`, p.camera.shakes.length === 1, String(p.camera.shakes.length));
+        const shake = p.camera.shakes[0];
+        check(`${gun.id}: rotational, matching the configured intensity and duration`, shake?.type === "Rotational" && shake?.intensity === gun.recoil.intensity && shake?.duration === gun.recoil.duration, JSON.stringify(shake));
+    }
+    done();
+});
+
+test("the Gatling gun shakes the camera on every shot of its own automatic loop too", () => {
+    const { check, done } = checks();
+    const gun = GUNS.gatling_gun;
+    const p = manned();
+
+    leftClick(p);   // starts the self-sustaining loop
+    fake.advance(ticksFor(4));
+
+    check("at least a few shakes landed, one per shot fired", p.camera.shakes.length >= 3, String(p.camera.shakes.length));
+    check("every one matches the Gatling gun's own (small) recoil value", p.camera.shakes.every((s) => s.type === "Rotational" && s.intensity === gun.recoil.intensity && s.duration === gun.recoil.duration), JSON.stringify(p.camera.shakes));
+    done();
+});
+
+test("the ammo readout shows while manning the Gatling gun too, not just while holding a gun in hand", () => {
+    const { check, done } = checks();
+    const p = manned();
+    check("a readout line with the Gatling gun's own name and a full magazine", ammoLine(p)?.includes(GATLING.displayName) && ammoLine(p)?.includes(`${GATLING.magazineSize}/${GATLING.magazineSize}`), ammoLine(p));
+    done();
+});
+
+test("recoil config sanity: every gun's intensity is within the engine's own 0-4 cap, and duration is a real, short amount of time", () => {
+    const { check, done } = checks();
+    for (const gun of guns) {
+        check(`${gun.id}: intensity is positive and at most 4`, gun.recoil.intensity > 0 && gun.recoil.intensity <= 4, String(gun.recoil.intensity));
+        check(`${gun.id}: duration is a positive fraction of a second, not a lingering shake`, gun.recoil.duration > 0 && gun.recoil.duration <= 0.5, String(gun.recoil.duration));
+    }
     done();
 });
 

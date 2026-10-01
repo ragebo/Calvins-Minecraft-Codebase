@@ -202,6 +202,14 @@ Gatling gun and every other fast-firing gun deliberately don't get it: see
 `docs/test-cards/MUZZLE-LIGHT.md` for what to watch for (feel and any lag) before it's
 considered for anything faster.
 
+Every shot also gives the shooter three kinds of feedback (`docs/test-cards/GUN-FEEDBACK.md`): a camera
+shake scaled per gun (`core/aim.ts`'s `shakeCamera`, wrapping `Camera.addShake` — a shake, not a literal
+forced view angle, since nothing confirms this engine lets script override a real player's own look
+direction), a private hit marker sound and action-bar line on a landed shot (a different, louder one on a
+kill), and a continuous ammo/reload readout on the action bar instead of chat, which used to scroll away
+mid-fight. All three are driven by `dealGunDamage` (hit/kill) and the loaded-rounds/reload state every gun
+already tracked — `signalHit`/`gunInUse` in `systems/guns.ts`, `recoil` in `config/guns.ts`.
+
 Every gun is a flat 2D item held like a tool (`minecraft:hand_equipped`) with its own
 texture (`BountySys_RP/textures/items/<gun>.png`, 16x16, mapped in
 `textures/item_texture.json`). The revolver used

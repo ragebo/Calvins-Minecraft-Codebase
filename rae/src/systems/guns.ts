@@ -4,13 +4,14 @@ import {
     type EntityApplyDamageByProjectileOptions, type EntityApplyDamageOptions,
     EquipmentSlot, EntityDamageCause, EntitySwingSource
 } from "@minecraft/server";
-import { AMMO, GUNS, BULLET_ENTITY_ID, BULLET_LIFETIME_TICKS, GATLING_AIM_PITCH_PROPERTY, GATLING_BARREL_SPIN_PROPERTY, HIT_WINDOW_TICKS, type AutomaticConfig, type GunConfig, type GunId, type MuzzleEffects, type MuzzleLight, type SoundCue } from "../config/guns.js";
+import { AMMO, GUNS, BULLET_ENTITY_ID, BULLET_LIFETIME_TICKS, GATLING_AIM_PITCH_PROPERTY, GATLING_BARREL_SPIN_PROPERTY, HIT_MARKER_SOUND, HIT_WINDOW_TICKS, KILL_MARKER_SOUND, type AutomaticConfig, type GunConfig, type GunId, type MuzzleEffects, type MuzzleLight, type SoundCue } from "../config/guns.js";
 import { AIM, TUMBLEWEED_ENTITY_ID } from "../config/balance.js";
-import { hideScope, showScope, zoomReset, zoomTo } from "../core/aim.js";
-import { warn } from "../core/log.js";
+import { hideScope, shakeCamera, showScope, zoomReset, zoomTo } from "../core/aim.js";
+import { error, warn } from "../core/log.js";
 import { registerSystem } from "../core/registry.js";
 import { playFor, playSequence } from "../core/sound.js";
 import { onTick } from "../core/tick.js";
+import { ACTION_BAR_PRIORITY, setActionBar } from "../core/ui.js";
 
 /**
  * One shared engine for all 6 guns, parameterized entirely by
@@ -54,6 +55,10 @@ for (const gun of Object.values(GUNS)) {
 const lastFiredTick = new Map<string, number>();
 const reloadingKeys = new Set<string>();
 const loadedRounds = new Map<string, number>();
+
+/** GUN-09's ammo readout reads this to show a countdown while reloadingKeys has the key — set when a
+ *  reload starts, cleared whenever reloadingKeys itself is (both paths always do both, together). */
+const reloadEndsAtTick = new Map<string, number>();
 
 /**
  * A gun with `primeTicks` set (config/guns.ts) needs its action manually cycled between shots: this
@@ -188,6 +193,7 @@ function startReload(player: Player, gun: GunConfig): void {
     }
 
     reloadingKeys.add(key);
+    reloadEndsAtTick.set(key, system.currentTick + gun.reloadTicks);
     needsPrimeKeys.delete(key);   // a full reload leaves it ready to fire, not mid-cycle
     player.sendMessage(`§7Reloading ${gun.displayName}...`);
     playCues(player, gun, gun.sounds.reload);
@@ -195,6 +201,7 @@ function startReload(player: Player, gun: GunConfig): void {
     system.runTimeout(() => {
 
         reloadingKeys.delete(key);
+        reloadEndsAtTick.delete(key);
 
         // The player may have disconnected while the reload was in progress.
         if (!player.isValid) return;
@@ -255,6 +262,7 @@ function tryFire(player: Player, gun: GunConfig): void {
     setLoadedRounds(player, gun, loaded - 1);
 
     showMuzzle(player, gun.effects);
+    shakeCamera(player, gun.recoil);
 
     if (gun.kind === "projectile") {
         fireProjectile(player, gun);
@@ -328,6 +336,7 @@ function fireAutomaticStep(key: string, run: GatlingRun): void {
 
     setLoadedRounds(run.player, run.gun, loaded - 1);
     showMuzzle(run.player, run.gun.effects);
+    shakeCamera(run.player, run.gun.recoil);
 
     if (run.gun.kind === "projectile") fireProjectile(run.player, run.gun);
     else fireHitscan(run.player, run.gun);
@@ -479,8 +488,12 @@ const lastHit = new Map<string, { tick: number; amount: number }>();
  * call; this does the same across separate trigger pulls, adding a would-be-lost hit to the pending total
  * instead of dealing it (and losing it) on its own. Every gun's damage should go through this, not a bare
  * `entity.applyDamage`.
+ *
+ * `shooter` is who gets told it landed (GUN-07's hit/kill feedback, signalHit below) — undefined when the
+ * engine can't say who fired (a projectile's own `source` is optional), in which case nobody is told, but
+ * the damage and the hit-window summing above still happen exactly the same either way.
  */
-function dealGunDamage(target: Entity, amount: number, options: EntityApplyDamageByProjectileOptions | EntityApplyDamageOptions): void {
+function dealGunDamage(target: Entity, amount: number, options: EntityApplyDamageByProjectileOptions | EntityApplyDamageOptions, shooter: Player | undefined): void {
 
     const previous = lastHit.get(target.id);
     const withinWindow = previous !== undefined && system.currentTick - previous.tick < HIT_WINDOW_TICKS;
@@ -488,6 +501,33 @@ function dealGunDamage(target: Entity, amount: number, options: EntityApplyDamag
 
     target.applyDamage(dealt, options);
     lastHit.set(target.id, { tick: system.currentTick, amount: dealt });
+
+    if (shooter?.isValid) signalHit(shooter, killedBy(target));
+}
+
+/** Whether `target` is dead right after taking a hit: either its own health component now reads zero or
+ *  below, or the hit removed it outright (its handle is already invalid to even ask). */
+function killedBy(target: Entity): boolean {
+    if (!target.isValid) return true;
+    const health = target.getComponent("minecraft:health");
+    return health !== undefined && health.currentValue <= 0;
+}
+
+const reportedHitFeedbackErrors = new Set<string>();
+
+/** GUN-07: tells the shooter alone (never positionally — this is confirmation for them, not a public
+ *  event) that their shot landed, with a different cue and action-bar line on a kill. A failure here must
+ *  never un-deal damage that already happened, so it's caught and reported once, like every other effect
+ *  in this file. */
+function signalHit(shooter: Player, killed: boolean): void {
+    try {
+        playFor(shooter, killed ? KILL_MARKER_SOUND : HIT_MARKER_SOUND);
+        setActionBar(shooter, "guns:hit-marker", killed ? "§c§lKILL" : "§fHIT", { priority: ACTION_BAR_PRIORITY.alert, ttlTicks: 8 });
+    } catch (err) {
+        if (reportedHitFeedbackErrors.has("hit-marker")) return;
+        reportedHitFeedbackErrors.add("hit-marker");
+        warn("gun effects", `hit marker failed: ${err}`);
+    }
 }
 
 function fireHitscan(player: Player, gun: Extract<GunConfig, { kind: "hitscan" }>): void {
@@ -551,7 +591,7 @@ function fireHitscan(player: Player, gun: Extract<GunConfig, { kind: "hitscan" }
         dealGunDamage(entity, gun.pelletDamage * pellets, {
             cause: EntityDamageCause.entityAttack,
             damagingEntity: player
-        });
+        }, player);
     }
 }
 
@@ -826,6 +866,66 @@ onTick("guns:gatling-aim", (ctx) => {
 
 }, { everyTicks: 1 });
 
+// ---- Ammo and reload readout (GUN-09) -------------------------------------------------------------------
+//
+// Chat was too slow to read in a fight (the ticket's own complaint, and it matches this file's own
+// "Reloading..."/"X reloaded. (n/m)" lines, which scroll away). This reads the same state those chat lines
+// already track and posts it to the action bar instead, through core/ui.ts like every other action-bar
+// writer here. core/ui.ts's own note applies: an unchanged line has to be re-sent anyway, or the client
+// fades it after about two seconds, so this reposts every refresh whether or not the numbers moved.
+
+/** The gun a player is currently either holding (a carried gun) or riding the mount of (an automatic one) —
+ *  the same two cases stillUsing already distinguishes, just answering "which" instead of "is it this one". */
+function gunInUse(player: Player): GunConfig | undefined {
+
+    const heldId = getMainhandItemTypeId(player);
+    if (heldId) {
+        const held = gunsByItemId.get(heldId);
+        if (held) return held;
+    }
+
+    const mount = riddenEntity(player);
+    return mount ? gunsByMountEntityId.get(mount.typeId) : undefined;
+}
+
+let lastAmmoReadoutErrorTick = -Infinity;
+
+onTick("guns:ammo-readout", (ctx) => {
+
+    for (const player of ctx.players) {
+
+        // Routine, not a failure: a player can disconnect (or an entity can be removed) between
+        // ctx.players being built and this handler reaching them. Skip silently, same as
+        // guns:gatling-aim's own mount?.isValid guard above.
+        if (!player.isValid) continue;
+
+        try {
+
+            const gun = gunInUse(player);
+            if (!gun) continue;
+
+            const key = stateKey(player, gun.id);
+
+            if (reloadingKeys.has(key)) {
+                const ticksLeft = (reloadEndsAtTick.get(key) ?? system.currentTick) - system.currentTick;
+                const secondsLeft = Math.max(0, Math.ceil(ticksLeft / 20));
+                setActionBar(player, "guns:ammo", `§eReloading ${gun.displayName}... §7${secondsLeft}s`);
+            } else {
+                setActionBar(player, "guns:ammo", `§f${gun.displayName} §7| §a${getLoadedRounds(player, gun)}/${gun.magazineSize}`);
+            }
+
+        } catch (err) {
+            // Runs several times a second across every armed player — throttle so a persistent
+            // failure can't flood the console (and an operator's chat), same as compass.ts's own guard.
+            if (system.currentTick - lastAmmoReadoutErrorTick > 200) {
+                lastAmmoReadoutErrorTick = system.currentTick;
+                error("guns", `ammo readout for ${player.name}: ${err}`);
+            }
+        }
+    }
+
+}, { everyTicks: 4 });
+
 // ---- Reload key (Q) --------------------------------------------------------------------------------------
 
 interface DroppedGun {
@@ -962,10 +1062,11 @@ world.afterEvents.projectileHitEntity.subscribe((event) => {
     if (hitEntity && hitEntity.isValid) {
         // The "projectile" cause requires the actual projectile
         // entity, not a bare cause string.
+        const shooter = event.source?.typeId === "minecraft:player" ? (event.source as Player) : undefined;
         dealGunDamage(hitEntity, gun.damage, {
             damagingProjectile: event.projectile,
             damagingEntity: event.source
-        });
+        }, shooter);
     }
 
     event.projectile.remove();
@@ -986,6 +1087,7 @@ registerSystem({
     reset() {
         lastFiredTick.clear();
         reloadingKeys.clear();
+        reloadEndsAtTick.clear();
         loadedRounds.clear();
         needsPrimeKeys.clear();
         gatlingRuns.clear();

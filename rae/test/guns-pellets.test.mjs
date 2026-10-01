@@ -6,7 +6,7 @@ import { fake, world, load, checks, leftClick, pressQ } from "./helpers.mjs";
 // invulnerability (vanilla ignores a repeat hit that is not bigger than the last). The rays are scripted
 // here, so what is judged is what the guns system does with them.
 
-const { GUNS, AMMO, HIT_WINDOW_TICKS } = await load("config/guns.js");
+const { GUNS, AMMO, HIT_WINDOW_TICKS, HIT_MARKER_SOUND, KILL_MARKER_SOUND } = await load("config/guns.js");
 await load("systems/guns.js");
 const { listSystems } = await load("core/registry.js");
 
@@ -261,5 +261,62 @@ test("a second hit that is already bigger than the last lands as itself, not fur
     volleyShot(p, gun, target, gun.pelletCount);   // the full blast, already bigger than the first shot
 
     check("the bigger second shot is recorded at its own damage, not summed further", target.damage.at(-1)?.amount === full, String(target.damage.at(-1)?.amount));
+    done();
+});
+
+// ---------------------------------------------------------------------------------------------------------
+// GUN-07: hit marker and kill feedback. dealGunDamage tells the shooter alone (never positionally) whenever
+// a shot actually lands, with a different cue and action-bar line when it was lethal.
+// ---------------------------------------------------------------------------------------------------------
+
+test("a landed shot plays a hit marker to the shooter alone, and posts a HIT line", () => {
+    const { check, done } = checks();
+    const gun = GUNS.pump_shotgun;
+    const target = mob("hit-marker-target");
+    const { p } = shoot(gun, () => [{ entity: target, distance: 3 }]);
+
+    check("the shooter heard the hit marker (private, not positional)", p.privateSounds.some((s) => s.id === HIT_MARKER_SOUND.id), JSON.stringify(p.privateSounds));
+    check("not the kill marker", !p.privateSounds.some((s) => s.id === KILL_MARKER_SOUND.id));
+    check("a HIT line reached the shooter's action bar", p.actionBar.some((line) => line.includes("HIT") && !line.includes("KILL")), JSON.stringify(p.actionBar));
+    done();
+});
+
+test("a lethal shot plays the kill marker instead, and posts KILL", () => {
+    const { check, done } = checks();
+    const gun = GUNS.pump_shotgun;
+    const target = mob("kill-marker-target");
+    target.applyDamage = (amount, opts) => {
+        target.damage.push({ amount, ...opts });
+        target.isValid = false;   // this hit was lethal: the entity is gone immediately after
+        return true;
+    };
+
+    const { p } = shoot(gun, () => [{ entity: target, distance: 3 }]);
+
+    check("(setup) the hit actually landed", target.damage.length === 1, String(target.damage.length));
+    check("the shooter heard the kill marker, not the plain hit marker", p.privateSounds.some((s) => s.id === KILL_MARKER_SOUND.id) && !p.privateSounds.some((s) => s.id === HIT_MARKER_SOUND.id), JSON.stringify(p.privateSounds));
+    check("a KILL line reached the shooter's action bar", p.actionBar.some((line) => line.includes("KILL")), JSON.stringify(p.actionBar));
+    done();
+});
+
+test("a miss plays neither marker and posts nothing", () => {
+    const { check, done } = checks();
+    const gun = GUNS.pump_shotgun;
+    const { p } = shoot(gun, () => []);   // every pellet misses
+
+    check("no hit marker", !p.privateSounds.some((s) => s.id === HIT_MARKER_SOUND.id || s.id === KILL_MARKER_SOUND.id), JSON.stringify(p.privateSounds));
+    check("no hit/kill line", !p.actionBar.some((line) => line.includes("HIT") || line.includes("KILL")), JSON.stringify(p.actionBar));
+    done();
+});
+
+test("a bystander (not the shooter) never hears the shooter's hit marker", () => {
+    const { check, done } = checks();
+    const gun = GUNS.pump_shotgun;
+    const target = mob("bystander-target");
+    const { p } = shoot(gun, () => [{ entity: target, distance: 3 }]);
+    const bystander = fake.makePlayer("Bystander", { location: { x: 10, y: 64, z: 10 } });
+
+    check("only the shooter's own private sounds got the marker", p.privateSounds.some((s) => s.id === HIT_MARKER_SOUND.id));
+    check("the bystander heard nothing privately", bystander.privateSounds.length === 0, JSON.stringify(bystander.privateSounds));
     done();
 });

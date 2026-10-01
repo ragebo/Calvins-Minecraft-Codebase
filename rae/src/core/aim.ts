@@ -1,15 +1,22 @@
-import { system, type Player } from "@minecraft/server";
+import { system, CameraShakeType, type Player } from "@minecraft/server";
 import { AIM } from "../config/balance.js";
 import { warn } from "./log.js";
 import { clearTitle, showTitle } from "./ui.js";
 
 /**
- * The two things aiming does to the screen: zoom the camera, and put a scope overlay over it. One place, so
- * the guns and the measurement spike (systems/aimprobe.ts) do it the same way.
+ * The three things a gun does to the screen: zoom the camera, put a scope overlay over it, and (GUN-03)
+ * briefly shake it for recoil. One place, so the guns and the measurement spike (systems/aimprobe.ts) do
+ * it the same way.
  *
  * Measured in the real game (2026-09-20, docs/test-cards/AIM-SPIKE.md): Camera.setFov zooms smoothly and setFov()
  * puts the view back; the overlay is a HUD image (BountySys_RP/ui) that shows while the HUD's title text equals
  * AIM.scopeTitle.
+ *
+ * Recoil is a Camera.addShake, not a literal "kick the view up and ease it back": there is no confirmed API
+ * that forces a real connected player's own look direction (Entity.setRotation's own doc only promises body
+ * rotation "for most mobs", and a player's camera is otherwise client-controlled), while addShake is an
+ * engine feature built and documented for exactly this kind of per-shot camera feedback. Rotational, not
+ * positional, since recoil is a view punch, not the camera physically moving.
  */
 
 const reported = new Set<string>();
@@ -57,4 +64,14 @@ export function hideScope(player: Player): void {
     system.runTimeout(() => {
         if (player.isValid) clearTitle(player);
     }, AIM.scopeClearDelayTicks);
+}
+
+/** A brief rotational camera shake (GUN-03's recoil). `intensity` is 0-4 (the engine's own cap on
+ *  Camera.addShake); `duration` is in seconds. */
+export function shakeCamera(player: Player, shake: { readonly intensity: number; readonly duration: number }): void {
+    try {
+        player.camera.addShake({ type: CameraShakeType.Rotational, intensity: shake.intensity, duration: shake.duration });
+    } catch (error) {
+        report("shake", error);
+    }
 }
