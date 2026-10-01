@@ -5,7 +5,8 @@
                 "array_name": "controls",
                 "operation": "insert_back",
                 "value": [
-                    { "rae_scope_root@rae_scope.scope_root": {} }
+                    { "rae_scope_root@rae_scope.scope_root": {} },
+                    { "rae_hit_marker_root@rae_hit_marker.hit_marker_root": {} }
                 ]
             }
         ]

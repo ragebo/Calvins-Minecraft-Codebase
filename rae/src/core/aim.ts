@@ -4,9 +4,9 @@ import { warn } from "./log.js";
 import { clearTitle, showTitle } from "./ui.js";
 
 /**
- * The three things a gun does to the screen: zoom the camera, put a scope overlay over it, and (GUN-03)
- * briefly shake it for recoil. One place, so the guns and the measurement spike (systems/aimprobe.ts) do
- * it the same way.
+ * What a gun does to the screen: zoom the camera, put a scope overlay over it, (GUN-03) briefly shake it for
+ * recoil, and (GUN-07, a spike) briefly flash a hit-marker overlay. One place, so the guns and the
+ * measurement spike (systems/aimprobe.ts) do it the same way.
  *
  * Measured in the real game (2026-09-20, docs/test-cards/AIM-SPIKE.md): Camera.setFov zooms smoothly and setFov()
  * puts the view back; the overlay is a HUD image (BountySys_RP/ui) that shows while the HUD's title text equals
@@ -17,6 +17,12 @@ import { clearTitle, showTitle } from "./ui.js";
  * rotation "for most mobs", and a player's camera is otherwise client-controlled), while addShake is an
  * engine feature built and documented for exactly this kind of per-shot camera feedback. Rotational, not
  * positional, since recoil is a view punch, not the camera physically moving.
+ *
+ * The hit marker reuses the scope's own title-text switch technique (there is no other way to toggle a HUD
+ * image: a custom entity property can only be declared on an entity this addon's own behavior pack defines,
+ * never on the vanilla player, so a per-player property to bind the image to isn't available at all). Both
+ * switches share the one title channel a player has, which is why this file — not two independent callers —
+ * owns both: flashHitMarker always knows what to restore the title to afterward.
  */
 
 const reported = new Set<string>();
@@ -55,15 +61,40 @@ export function showScope(player: Player): void {
 }
 
 /**
- * Switches the overlay off. The overlay shows while the HUD's title text equals the switch text, and the HUD keeps
- * the last text it was given: clearing the title alone left the overlay up in the first real-game run. So the text
- * is overwritten with one that draws nothing, and the title is cleared once that has had time to arrive.
+ * Puts the title back to properly cleared from ANY previous switch text (the scope's, the hit marker's, or
+ * anything else that reuses this one title channel) — never just an empty clearTitle() alone, because the
+ * HUD keeps the last text it was given: clearing straight from a switch value left the thing bound to it up
+ * in the first real-game run. So the text is overwritten with one that draws nothing, and the title is
+ * cleared once that has had time to arrive.
  */
-export function hideScope(player: Player): void {
+function clearTitleSafely(player: Player): void {
     showTitle(player, AIM.scopeOffTitle, { fadeInTicks: 0, stayTicks: 1, fadeOutTicks: 0 });
     system.runTimeout(() => {
         if (player.isValid) clearTitle(player);
     }, AIM.scopeClearDelayTicks);
+}
+
+/** Switches the scope overlay off (it shows while the title equals AIM.scopeTitle). */
+export function hideScope(player: Player): void {
+    clearTitleSafely(player);
+}
+
+/**
+ * SPIKE (GUN-07, docs/test-cards/GUN-FEEDBACK.md): briefly switches the hit-marker overlay on, then puts
+ * the title back — the scope switch if the shooter is still aiming with one (`restoreScope`), or properly
+ * cleared otherwise. This is the one title channel both features share, so a hit landed while scoped
+ * briefly interrupts the scope overlay for the flash's own duration rather than showing both at once — a
+ * known, deliberate trade-off of this first pass; see the test card for what to actually check in game.
+ */
+export function flashHitMarker(player: Player, options: { readonly restoreScope: boolean }): void {
+
+    showTitle(player, AIM.hitMarkerTitle, { fadeInTicks: 0, stayTicks: AIM.hitMarkerFlashTicks, fadeOutTicks: 0 });
+
+    system.runTimeout(() => {
+        if (!player.isValid) return;
+        if (options.restoreScope) showScope(player);
+        else clearTitleSafely(player);
+    }, AIM.hitMarkerFlashTicks);
 }
 
 /** A brief rotational camera shake (GUN-03's recoil). `intensity` is 0-4 (the engine's own cap on

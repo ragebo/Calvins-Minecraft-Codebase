@@ -1,0 +1,21 @@
+{
+    "namespace": "rae_hit_marker",
+
+    "hit_marker_root": {
+        "type": "image",
+        "texture": "textures/ui/rae_hit_marker",
+        "layer": 31,
+        "size": [48, 48],
+        "anchor_from": "center",
+        "anchor_to": "center",
+        "visible": false,
+        "bindings": [
+            { "binding_name": "#hud_title_text_string" },
+            {
+                "binding_type": "view",
+                "source_property_name": "(#hud_title_text_string = '§r§g§i§w')",
+                "target_property_name": "#visible"
+            }
+        ]
+    }
+}

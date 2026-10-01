@@ -371,6 +371,60 @@ test("the bolt rifle shows the scope while aimed and switches it off properly; t
     done();
 });
 
+// ---------------------------------------------------------------------------------------------------------
+// GUN-07 spike: the hit-marker overlay shares the scope's one title channel (core/aim.ts's flashHitMarker),
+// since a per-player custom property to bind a HUD image to isn't available (only an entity this addon's own
+// behavior pack defines can declare one — never the vanilla player). A landed projectile hit is the trigger
+// here (the hitscan path is already covered in guns-pellets.test.mjs); fire for real so the bullet entity's
+// own gunId dynamic property is genuine, then simulate the hit the fake world doesn't do on its own.
+// ---------------------------------------------------------------------------------------------------------
+
+/** Fires `gun` for real (a genuine bullet, with its gunId set exactly as fireProjectile sets it), then
+ *  simulates that bullet landing on `target` — the fake world has no real projectile physics. */
+function fireAndHit(p, gun, target) {
+    const dim = overworld();
+    leftClick(p);
+    const bullet = dim.spawned.at(-1);
+    world.afterEvents.projectileHitEntity.emit({ projectile: bullet, getEntityHit: () => ({ entity: target }), source: p });
+}
+
+test("a landed hit flashes the hit-marker title and clears it properly, when the shooter wasn't aiming", () => {
+    const { check, done } = checks();
+    const gun = GUNS.pistol;
+    const p = armed(gun, "unaimed-hitter");
+    const target = fake.makeEntity({ typeId: "minecraft:pillager" });
+
+    fireAndHit(p, gun, target);
+    check("the hit-marker title is sent", p.titles.at(-1) === AIM.hitMarkerTitle, JSON.stringify(p.titles));
+
+    fake.advance(AIM.hitMarkerFlashTicks);
+    check("overwritten with the invisible one first, same as hideScope's own clear", p.titles.at(-1) === AIM.scopeOffTitle, JSON.stringify(p.titles));
+
+    fake.advance(AIM.scopeClearDelayTicks);
+    check("then properly cleared, not left stuck on the flash", JSON.stringify(p.titles) === JSON.stringify([AIM.hitMarkerTitle, AIM.scopeOffTitle, ""]), JSON.stringify(p.titles));
+    done();
+});
+
+test("a landed hit while scoped flashes the hit-marker, then restores the scope instead of clearing it", () => {
+    const { check, done } = checks();
+    const gun = GUNS.bolt_rifle;
+    const p = armed(gun, "scoped-hitter");
+    const target = fake.makeEntity({ typeId: "minecraft:pillager" });
+
+    rightClick(p);   // aims with the scope on
+    check("(setup) scoped", p.titles.at(-1) === AIM.scopeTitle, JSON.stringify(p.titles));
+
+    fireAndHit(p, gun, target);
+    check("the hit-marker title interrupts the scope", p.titles.at(-1) === AIM.hitMarkerTitle, JSON.stringify(p.titles));
+
+    fake.advance(AIM.hitMarkerFlashTicks);   // the flash's own duration
+    check("the scope switch comes back, not a clear", p.titles.at(-1) === AIM.scopeTitle, JSON.stringify(p.titles));
+
+    fake.advance(50);
+    check("and the scope stays up (it wasn't a one-off re-show)", p.titles.at(-1) === AIM.scopeTitle, JSON.stringify(p.titles));
+    done();
+});
+
 test("aiming slows the player for as long as it lasts, by the gun's amount, and stops when it ends", () => {
     const { check, done } = checks();
 

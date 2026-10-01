@@ -6,7 +6,7 @@ import {
 } from "@minecraft/server";
 import { AMMO, GUNS, BULLET_ENTITY_ID, BULLET_LIFETIME_TICKS, GATLING_AIM_PITCH_PROPERTY, GATLING_BARREL_SPIN_PROPERTY, HIT_MARKER_SOUND, HIT_WINDOW_TICKS, KILL_MARKER_SOUND, type AutomaticConfig, type GunConfig, type GunId, type MuzzleEffects, type MuzzleLight, type SoundCue } from "../config/guns.js";
 import { AIM, TUMBLEWEED_ENTITY_ID } from "../config/balance.js";
-import { hideScope, shakeCamera, showScope, zoomReset, zoomTo } from "../core/aim.js";
+import { flashHitMarker, hideScope, shakeCamera, showScope, zoomReset, zoomTo } from "../core/aim.js";
 import { error, warn } from "../core/log.js";
 import { registerSystem } from "../core/registry.js";
 import { playFor, playSequence } from "../core/sound.js";
@@ -523,6 +523,9 @@ function signalHit(shooter: Player, killed: boolean): void {
     try {
         playFor(shooter, killed ? KILL_MARKER_SOUND : HIT_MARKER_SOUND);
         setActionBar(shooter, "guns:hit-marker", killed ? "§c§lKILL" : "§fHIT", { priority: ACTION_BAR_PRIORITY.alert, ttlTicks: 8 });
+        // Whether to put the scope back afterward (aiming is defined further down; see its own section —
+        // referencing it here is safe since nothing calls signalHit before the module has finished loading).
+        flashHitMarker(shooter, { restoreScope: aiming.get(shooter.id)?.gun.aim.scope === true });
     } catch (err) {
         if (reportedHitFeedbackErrors.has("hit-marker")) return;
         reportedHitFeedbackErrors.add("hit-marker");

@@ -415,6 +415,66 @@ test("the scope overlay image in the pack is exactly what scripts/gen-scope-over
     done();
 });
 
+// ---------------------------------------------------------------------------------------------------------
+// The hit-marker overlay (GUN-07 spike): the same HUD-image-switched-by-title-text technique as the scope,
+// on its own title string so core/aim.ts can coordinate the two instead of them fighting over one channel.
+// ---------------------------------------------------------------------------------------------------------
+
+const HIT_MARKER_TEXTURE = "textures/ui/rae_hit_marker";
+
+test("the hit-marker overlay's HUD files hang together: defs list an existing file, the hook names a real element, its texture exists", () => {
+    const { check, done } = checks();
+    const defs = readJson(path.join(UI, "_ui_defs.json"));
+    check("_ui_defs.json lists the hit-marker file", defs.ui_defs?.includes("ui/rae_hit_marker.json"), JSON.stringify(defs));
+
+    const marker = readJson(path.join(UI, "rae_hit_marker.json"));
+    const namespace = marker.namespace;
+    check("the hit-marker file has a namespace", typeof namespace === "string" && namespace.length > 0);
+    check("it defines hit_marker_root", marker.hit_marker_root !== undefined);
+    check("the element shows the hit-marker texture", marker.hit_marker_root?.texture === HIT_MARKER_TEXTURE, String(marker.hit_marker_root?.texture));
+    check("and is hidden until a binding shows it", marker.hit_marker_root?.visible === false);
+    check("it's centered, not full-screen like the scope", marker.hit_marker_root?.anchor_from === "center" && marker.hit_marker_root?.anchor_to === "center", JSON.stringify(marker.hit_marker_root));
+    check("the texture file exists", existsSync(path.join(RP, `${HIT_MARKER_TEXTURE}.png`)));
+
+    const hud = readJson(path.join(UI, "hud_screen.json"));
+    const added = (hud.root_panel?.modifications?.[0]?.value ?? []).map((v) => Object.keys(v)[0]);
+    check("hud_screen.json adds a control pointing at namespace.hit_marker_root", added.some((name) => name.endsWith(`@${namespace}.hit_marker_root`)), JSON.stringify(added));
+    done();
+});
+
+test("the title text in the hit-marker's binding is the one the script sends, and differs from the scope's own switch", async () => {
+    const { check, done } = checks();
+    const { AIM } = await load("config/balance.js");
+    const marker = readJson(path.join(UI, "rae_hit_marker.json"));
+
+    const binding = (marker.hit_marker_root?.bindings ?? []).find((b) => b.target_property_name === "#visible");
+    check("a binding sets #visible", binding !== undefined, JSON.stringify(marker.hit_marker_root?.bindings));
+    check("it compares the title text with the configured switch", binding?.source_property_name === `(#hud_title_text_string = '${AIM.hitMarkerTitle}')`, `${binding?.source_property_name} vs ${AIM.hitMarkerTitle}`);
+    check("the switch draws nothing by itself (formatting codes only)", AIM.hitMarkerTitle.replace(/§./g, "") === "", JSON.stringify(AIM.hitMarkerTitle));
+    check("it's a different switch from the scope's own, so core/aim.ts can tell them apart", AIM.hitMarkerTitle !== AIM.scopeTitle && AIM.hitMarkerTitle !== AIM.scopeOffTitle, `${AIM.hitMarkerTitle} vs ${AIM.scopeTitle} / ${AIM.scopeOffTitle}`);
+    done();
+});
+
+test("the hit-marker image in the pack is exactly what scripts/gen-hit-marker.mjs makes", async () => {
+    const { check, done } = checks();
+    const generator = await import(pathToFileURL(path.join(import.meta.dirname, "..", "scripts", "gen-hit-marker.mjs")).href);
+    const file = path.join(RP, `${HIT_MARKER_TEXTURE}.png`);
+    check("the file exists", existsSync(file));
+    if (!existsSync(file)) return done();
+
+    const info = pngInfo(file);
+    check("it is a PNG of the generator's size, with an alpha channel", info?.width === generator.WIDTH && info?.height === generator.HEIGHT && ALPHA_COLOR_TYPES.has(info?.colorType), JSON.stringify(info));
+    const pixels = pngPixels(file);
+    check("its pixels are the generator's (run: node scripts/gen-hit-marker.mjs)", pixels !== null && pixels.equals(generator.buildHitMarkerPixels()));
+
+    const at = (x, y) => pixels?.[(y * generator.WIDTH + x) * 4 + 3];
+    const center = Math.floor(generator.WIDTH / 2);
+    check("the very centre is clear (the dashes leave a gap for the crosshair)", at(center, center) === 0);
+    check("a corner is clear too (it's a small mark, not a full-screen image)", at(2, 2) === 0 && at(generator.WIDTH - 3, generator.HEIGHT - 3) === 0);
+    check("at least one dash is actually opaque somewhere", pixels.some((_, i) => i % 4 === 3 && pixels[i] === 255));
+    done();
+});
+
 test("every gun is a plain item: not hold-to-use (a used item blocks left-click) and with no cooldown", async () => {
     const { check, done } = checks();
     const { GUNS } = await load("config/guns.js");

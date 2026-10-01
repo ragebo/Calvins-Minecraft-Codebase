@@ -182,6 +182,16 @@ export const AIM = {
     scopeClearDelayTicks: 5,
     /** How long the scope title is held (ticks); it is cleared by `rae:aim_spike scope off` well before this. */
     scopeStayTicks: 72000,
+    /**
+     * SPIKE (GUN-07's visual hit marker, docs/test-cards/GUN-FEEDBACK.md): the title text that switches the
+     * hit-marker overlay on. A different switch from scopeTitle above — a landed hit needs to briefly
+     * interrupt whatever the title currently shows (scoped or not) for the flash, then core/aim.ts's
+     * flashHitMarker puts it back. Formatting codes only, same convention as scopeTitle: it must equal the
+     * string in BountySys_RP/ui/rae_hit_marker.json (assets.test.mjs checks that they do).
+     */
+    hitMarkerTitle: "§r§g§i§w",
+    /** How long the hit-marker flash stays up before flashHitMarker restores the title, in ticks. */
+    hitMarkerFlashTicks: 5,
     /** `rae:aim_spike fov`: how long the camera takes to move to the new field of view, in seconds. */
     fovEaseSeconds: 0.2,
     /**
