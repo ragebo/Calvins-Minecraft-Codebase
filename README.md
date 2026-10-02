@@ -280,6 +280,27 @@ physical button still works. The game's own actions live in `core/game.ts`, shar
 straight from a right-click hits that). The icon is made by `scripts/gen-menu-icon.mjs`; replace the
 PNG with your own art whenever you like.
 
+### Live config editor
+
+Six commands — `/rae:config_list`, `_get`, `_set_number`, `_set_bool`, `_set_coordinate`, `_reset` —
+let an operator change a gun's balance numbers or a world coordinate while the game is running, with
+the change applying immediately and surviving a reload, no redeploy or relaunch needed. Each
+command's `field` argument is tab-completed by the game itself; `_set_coordinate`'s value accepts
+Bedrock's own relative syntax (`~ ~ ~` for where you're standing). Unlike every other command in this
+addon, these are real custom commands (`@minecraft/server`'s `CustomCommandRegistry`, registered in
+`systems/liveconfig.ts`), not `/scriptevent` — which is also how "operator-only" is enforced: the
+engine refuses a non-operator before the command ever runs, rather than a hand-rolled check.
+
+`core/configoverrides.ts` is the registry: a hand-written list of every editable field in
+`config/guns.ts`, `config/balance.ts` and `config/world.ts`, each with its own getter/setter closing
+directly over the real exported object (never a generic "parse a path string" resolver). Setting a
+field mutates that real object in place, so every system already reading it — an in-flight Gatling
+burst, an already-aiming player, the game menu's own `TELEPORT_TARGETS` list — picks up the change
+within a few ticks. A handful of fields are deliberately left out because they're proven stale-cached
+regardless (the scripted train's start/end/speed numbers are baked into a path built once at startup;
+see the file's own header comment). Changes persist as a sparse diff through the existing
+`core/persist.ts` engine, the same mechanism `round.ts`/`telemetry.ts`/`state.ts` already use.
+
 ### Tumbleweeds
 
 Purely ambient: `bountysys:tumbleweed`s roll across desert ground, nudged along by a steady "world

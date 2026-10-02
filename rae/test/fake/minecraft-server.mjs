@@ -14,6 +14,13 @@ export const EntitySwingSource = { Attack: "Attack", Build: "Build", DropItem: "
 export const EntityDamageCause = { entityAttack: "entityAttack", projectile: "projectile", fall: "fall", override: "override" };
 export const PlayerPermissionLevel = { Visitor: 0, Member: 1, Operator: 2, Custom: 3 };
 export const StructureSaveMode = { Memory: "Memory", World: "World" };
+export const CommandPermissionLevel = { Any: 0, GameDirectors: 1, Admin: 2, Host: 3, Owner: 4 };
+export const CustomCommandParamType = {
+    BlockType: "BlockType", Boolean: "Boolean", EntitySelector: "EntitySelector", EntityType: "EntityType",
+    Enum: "Enum", Float: "Float", Integer: "Integer", ItemType: "ItemType", Location: "Location",
+    PlayerSelector: "PlayerSelector", String: "String"
+};
+export const CustomCommandStatus = { Success: 0, Failure: 1 };
 export class BlockVolume { constructor(from, to) { this.from = from; this.to = to; } }
 export const BlockPermutation = { resolve(id, states) { return { type: { id }, states }; } };
 

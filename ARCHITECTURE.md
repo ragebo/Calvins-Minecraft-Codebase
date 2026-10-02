@@ -27,6 +27,7 @@ own header comment where it has one.
 |---|---|
 | `aim.ts` | Camera zoom and the scope overlay — one place so guns and the aim-measurement spike do it the same way. |
 | `ambience.ts` | The on/off toggle for cosmetic effects (tumbleweeds) — lives here because the system that acts on it and the system that lets a player flip it can't import each other. |
+| `configoverrides.ts` | The curated registry of `config/guns.ts`/`balance.ts`/`world.ts` leaf fields `systems/liveconfig.ts`'s commands can edit live, mutating the real object in place and persisting the change — see `CLAUDE.md`'s custom-command-ids entry. |
 | `director.ts` | The one shared "slot" the three scripted set-piece events (fort raid, ranch raid, train robbery) take turns through, replacing V1's hand-wired lock that could get stuck taken. |
 | `economy.ts` | The only place coin/bounty scores are read or written, plus the scoreboard-existence check `preflight.ts` builds on. |
 | `events.ts` | The one ordered `entityDie` dispatcher, plus the `onScriptEvent`/`onSpawn` registries. |
@@ -45,11 +46,12 @@ own header comment where it has one.
 | `tick.ts` | The one `system.runInterval`. Every repeating job is a cadence-aware handler registered with `onTick`. |
 | `ui.ts` | The one writer for title/action bar/chat text, arbitrated by source and priority so one line can't silently overwrite another. |
 
-Four of these fit the "engines and contracts" label more loosely, worth knowing going in:
-`telemetry.ts` is a passive ledger with no registry hook by design; `game.ts` is domain-specific
-round-start logic shared by two callers, not generic infrastructure; `preflight.ts` is a one-shot
-startup validator; `ambience.ts` is a single shared boolean. None of that is a problem — the label
-just describes most of the folder, not a strict rule every file satisfies.
+Five of these fit the "engines and contracts" label more loosely, worth knowing going in:
+`telemetry.ts` and `configoverrides.ts` are both `Persistable`-only with no `registerSystem` hook by
+design (a round reset must never erase round history or a live-tuned value); `game.ts` is
+domain-specific round-start logic shared by two callers, not generic infrastructure; `preflight.ts`
+is a one-shot startup validator; `ambience.ts` is a single shared boolean. None of that is a
+problem — the label just describes most of the folder, not a strict rule every file satisfies.
 
 ### `rae/src/systems/` — one file per gameplay system
 
@@ -65,6 +67,7 @@ just describes most of the folder, not a strict rule every file satisfies.
 | `horse.ts` | Standardizes a spawned horse's state. |
 | `jail.ts` | Picks the active jail site; a first capture jails an outlaw, a second eliminates them. |
 | `jailbreak.ts` | The lockpick/rescue minigame for freeing a jailed outlaw. |
+| `liveconfig.ts` | The `rae:config_*` custom commands (list/get/set/reset) that edit `core/configoverrides.ts`'s registry live, each operator-gated and autocompleted by the engine itself. |
 | `menu.ts` | The in-game menu item: start or reset the game, teleport to the key places. |
 | `probe.ts` | Measurement spike, not a feature: measures whether stacked `applyDamage` calls add up (`rae:probe_damage`). |
 | `raids.ts` | Two raids in one file — fort plugs into `core/raid.ts`'s shared engine; ranch is hand-rolled because its countdown-that-stretches-on-reinforcement doesn't fit that shape. |
@@ -108,7 +111,7 @@ Two kinds of content, both intentional:
 
 - **Imports that register things.** `core/economy.ts`, `core/events.ts`, `core/game.ts`,
   `core/log.ts`, `core/preflight.ts`, `core/registry.ts`, `core/tick.ts` and `systems/roles.ts`'s
-  `pickRandom` are imported for their exports. All 17 files in `systems/` are imported purely for
+  `pickRandom` are imported for their exports. All 18 files in `systems/` are imported purely for
   their self-registration side effect (per rule 6, importing a system is what makes it exist — order
   never matters, since handler ordering is declared explicitly wherever it's registered).
   `core/telemetry.ts` is imported the same way, for its `onDeath`/`onPhase`/persist registrations.

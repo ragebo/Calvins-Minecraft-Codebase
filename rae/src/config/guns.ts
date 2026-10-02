@@ -58,12 +58,14 @@ export interface SoundCue {
 }
 
 export interface AimConfig {
-    /** The field of view while aiming, in degrees. The normal view is about 70, so smaller zooms in further. */
-    readonly fov: number;
-    /** Also draw the scope overlay (a black screen with a clear lens and a crosshair). */
-    readonly scope?: boolean;
-    /** Slowness amplifier while aimed (0 is 15% slower, 1 is 30%, 2 is 45%, 3 is 60%). Omit for no slowdown. */
-    readonly slowness?: number;
+    /** The field of view while aiming, in degrees. The normal view is about 70, so smaller zooms in further.
+     *  Mutable: core/configoverrides.ts edits this in place for a live-tuned gun. */
+    fov: number;
+    /** Also draw the scope overlay (a black screen with a clear lens and a crosshair). Mutable, see fov. */
+    scope?: boolean;
+    /** Slowness amplifier while aimed (0 is 15% slower, 1 is 30%, 2 is 45%, 3 is 60%). Omit for no slowdown.
+     *  Mutable, see fov. */
+    slowness?: number;
 }
 
 /**
@@ -80,15 +82,17 @@ export interface AimConfig {
  */
 export interface AutomaticConfig {
     readonly mountEntityId: string;
-    readonly fireRateTicksStart: number;
-    readonly fireRateTicksSpunUp: number;
-    readonly spinUpShots: number;
+    /** Mutable: core/configoverrides.ts edits these four in place for a live-tuned Gatling gun. */
+    fireRateTicksStart: number;
+    fireRateTicksSpunUp: number;
+    spinUpShots: number;
     /** How far away (blocks) a block can be and still be placed on. */
-    readonly placementRange: number;
+    placementRange: number;
     /** The model's barrels turn this many degrees per tick while firing, ramping the same way the fire rate
-     *  does (see fireRateTicksStart/SpunUp) — cold at the first shot, fastest once fully spun up. */
-    readonly spinDegreesStart: number;
-    readonly spinDegreesSpunUp: number;
+     *  does (see fireRateTicksStart/SpunUp) — cold at the first shot, fastest once fully spun up. Mutable,
+     *  see fireRateTicksStart above. */
+    spinDegreesStart: number;
+    spinDegreesSpunUp: number;
 }
 
 export interface GunSounds {
@@ -105,9 +109,11 @@ interface BaseGunConfig {
     readonly itemId: string;
     readonly displayName: string;
     readonly ammo: AmmoId;
-    readonly magazineSize: number;
+    /** Mutable: core/configoverrides.ts edits magazineSize/fireRateTicks/primeTicks/reloadTicks in place
+     *  for a live-tuned gun. */
+    magazineSize: number;
     /** Ticks that must pass between shots. */
-    readonly fireRateTicks: number;
+    fireRateTicks: number;
     /**
      * Omit for a gun that fires on every trigger pull, same as always. Set it and firing becomes
      * two clicks: the shot, then one more click (no earlier than this many ticks later) to cycle
@@ -116,9 +122,9 @@ interface BaseGunConfig {
      * player's own click-to-click time dwarfs a few ticks either way, needing two clicks instead
      * of one is what actually slows the gun down in practice, not this number itself.
      */
-    readonly primeTicks?: number;
+    primeTicks?: number;
     /** Ticks a reload takes once started (Q, or clicking an empty gun). */
-    readonly reloadTicks: number;
+    reloadTicks: number;
     /** What holding right-click does. Unreachable on a mounted gun (see `automatic`): nothing is ever held to fire itemUse on. */
     readonly aim: AimConfig;
     /** Set only for a gun that is manned rather than carried — see AutomaticConfig. */
@@ -130,9 +136,10 @@ interface BaseGunConfig {
 
 export interface ProjectileGunConfig extends BaseGunConfig {
     readonly kind: "projectile";
-    readonly damage: number;
+    /** Mutable: core/configoverrides.ts edits these in place for a live-tuned gun. */
+    damage: number;
     /** Blocks per tick. */
-    readonly projectileSpeed: number;
+    projectileSpeed: number;
 }
 
 /** What every gun shows at the muzzle when it fires. */
@@ -182,12 +189,13 @@ export interface GunEffects extends MuzzleEffects {
 
 export interface HitscanGunConfig extends BaseGunConfig {
     readonly kind: "hitscan";
-    /** Damage dealt by EACH pellet that connects. */
-    readonly pelletDamage: number;
-    readonly pelletCount: number;
+    /** Damage dealt by EACH pellet that connects. Mutable: core/configoverrides.ts edits these four in
+     *  place for a live-tuned gun. */
+    pelletDamage: number;
+    pelletCount: number;
     /** Half-angle of the spread cone, in degrees. */
-    readonly spreadDegrees: number;
-    readonly range: number;
+    spreadDegrees: number;
+    range: number;
     readonly effects: GunEffects;
 }
 
