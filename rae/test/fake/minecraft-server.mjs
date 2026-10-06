@@ -21,6 +21,32 @@ export const CustomCommandParamType = {
     PlayerSelector: "PlayerSelector", String: "String"
 };
 export const CustomCommandStatus = { Success: 0, Failure: 1 };
+
+// A real item stack: the type, a count, a name, a lore, and (only for a non-stackable one) dynamic properties.
+// `fake.makeItemStack` below is the lighter stand-in most tests already use.
+export class ItemStack {
+    constructor(typeId, amount = 1) {
+        this.typeId = typeId; this.amount = amount; this.nameTag = undefined; this.lore = [];
+        this.maxAmount = 64; this.properties = new Map();
+    }
+    clone() { const copy = new ItemStack(this.typeId, this.amount); copy.nameTag = this.nameTag; copy.lore = [...this.lore]; copy.maxAmount = this.maxAmount; return copy; }
+    setLore(lines = []) { this.lore = [...lines]; }
+    getLore() { return [...this.lore]; }
+    setDynamicProperty(k, v) {
+        if (this.maxAmount > 1) throw new Error("ArgumentOutOfBoundsError: dynamic properties only work on non-stackable items");
+        if (v === undefined || v === null) this.properties.delete(k); else this.properties.set(k, v);
+    }
+    getDynamicProperty(k) { return this.properties.get(k); }
+}
+
+// Text floating in the world (world.primitiveShapesManager.addText). Only what a test reads back is kept.
+export class TextPrimitive {
+    constructor(location, text) {
+        this.location = { ...location }; this.text = text; this.visibleTo = []; this.timeLeft = undefined;
+        this.depthTest = true; this.color = undefined; this.scale = 1;
+    }
+    setText(text) { this.text = text; }
+}
 export class BlockVolume { constructor(from, to) { this.from = from; this.to = to; } }
 export const BlockPermutation = { resolve(id, states) { return { type: { id }, states }; } };
 
@@ -253,6 +279,9 @@ function makePlayer(name, options = {}) {
         container,
         permission: options.permission ?? PlayerPermissionLevel.Member,
         messages: [], actionBar: [], titles: [], titleOptions: [], privateSounds: [], commands: [],
+        // Player.spawnParticle: visible only to this player, so it is kept on the player, not on the dimension.
+        privateParticles: [],
+        spawnParticle(id, location) { guard(player); player.privateParticles.push({ tick: fake.tick, id, location: { ...location } }); },
         scoreboardIdentity: { displayName: name, id: name },
         onScreenDisplay: {
             setActionBar(text) { guard(player); player.actionBar.push(text); },
@@ -313,7 +342,47 @@ export const world = {
     getPlayers(options) { fake.calls.getPlayers++; return queryPlayers(options); },
     getDimension(id) { return fake.dimension(id); },
     sendMessage(text) { fake.chat.push(text); },
-    structureManager: { get(id) { return fake.structures.has(id) ? { id } : undefined; } },
+    structureManager: {
+        get(id) { return fake.structures.has(id) ? { id } : undefined; },
+        // Enough of the real manager to act out saving, restoring and deleting a region: it keeps ids and a log of
+        // calls, not the blocks. `fake.structureMax` makes a too-large box throw, as the engine does.
+        createFromWorld(id, dimension, from, to, options = {}) {
+            const size = { x: Math.abs(to.x - from.x) + 1, y: Math.abs(to.y - from.y) + 1, z: Math.abs(to.z - from.z) + 1 };
+            if (Math.max(size.x, size.y, size.z) > fake.structureMax) throw new Error("ArgumentOutOfBoundsError: structure bounds exceed the maximum size");
+            if (fake.structures.has(id)) throw new Error(`structure ${id} already exists`);
+            fake.structures.add(id);
+            fake.structureLog.push({ op: "create", id, from: { ...from }, to: { ...to }, options });
+            return { id, size, isValid: true };
+        },
+        place(id, dimension, location, options) {
+            const name = typeof id === "string" ? id : id.id;
+            if (!fake.structures.has(name)) throw new Error(`structure ${name} does not exist`);
+            fake.structureLog.push({ op: "place", id: name, location: { ...location }, options });
+        },
+        delete(id) { return fake.structures.delete(typeof id === "string" ? id : id.id); },
+        getWorldStructureIds() { return [...fake.structures]; }
+    },
+    // fake.lootTables maps a table path to [[itemId, amount], ...]; an unknown path answers undefined, as the engine does.
+    getLootTableManager() {
+        return {
+            getLootTable(path) { return fake.lootTables.has(path) ? { path } : undefined; },
+            generateLootFromTable(table) { return (fake.lootTables.get(table.path) ?? []).map(([id, amount]) => new ItemStack(id, amount)); }
+        };
+    },
+    tickingAreaManager: {
+        chunkCount: 0, maxChunkCount: 255,
+        hasCapacity() { return true; },
+        createTickingArea(id, options) { fake.tickingAreas.set(id, options); return Promise.resolve(); },
+        getAllTickingAreas() { return [...fake.tickingAreas.keys()].map((identifier) => ({ identifier })); },
+        removeTickingArea(id) { fake.tickingAreas.delete(typeof id === "string" ? id : id.identifier); }
+    },
+    primitiveShapesManager: {
+        maxShapes: 500,
+        addText(text, dimension) { fake.shapes.push({ text, dimension }); },
+        getShapes() { return fake.shapes.map((entry) => entry.text); },
+        removeText(text) { const i = fake.shapes.findIndex((entry) => entry.text === text); if (i >= 0) fake.shapes.splice(i, 1); },
+        removeAll() { fake.shapes.length = 0; }
+    },
     scoreboard: {
         getObjective(id) { return objectives.get(id); },
         addObjective(id) { const o = makeObjective(id); objectives.set(id, o); return o; }
@@ -345,6 +414,11 @@ export const fake = {
     dynamic: new Map(),
     dynamicStringLimit: null,           // set to a number to make oversized string properties throw
     structures: new Set(),
+    structureMax: Infinity,             // the largest side (blocks) createFromWorld accepts
+    structureLog: [],                   // every createFromWorld/place the code made
+    lootTables: new Map(),              // path -> [[itemId, amount], ...]
+    tickingAreas: new Map(),
+    shapes: [],                         // world.primitiveShapesManager.addText calls
     itemTypes: new Set(["minecraft:stick", "minecraft:gold_ingot"]),
     calls: freshCalls(),
     // How bodies move (below), and the largest impulse applyImpulse accepts.
@@ -388,6 +462,7 @@ export const fake = {
     reset() {
         fake.players.length = 0; fake.entities.length = 0; fake.chat.length = 0;
         fake.dynamic.clear(); fake.structures.clear(); fake.dynamicStringLimit = null;
+        fake.structureMax = Infinity; fake.structureLog.length = 0; fake.lootTables.clear(); fake.tickingAreas.clear(); fake.shapes.length = 0;
         objectives.clear(); fake.calls = freshCalls();
         fake.physics.drag = 1; fake.physics.delivered = 1; fake.maxImpulse = Infinity; fake.cameraError = null;
         for (const d of Object.values(fake.dimensions)) { d.commands.length = 0; d.played.length = 0; d.spawned.length = 0; d.explosions.length = 0; d.filled.length = 0; d.particles.length = 0; }

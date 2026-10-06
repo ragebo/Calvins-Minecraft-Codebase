@@ -379,6 +379,40 @@ export const TELEMETRY = {
     maxStoredRounds: 20
 };
 
+/**
+ * The in-game robbery framework (systems/robbery*.ts, core/robbery*.ts): caps, defaults and tuning only. The
+ * robberies themselves (positions, names, loot, effects) are authored in game and saved in the world, the same
+ * way the recorded train route is, so none of them live in this file.
+ *
+ * Phase 0 (systems/robberyprobe.ts) is a measurement, not a feature: it records how the real game reports a
+ * right-click on a chest, door, button or lever, and whether a script can stop one, before the framework is
+ * built on any of that. Its knobs are the `probe*` fields.
+ */
+export const ROBBERY = {
+    /** The builder wand. Must equal the identifier in your_pack_name_BP/items/robbery_wand.json (assets.test.mjs checks it). */
+    wandItemId: "bountysys:robbery_wand",
+
+    /** Probe: `cancel on` switches itself off after this long (ticks), so a forgotten flag can never leave chests unopenable. */
+    probeCancelAutoOffTicks: 2400,
+    /** Probe: how long after a right-click the outcome (door swung? container opened?) is judged (ticks). */
+    probeEvaluateTicks: 3,
+    /** Probe: an event with no click of its own (container opened, button pushed) is credited to a click this recent (ticks). */
+    probeRecentTicks: 5,
+    /** Probe: a door's state is sampled this many ticks after being set, to see whether it holds or snaps back. */
+    probeDoorSampleTicks: [1, 20, 40, 100],
+    /** Probe: the cube sizes (blocks per side) tried when finding the largest structure the game will save. */
+    probeStructureSizes: [8, 16, 32, 48, 64, 65, 96, 128],
+    /** Probe: gap between the blocks `bench` lays out in a row. */
+    probeBenchSpacing: 3,
+    /** Probe: radius of the particle ring `view` draws, and how long its floating text stays (seconds). */
+    probeViewRadius: 3,
+    probeViewSeconds: 20,
+    /** Probe: how far a "look at this block" command reaches (blocks). */
+    probeAimDistance: 8,
+    /** Probe: loot tables tried by `loot`: one from this pack, one vanilla, one that does not exist. */
+    probeLootPaths: ["chests/gold_2", "chests/simple_dungeon", "chests/__no_such_table__"]
+};
+
 export const LOOT = {
     trainVault: "chests/gold_2",
     fortReward: "chests/gold_2"

@@ -27,7 +27,7 @@ function fakeReadyWorld() {
 // a refactor may add ids but must never rename or drop one without approval.
 const PUBLIC_SCRIPT_EVENTS = [
     "bounty:escape", "bounty:fort", "bounty:lockpick", "bounty:ranch", "bounty:start_round",
-    "bounty:teleport", "bounty:test_capture", "bounty:train", "rae:adopt", "rae:aim_spike", "rae:debug", "rae:menu", "rae:probe_damage", "rae:reset", "rae:tumbleweed",
+    "bounty:teleport", "bounty:test_capture", "bounty:train", "rae:adopt", "rae:aim_spike", "rae:debug", "rae:menu", "rae:probe_damage", "rae:reset", "rae:robbery_probe", "rae:tumbleweed",
     "rae:train_clear", "rae:train_info", "rae:train_loop", "rae:train_mark", "rae:train_show", "rae:train_spike", "rae:train_station", "rae:train_undo"
 ];
 

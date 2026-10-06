@@ -1,4 +1,4 @@
-import { world, system, type Player } from "@minecraft/server";
+import { world, system, PlayerPermissionLevel, type Player } from "@minecraft/server";
 import { recordOf, stateVersion, type PlayerRecord } from "./state.js";
 
 /**
@@ -48,6 +48,15 @@ function ask(key: string, keep: (record: Readonly<PlayerRecord>) => boolean): re
 /** Everyone currently in the world. */
 export function players(): readonly Player[] {
     return everyone();
+}
+
+/**
+ * Whether the game itself treats this player as an operator. The one place that question is asked outside
+ * core/log.ts (which cannot import this file: it would close an import cycle), so the live-config commands and
+ * the robbery builder agree on what "operator-only" means.
+ */
+export function isOperator(player: Player): boolean {
+    return player.playerPermissionLevel === PlayerPermissionLevel.Operator;
 }
 
 /** Everyone still in the round, whatever their role (or none yet). */

@@ -1,4 +1,4 @@
-import { PlayerPermissionLevel, type Player, type Vector3 } from "@minecraft/server";
+import type { Player, Vector3 } from "@minecraft/server";
 import { AIM, BOAT, COMPASS, ECONOMY, FORT, HARMING, HORSE, JAILBREAK, RAIDS, RANCH, TRAIN, TUMBLEWEED } from "../config/balance.js";
 import { GUNS } from "../config/guns.js";
 import {
@@ -8,6 +8,7 @@ import {
 } from "../config/world.js";
 import { warn } from "./log.js";
 import { registerPersistable } from "./persist.js";
+import { isOperator } from "./players.js";
 import { checkCoordinateBounds } from "./preflight.js";
 
 /**
@@ -164,10 +165,6 @@ function applyValue(field: EditableField, value: unknown): ApplyResult {
 
     field.set(value);
     return { ok: true };
-}
-
-function isOperator(player: Player): boolean {
-    return player.playerPermissionLevel === PlayerPermissionLevel.Operator;
 }
 
 /** The active overrides, by field id — what differs from the compiled-in default right now. Also exactly

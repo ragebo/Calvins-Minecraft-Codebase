@@ -301,6 +301,21 @@ regardless (the scripted train's start/end/speed numbers are baked into a path b
 see the file's own header comment). Changes persist as a sparse diff through the existing
 `core/persist.ts` engine, the same mechanism `round.ts`/`telemetry.ts`/`state.ts` already use.
 
+### Robbery framework (in progress)
+
+Today the fort raid, ranch raid and train robbery are code plus command-block chains plus NPC buttons on three
+separate clocks. The plan (approved 2026-10-06) is one in-game system: a builder wires up blocks they built (an
+iron door, a chest, a button...) with a **Robbery Wand** (`bountysys:robbery_wand`) and forms, in elements such
+as doors, lockable chests, switches, breakable walls, guard spawners and zones, each completed by a lock (lockpick
+minigame, key item, coins, a placed block) and gated by what must be done first; players then just interact with
+them. No custom blocks or art, operator-only authoring, robberies saved in the world (like the train route), and the
+first proof is a new robbery (the Saint Diego Bank) built entirely in game. Fort, ranch and train stay as they are.
+
+**Phase 0 (here now):** `/scriptevent rae:robbery_probe` (and `/rae:robbery_probe_ctx`) measure what the real game
+reports for right-clicks on vanilla blocks, whether a script can cancel them, and what the structure, loot-table and
+ticking-area APIs allow; `docs/test-cards/ROBBERY-SPIKE.md` is the run sheet and the decision table. The wand item
+exists so the probe can see what a right-click with it does. `logic/blockclass.ts` classifies block types.
+
 ### Tumbleweeds
 
 Purely ambient: `bountysys:tumbleweed`s roll across desert ground, nudged along by a steady "world

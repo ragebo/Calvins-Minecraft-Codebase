@@ -35,7 +35,7 @@ own header comment where it has one.
 | `game.ts` | Starting a round (assign roles, send everyone to a spawn) — shared by the old script events and the in-game menu, since a system can't import a system. |
 | `log.ts` | The one place a failure or diagnostic goes: console always, chat only for `error()`, and only to an operator. |
 | `persist.ts` | The save/restore contract and engine — one world dynamic property per registered key, survives a world reload. |
-| `players.ts` | Cached "which players are X?" queries (law, alive outlaws, spectators, ...), read from `core/state`, fetched at most once a tick. |
+| `players.ts` | Cached "which players are X?" queries (law, alive outlaws, spectators, ...), read from `core/state`, fetched at most once a tick. Also `isOperator(player)`, the one answer to "is this an operator?" outside `core/log.ts`. |
 | `preflight.ts` | Startup checks — scoreboards, the train structure, every gun/ammo item id, every hardcoded coordinate — one combined `error()` if anything's wrong. |
 | `raid.ts` | The shared wave-spawn/track/reward/cleanup engine a raid config plugs into. Fort does; ranch doesn't (see `systems/raids.ts`). |
 | `registry.ts` | Where a system registers itself and its reset, so a round reset can never again forget one. |
@@ -70,6 +70,7 @@ problem — the label just describes most of the folder, not a strict rule every
 | `liveconfig.ts` | The `rae:config_*` custom commands (list/get/set/reset) that edit `core/configoverrides.ts`'s registry live, each operator-gated and autocompleted by the engine itself. |
 | `menu.ts` | The in-game menu item: start or reset the game, teleport to the key places. |
 | `probe.ts` | Measurement spike, not a feature: measures whether stacked `applyDamage` calls add up (`rae:probe_damage`). |
+| `robberyprobe.ts` | Measurement spike, not a feature: Phase 0 of the in-game robbery framework (`rae:robbery_probe`, `rae:robbery_probe_ctx`). Records how the real game reports a right-click on a chest, door, button or lever, whether `cancel` stops it, and what structures, loot tables and ticking areas allow, before the framework is built on any of it. See `docs/test-cards/ROBBERY-SPIKE.md`. |
 | `raids.ts` | Two raids in one file — fort plugs into `core/raid.ts`'s shared engine; ranch is hand-rolled because its countdown-that-stretches-on-reinforcement doesn't fit that shape. |
 | `roles.ts` | The template file every other system was ported to match, and where role assignment and `pickRandom` live. |
 | `train.ts` | The train-robbery structure swap and its movement (backup/restore, wave timing) — a different "train" from `transit.ts`. |
@@ -87,10 +88,11 @@ condition, in separate files. None of this needs fixing — it's just what's act
 | File | Owns |
 |---|---|
 | `bearing.ts` | Compass direction math and display. |
+| `blockclass.ts` | What kind of block a type id is (door, trapdoor, gate, container, button, lever, plate, tripwire, other), by suffix, for the robbery framework. |
 | `route.ts` | The train's track math: smoothing, distance, heading, speed, steering. |
 | `schema.ts` | Config schema-version fingerprinting and migration for persisted data. |
 
-All three hold to "no game imports" exactly as documented, modulo `bearing.ts`/`route.ts` each
+All four hold to "no game imports" exactly as documented, modulo `bearing.ts`/`route.ts` each
 importing `Vector3` as a type only (erased at compile time, so it costs nothing at runtime).
 
 ### `rae/src/config/` — numbers and coordinates, mostly
@@ -105,13 +107,19 @@ importing `Vector3` as a type only (erased at compile time, so it costs nothing 
 minor stretch of "numbers and coordinates only," not a violation worth fixing: those strings need
 exactly one home too, and `config/guns.ts` is already it for everything else about a gun.
 
+One deliberate exception to rule 3: **data authored in game is world data, not config.** The recorded train
+route (`systems/transit.ts`, a world dynamic property) is the precedent, and the robbery framework (planned;
+Phase 0 is `systems/robberyprobe.ts`) follows it: the robberies a builder wires up with the wand (positions,
+names, loot, effects) are saved in the world, and `config/balance.ts`'s `ROBBERY` block holds only caps,
+defaults and tuning.
+
 ## `main.ts`: what it wires
 
 Two kinds of content, both intentional:
 
 - **Imports that register things.** `core/economy.ts`, `core/events.ts`, `core/game.ts`,
   `core/log.ts`, `core/preflight.ts`, `core/registry.ts`, `core/tick.ts` and `systems/roles.ts`'s
-  `pickRandom` are imported for their exports. All 18 files in `systems/` are imported purely for
+  `pickRandom` are imported for their exports. All 19 files in `systems/` are imported purely for
   their self-registration side effect (per rule 6, importing a system is what makes it exist — order
   never matters, since handler ordering is declared explicitly wherever it's registered).
   `core/telemetry.ts` is imported the same way, for its `onDeath`/`onPhase`/persist registrations.
