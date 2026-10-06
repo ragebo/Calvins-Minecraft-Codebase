@@ -753,7 +753,8 @@ function probeItemProperty(player: Player): void {
 // The script event
 // ---------------------------------------------------------------------------------------------------------
 
-const MUTATING = new Set(["bench", "door", "container", "structure", "tick"]);
+/** Commands that change the world, or what happens to everyone else's clicks: operators only. */
+const MUTATING = new Set(["bench", "door", "container", "structure", "tick", "cancel", "restricted"]);
 
 function clearAll(): void {
     rows.clear();

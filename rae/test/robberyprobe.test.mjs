@@ -562,6 +562,24 @@ test("`itemprop` tries a dynamic property on the held item: fine on a one-at-a-t
 // The script event itself, and staying out of the game's way
 // ---------------------------------------------------------------------------------------------------------
 
+test("a member cannot turn on cancel or the restricted battery, which would change what happens for everyone", () => {
+    const { check, done } = checks();
+    const op = fresh();
+    const member = fake.makePlayer("Ben", { permission: PlayerPermissionLevel.Member });
+    const chest = putBlock("minecraft:chest", 3, 64, 3);
+
+    say(member, "cancel on");
+    say(member, "cancel break on");
+    say(member, "restricted on");
+    check("each is refused with the operators-only line", (text(member).match(/Operators only/g) ?? []).length === 3, text(member));
+    check("nothing was switched on: an operator's click is not cancelled", click(op, chest).cancel === false);
+    check("and no battery ran", results().filter((r) => r.startsWith("restricted")).length === 0);
+
+    say(member, "log on");
+    check("logging (harmless) is still open to anyone", /Logging on/.test(text(member)), text(member));
+    done();
+});
+
 test("an unknown subcommand gets the usage line; with no player it only warns", () => {
     const { check, done } = checks();
     const p = fresh();
