@@ -653,7 +653,7 @@ export function validateRobbery(raw: unknown): Result<Robbery> {
         for (const required of element.req) {
             if (!ids.has(required)) return bad(`${element.name} needs an element that does not exist (${required})`);
         }
-        if (Number(element.id.slice(1)) >= nextElement) return bad(`${element.name}: its id is ahead of the element counter`);
+        if (Number(element.id.slice(1)) >= nextElement) return bad(`element "${element.name}" has an id ahead of the element counter`);
     }
 
     const owner = new Map<string, string>();
@@ -1016,7 +1016,7 @@ export function whyNotRunnable(robbery: Robbery): string[] {
 
     for (const element of robbery.elements) {
         if (element.kind === "chest" && element.table === undefined && element.items.length === 0 && element.locks.length === 0 && element.req.length === 0) {
-            problems.push(`${element.name}: a chest with no loot, lock or requirement does nothing`);
+            problems.push(`"${element.name}": a chest with no loot, lock or requirement does nothing`);
         }
     }
 
