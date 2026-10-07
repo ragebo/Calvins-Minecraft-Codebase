@@ -562,8 +562,6 @@ export const SHOP = {
     aimReach: 8,
     /** A click on a shop NPC closer than this to the last one (ticks) is the same click: the game can report one twice. */
     clickGapTicks: 5,
-    /** The most characters of the shop's greeting and the trade list the action bar repeats; the form itself shows everything. */
-    noticeChars: 56,
 
     /** What each moment sounds like (private to the player). */
     cues: {
