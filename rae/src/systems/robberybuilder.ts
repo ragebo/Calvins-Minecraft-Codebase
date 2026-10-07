@@ -75,13 +75,13 @@ const lastWandClick = new Map<string, number>();
 
 const sameClick = (player: Player): boolean => system.currentTick - (lastWandClick.get(player.id) ?? -Infinity) <= R.wandClickGapTicks;
 
-/** What the wand points at, for the debug log: a block type, or "(air)". Never throws. */
-function aimedAt(player: Player): string {
+/** The type of the block the wand points at within reach, or undefined when it points at nothing (or the game cannot say). */
+function blockInReach(player: Player): string | undefined {
 
     try {
-        return player.getBlockFromViewDirection({ maxDistance: R.wandReach })?.block.typeId ?? "(air)";
+        return player.getBlockFromViewDirection({ maxDistance: R.wandReach })?.block.typeId;
     } catch {
-        return "(unreadable)";
+        return undefined;
     }
 }
 
@@ -149,16 +149,28 @@ try {
 /**
  * A click on nothing. What the game sends for one is not the same for every kind: a LEFT-click in the air is a swing with the
  * source Attack, which the guns already rely on; a RIGHT-click in the air has only been seen as a swing (Interact) or an item
- * use when the game counts it as one, and the spike never recorded a clean sample. So the wand listens for all of them, and
- * for a click that is really the block event's or the same click reported twice it does nothing.
+ * use when the game counts it as one, and the spike never recorded a clean sample. So the wand listens for all of them.
+ *
+ * What it must NOT do is take a click on a block for one on nothing. The game reports a swing (and sometimes an item use) with
+ * about half of all block clicks, and never with an iron door, and not at a fixed moment after the block event: the first
+ * playtest opened the main menu on top of the element screen for exactly those clicks. A time window cannot catch them all, so
+ * the question asked is where the wand points: a block within reach means the click was on it, and the block event has it.
  */
 function clickOnNothing(player: Player, how: string): void {
 
+    const block = blockInReach(player);
+
+    if (block !== undefined) {
+        debug(SOURCE, `wand ${how} ignored: it points at ${block}, so it is a click on a block`);
+        return;
+    }
+
+    // The same click reported twice (a swing and an item use): the first one opened the menu.
     if (sameClick(player)) return;
 
     lastWandClick.set(player.id, system.currentTick);
 
-    debug(SOURCE, `wand click on nothing: ${how}, aimed at ${aimedAt(player)}`);
+    debug(SOURCE, `wand click on nothing: ${how}`);
 
     // Already opening one (an impatient second click): nothing to add, and no reason to tell them off.
     if (hasMenuOpen(player)) return;

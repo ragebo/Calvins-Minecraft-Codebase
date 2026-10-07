@@ -460,8 +460,11 @@ export const ROBBERY = {
     /** How long the builder's wand waits for the click a menu asked for (a corner of the area, a block to bind), in seconds. */
     pendingSeconds: 60,
     // ---- The builder's wand and view.
-    /** How far the wand's "what am I pointing at" readout reaches (blocks). */
-    wandReach: 6,
+    /**
+     * How far the wand looks for a block (blocks): the aim readout, and the test for "is this click on a block?". About how far the
+     * game itself lets a player reach, so a block the player can click is a block the wand sees.
+     */
+    wandReach: 5,
     /** The builder view redraws this often (ticks). */
     viewEvery: 10,
     /** The view marks blocks and the area's edges within this many blocks of the builder. */

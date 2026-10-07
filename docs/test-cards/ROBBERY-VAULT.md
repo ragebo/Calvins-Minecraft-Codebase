@@ -12,8 +12,9 @@ first thing built on those answers, so most of this card is "does the real game 
   right-click in the air (it opens from a left-click in the air, or sneak plus right-click on any block now; both are
   events the game is known to send); a refusal such as "this robbery is not finished" was cut off on the action bar (it is one
   short line now, and a builder gets the whole reason in chat); the builder view's marker for a chest was inside the chest (it
-  floats just over every block now). Still open: a vanilla screen opening when a bound block is clicked (see "If a vanilla
-  screen opens" below).
+  floats just over every block now); and the "vanilla screen" that opened about half the time on a button or chest was this framework's own
+  main menu opening on top of the block's screen (see "What the vanilla screen turned out to be" below), fixed by looking at what the wand
+  points at instead of at the clock.
 - RAE2's load line says a scoreboard objective is missing (`coins`). The price lock and the payouts need it, so create it
   before step 13: `/scoreboard objectives add coins dummy`, and `/scoreboard objectives add bounty dummy` if that is missing too.
 - Operators only. Run it in your test world (RAE2) as an operator, on flat ground **away from the old Saint Diego Bank**
@@ -34,6 +35,9 @@ under a registry that enforces the real one's rules. None of that can say what t
 particle, a double chest or a sound: that is this card.
 
 ## Steps
+
+**The wand EDITS; anything else PLAYS.** A click with the wand in hand always opens a builder screen, even on a robbery that is
+running. To rob your own vault (steps 10 to 17, 19 and 21) put the wand away: hold nothing, or any other item.
 
 | # | Do | Expect |
 |---|---|---|
@@ -77,22 +81,26 @@ particle, a double chest or a sound: that is this card.
 7. **The double chest** (step 22), and a pressure plate: bind one as a switch and step on it.
 8. Anything in the content log marked `[robbery]`, `[forms]` or `[Scripting][error]`.
 
-## If a vanilla screen opens when you click a bound block
+## What the "vanilla screen" turned out to be
 
-The framework asks the game not to do its own thing with a bound block (it sets `cancel` in the block-interaction event), and
-the Phase 0 spike only ever measured that working **with the wand in hand**; empty-handed it was never tested. If a chest's
-own screen opens when you click a bound chest, this settles whether `cancel` is ignored empty-handed (about a minute, with the
+On the first run, clicking a bound button or chest with the wand sometimes showed a second screen, about half the time, never with
+the iron door. It was not the game's own screen: it was this framework's main menu opening on top of the block's screen. The game
+reports a swing with only some block clicks (in the spike's log: a chest 5 times in 8, a wooden door 4 in 6, a button 1 in 3, a
+lever 1 in 3, an iron door 0 in 2), at no fixed moment after the block event, and the wand took any swing it could not match to a
+block event for "a click on nothing". It now looks at what the wand points at instead of at the clock: a swing or an item use
+that points at a block within reach is that block's click, whatever the timing. If a second screen still shows up, turn on
+`/scriptevent rae:log_debug on`, click again, and tell me; the wand writes every click it receives and every one it ignores.
+
+Separately, one thing the first run could not say: the spike only ever measured `cancel` (the framework asking the game not to
+open a chest, press a button or swing a door) with the wand in hand. If a sealed chest or a locked button still opens or presses
+when you click it **without** the wand (steps 10 to 13), this settles whether `cancel` is ignored empty-handed (a minute, with the
 probe that is already installed):
 
-1. `/scriptevent rae:robbery_probe clear`, then `/scriptevent rae:robbery_probe log on` and `/scriptevent rae:log_debug on`.
+1. `/scriptevent rae:robbery_probe clear`, then `/scriptevent rae:robbery_probe log on`.
 2. `/scriptevent rae:robbery_probe cancel interact on` (it switches itself off after two minutes).
 3. **Empty hand:** right-click a chest, a barrel, a lever and a door (any, bound or not: the probe cancels them all while it is
    on). Say which still opened, pulled or swung.
-4. **Holding the wand:** the same four clicks.
-5. `/scriptevent rae:robbery_probe cancel interact off`, `/scriptevent rae:robbery_probe report`,
-   `/scriptevent rae:robbery_probe log off`, `/scriptevent rae:log_debug off`.
-
-Then tell me what you saw; the report and the log (the wand's own clicks are logged too while `log_debug` is on) hold the rest.
+4. `/scriptevent rae:robbery_probe cancel interact off`, `/scriptevent rae:robbery_probe report`, `/scriptevent rae:robbery_probe log off`.
 
 ## Known limits (by design, for this phase)
 

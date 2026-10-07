@@ -570,6 +570,59 @@ test("what is not a click on nothing opens nothing: mining, placing, dropping, a
     done();
 });
 
+test("a swing or an item use that points at a block is that block's click, however early or late it arrives", async () => {
+    setup();
+    fake.strictBefore = true;
+    const { check, done } = checks();
+    const op = operator();
+    save(ok(L.newRobbery("bank", "Bank", "overworld")));
+    E.select(op, "bank");
+
+    // The first playtest: the game reports a swing with about half of all block clicks (a chest, a button; never an iron door), at no
+    // fixed moment after the block event, and the main menu opened on top of the block's own screen whenever it came late.
+    op.aimAt = { x: SITE.keypad[0], y: SITE.keypad[1], z: SITE.keypad[2] };
+
+    swing(op, "Interact");
+    swing(op, "Attack");
+    swing(op, "Use");
+    useItem(op);
+    await flush();
+    check("pointing at a block, no swing or item use is a click on nothing", ui.shown.length === 0, String(ui.shown.length));
+
+    // The swing arrives long AFTER the block event, with the block's screen already closed.
+    script(close);
+    useBlock(op, SITE.keypad, { held: R.wandItemId });
+    fake.advance(1);
+    await flush();
+    fake.advance(R.wandClickGapTicks * 4);
+    swing(op, "Interact");
+    useItem(op);
+    await flush();
+    check("a late swing opens nothing more: only the block's own screen was shown", ui.shown.length === 1 && /bind a block/.test(strip(titleOf(ui.shown[0]))), ui.shown.map((s) => strip(titleOf(s))).join(" > "));
+    check("and the builder is not scolded", !said(op).some((m) => /Finish or close the menu/.test(m)), said(op).join("|"));
+
+    // The swing arrives long BEFORE the block event.
+    ui.shown.length = 0;
+    later();
+    script(close);
+    swing(op, "Interact");
+    fake.advance(R.wandClickGapTicks * 4);
+    useBlock(op, SITE.keypad, { held: R.wandItemId });
+    fake.advance(1);
+    await flush();
+    check("an early swing opens nothing either: one screen, the block's own", ui.shown.length === 1 && /bind a block/.test(strip(titleOf(ui.shown[0]))), ui.shown.map((s) => strip(titleOf(s))).join(" > "));
+
+    // Looking at nothing, the same swing is the menu.
+    ui.shown.length = 0;
+    op.aimAt = undefined;
+    later();
+    script(close);
+    swing(op, "Attack");
+    await flush();
+    check("looking at nothing, a left-click is the menu", menus() === 1, String(menus()));
+    done();
+});
+
 test("a click while a menu is already open is ignored without a word; once it is closed the next click opens it again", async () => {
     setup();
     const { check, done } = checks();
@@ -681,7 +734,7 @@ test("with debug logging on, what the wand receives goes to the log; with it off
         console.warn = original;
     }
 
-    check("a click on nothing says how it arrived and what the wand was aimed at", lines.some((l) => /wand click on nothing: swing Attack, aimed at \(air\)/.test(l)), lines.join("|"));
+    check("a click on nothing says how it arrived", lines.some((l) => /wand click on nothing: swing Attack/.test(l)), lines.join("|"));
     check("a swing that is not a click says why it was ignored", lines.some((l) => /wand swing ignored: Mine/.test(l)), lines.join("|"));
     check("a click on a block says what, where, and whether she was sneaking", lines.some((l) => /wand click on minecraft:stone_button at 103,66,171 face=Up sneak=false/.test(l)), lines.join("|"));
     done();
