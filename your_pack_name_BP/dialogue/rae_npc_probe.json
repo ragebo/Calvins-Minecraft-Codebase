@@ -1,0 +1,26 @@
+{
+    "format_version": "1.17",
+    "minecraft:npc_dialogue": {
+        "scenes": [
+            {
+                "scene_tag": "rae_npc_probe",
+                "text": "NPC probe. Press a button, then read the report.",
+                "buttons": [
+                    {
+                        "name": "Probe button A",
+                        "commands": [
+                            "/scriptevent rae:npc_probe btn A"
+                        ]
+                    },
+                    {
+                        "name": "Probe button B (two commands)",
+                        "commands": [
+                            "/scriptevent rae:npc_probe btn B",
+                            "/tag @initiator add rae_npc_probe_pressed"
+                        ]
+                    }
+                ]
+            }
+        ]
+    }
+}

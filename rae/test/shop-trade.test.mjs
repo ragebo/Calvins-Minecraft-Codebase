@@ -105,7 +105,8 @@ test("goods the game cannot make are refused with its own words, before anything
     const { check, done } = checks();
     const fails = (spec) => { try { items.makeStacks(spec); return undefined; } catch (err) { return String(err.message); } };
 
-    check("an unknown potion effect", /InvalidPotionEffectType/.test(fails({ type: "minecraft:potion", amount: 1, potion: ["Nonsense", "Consume"] }) ?? ""));
+    check("an unknown potion effect", /does not know the potion Nonsense/.test(fails({ type: "minecraft:potion", amount: 1, potion: ["Nonsense", "Consume"] }) ?? ""));
+    check("an unknown potion delivery", /does not know the potion Healing \/ Eat/.test(fails({ type: "minecraft:potion", amount: 1, potion: ["Healing", "Eat"] }) ?? ""));
     check("an unknown enchantment", /does not know the enchantment/.test(fails({ type: "minecraft:bow", amount: 1, enchants: [["minecraft:nonsense", 1]] }) ?? ""));
     check("enchantments on an item that cannot take them", /cannot be enchanted/.test(fails({ type: "minecraft:arrow", amount: 1, enchants: [["minecraft:flame", 1]] }) ?? ""));
     check("an enchantment that does not fit the item", /NotCompatible/.test(fails({ type: "minecraft:iron_sword", amount: 1, enchants: [["minecraft:flame", 1]] }) ?? ""));

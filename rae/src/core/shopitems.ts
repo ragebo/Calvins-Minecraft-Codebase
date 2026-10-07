@@ -77,10 +77,21 @@ export function specOf(stack: ItemStack): ItemSpec {
     };
 }
 
+/** A potion of this effect and delivery, found the documented way (ids to handles, then `resolve`). Throws when the game does not know either. */
+function makePotion([effectId, deliveryId]: readonly [string, string]): ItemStack {
+
+    const effect = Potions.getEffectType(effectId);
+    const delivery = Potions.getDeliveryType(deliveryId);
+
+    if (!effect || !delivery) throw new Error(`the game does not know the potion ${effectId} / ${deliveryId}`);
+
+    return Potions.resolve(effect, delivery);
+}
+
 /** One finished item of this spec, a single one: a potion made as a potion, then named, given its lore and enchanted. Throws when the game refuses any of it. */
 function buildOne(spec: ItemSpec): ItemStack {
 
-    const stack = spec.potion ? Potions.resolve(spec.potion[0], spec.potion[1]) : new ItemStack(spec.type, 1);
+    const stack = spec.potion ? makePotion(spec.potion) : new ItemStack(spec.type, 1);
 
     if (spec.name !== undefined) stack.nameTag = spec.name;
     if (spec.lore) stack.setLore([...spec.lore]);

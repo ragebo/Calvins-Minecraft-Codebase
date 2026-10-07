@@ -122,8 +122,11 @@ export class ItemStack {
     getDynamicProperty(k) { return this.properties.get(k); }
 }
 
-// Potions.resolve(effect, delivery): a potion item, or the engine's own errors for an effect or delivery it does not know.
+// Potions.getEffectType / getDeliveryType turn an id into a handle (undefined for one the engine does not know), and
+// Potions.resolve(effect, delivery) makes the potion item (the engine's own errors for an effect or delivery it does not know).
 export const Potions = {
+    getEffectType(id) { return fake.potionEffects.has(id) ? { id } : undefined; },
+    getDeliveryType(id) { return POTION_ITEMS[id] ? { id } : undefined; },
     resolve(effect, delivery) {
         const e = typeof effect === "string" ? effect : effect?.id;
         const d = typeof delivery === "string" ? delivery : delivery?.id;

@@ -27,7 +27,7 @@ function fakeReadyWorld() {
 // a refactor may add ids but must never rename or drop one without approval.
 const PUBLIC_SCRIPT_EVENTS = [
     "bounty:escape", "bounty:fort", "bounty:lockpick", "bounty:ranch", "bounty:start_round",
-    "bounty:teleport", "bounty:test_capture", "bounty:train", "rae:adopt", "rae:aim_spike", "rae:debug", "rae:menu", "rae:probe_damage", "rae:reset", "rae:robbery_probe", "rae:tumbleweed",
+    "bounty:teleport", "bounty:test_capture", "bounty:train", "rae:adopt", "rae:aim_spike", "rae:debug", "rae:menu", "rae:npc", "rae:npc_probe", "rae:probe_damage", "rae:reset", "rae:robbery_probe", "rae:tumbleweed",
     "rae:train_clear", "rae:train_info", "rae:train_loop", "rae:train_mark", "rae:train_show", "rae:train_spike", "rae:train_station", "rae:train_undo"
 ];
 
@@ -39,6 +39,7 @@ test("main.js loads under the fake game API and registers every system", () => {
     check("every system can reset", systems.every((s) => typeof s.reset === "function"));
     check("core systems are registered", ["roles", "jail", "jailbreak", "raids", "train", "transit", "aimprobe", "menu", "tumbleweed", "boat", "guns", "compass", "endgame"].every((n) => names.includes(n)), names.join(","));
     check("the robbery framework's parts are registered", ["robbery", "robberyedit", "robberyglue", "robberybuilder", "robberyprobe"].every((n) => names.includes(n)), names.join(","));
+    check("the NPC shops' parts are registered", ["npcprobe", "shoptalk", "shopbuilder"].every((n) => names.includes(n)), names.join(","));
     done();
 });
 
@@ -54,7 +55,8 @@ test("the public script-event ids are all still registered", () => {
 const PUBLIC_COMMANDS = [
     "rae:config_get", "rae:config_list", "rae:config_reset", "rae:config_set_bool", "rae:config_set_coordinate", "rae:config_set_number",
     "rae:robbery_probe_ctx",
-    ...["list", "info", "new", "select", "delete", "start", "stop", "reset", "activate", "wand", "edit", "view", "undo", "area", "set"].map((n) => `rae:robbery_${n}`)
+    ...["list", "info", "new", "select", "delete", "start", "stop", "reset", "activate", "wand", "edit", "view", "undo", "area", "set"].map((n) => `rae:robbery_${n}`),
+    ...["list", "info", "new", "sell", "buy", "trade", "edit", "open", "select", "copy", "place", "delete", "undo"].map((n) => `rae:shop_${n}`)
 ];
 
 test("every public custom command registers together under the real registry's rules", () => {

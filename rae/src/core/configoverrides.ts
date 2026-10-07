@@ -1,5 +1,5 @@
 import type { Player, Vector3 } from "@minecraft/server";
-import { AIM, BOAT, COMPASS, ECONOMY, FORT, HARMING, HORSE, JAILBREAK, RAIDS, RANCH, TRAIN, TUMBLEWEED } from "../config/balance.js";
+import { AIM, BOAT, COMPASS, ECONOMY, FORT, HARMING, HORSE, JAILBREAK, RAIDS, RANCH, SHOP, TRAIN, TUMBLEWEED } from "../config/balance.js";
 import { GUNS } from "../config/guns.js";
 import {
     BOAT_NPC, BOAT_WIN_TELEPORT, BRIDGE_AREA, FORT_AREA, FORT_REWARD_CHEST, FORT_SPAWNS,
@@ -387,6 +387,12 @@ function registerBalanceFields(): void {
     numeric("compass.barCells", "Compass: bearing bar cells", "Compass", "integer", () => COMPASS.barCells, (v) => { COMPASS.barCells = v; }, { min: 1 });
     numeric("compass.barHalfWidthDegrees", "Compass: bearing bar half-width (deg)", "Compass", "float", () => COMPASS.barHalfWidthDegrees, (v) => { COMPASS.barHalfWidthDegrees = v; }, { min: 1, max: 180 });
     numeric("compass.alignToleranceDegrees", "Compass: align tolerance (deg)", "Compass", "float", () => COMPASS.alignToleranceDegrees, (v) => { COMPASS.alignToleranceDegrees = v; }, { min: 0 });
+
+    // The two switches that decide how a click on a shop NPC reaches the shop (systems/shoptalk.ts). Whether the game lets a
+    // script cancel its own NPC dialogue is what docs/test-cards/NPC-PROBE.md measures, and these let the answer be applied
+    // in the game, with no redeploy.
+    boolean("shop.interceptClicks", "Shop: a click on a shop NPC opens the shop at once (off: the NPC's dialogue button does)", "Shops", () => SHOP.interceptClicks, (v) => { SHOP.interceptClicks = v; });
+    boolean("shop.useDialogueScene", "Shop: point new shop NPCs at the dialogue scene", "Shops", () => SHOP.useDialogueScene, (v) => { SHOP.useDialogueScene = v; });
 }
 
 registerGunFields();

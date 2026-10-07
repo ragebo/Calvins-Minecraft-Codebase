@@ -1,0 +1,19 @@
+{
+    "format_version": "1.17",
+    "minecraft:npc_dialogue": {
+        "scenes": [
+            {
+                "scene_tag": "rae_npc",
+                "text": "Welcome. What can I do for you?",
+                "buttons": [
+                    {
+                        "name": "Browse the wares",
+                        "commands": [
+                            "/scriptevent rae:npc shop"
+                        ]
+                    }
+                ]
+            }
+        ]
+    }
+}

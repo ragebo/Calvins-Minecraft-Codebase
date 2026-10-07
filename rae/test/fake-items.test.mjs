@@ -52,6 +52,9 @@ test("potions: Potions.resolve makes the item for an effect and a delivery, and 
     check("a splash potion is its own item", splash.typeId === "minecraft:splash_potion");
     check("it reports its effect and delivery", splash.getComponent("minecraft:potion").potionEffectType.id === "Swiftness" && splash.getComponent("minecraft:potion").potionDeliveryType.id === "ThrowSplash");
     check("a drinkable one is a potion", Potions.resolve("Healing", "Consume").typeId === "minecraft:potion");
+    check("ids turn into handles, and an unknown id into undefined", Potions.getEffectType("Swiftness")?.id === "Swiftness" && Potions.getEffectType("Nonsense") === undefined
+        && Potions.getDeliveryType("ThrowSplash")?.id === "ThrowSplash" && Potions.getDeliveryType("Eat") === undefined);
+    check("resolve accepts handles as well as ids", Potions.resolve(Potions.getEffectType("Healing"), Potions.getDeliveryType("Consume")).potion.effect === "Healing");
     check("an item that is not a potion has no potion component", new ItemStack("minecraft:stick").getComponent("minecraft:potion") === undefined);
     check("an unknown effect throws", (() => { try { Potions.resolve("Nonsense", "Consume"); return false; } catch (err) { return /InvalidPotionEffectType/.test(err.message); } })());
     check("an unknown delivery throws", (() => { try { Potions.resolve("Healing", "Eat"); return false; } catch (err) { return /InvalidPotionDeliveryType/.test(err.message); } })());
