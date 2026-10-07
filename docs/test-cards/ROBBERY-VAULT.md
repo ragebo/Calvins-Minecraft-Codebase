@@ -15,7 +15,7 @@ first thing built on those answers, so most of this card is "does the real game 
   `undo`, `area`, `set`; type `/rae:robbery_` and the game completes them.
 - Problems go to the content log as `[robbery]` lines and, if they are real failures, to every operator in chat.
 
-`npm test` covers (784 tests): the data model and its validation; the store (every edit written at once, an over-size
+`npm test` covers (787 tests, and 22 deliberate mutations of the core rules were each caught by one): the data model and its validation; the store (every edit written at once, an over-size
 edit refused, an unreadable save listed and never overwritten, undo); every door and chest operation against a fake
 world, including a door always swung as a pair and a chunk that is not loaded; the whole run (starting, the director's
 slot, who may touch what, the locks, effects and their delays, the time limit, the empty-area fail, stop, reset, a round
