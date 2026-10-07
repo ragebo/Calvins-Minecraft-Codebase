@@ -507,6 +507,81 @@ export const ROBBERY = {
     probeLootPaths: ["chests/gold_2", "chests/simple_dungeon", "chests/__no_such_table__"]
 };
 
+/**
+ * NPC shops (logic/shop.ts, core/shop*.ts, systems/shopbuilder.ts and shoptalk.ts) and the measurement that came first
+ * (systems/npcprobe.ts).
+ *
+ * A shop is world data a builder makes in game (a vanilla NPC that carries a shop id, plus what it sells, buys and trades),
+ * so this block holds only its caps, defaults and tuning, the same deal as ROBBERY above.
+ */
+export const SHOP = {
+    // ---- What one shop may hold. A whole shop is saved as one world property, so size is the real limit.
+    maxShops: 60,
+    maxTrades: 40,
+    maxCostItems: 3,
+    maxRewards: 4,
+    maxIdLength: 20,
+    maxNameLength: 32,
+    maxGreetingLength: 200,
+    /** An item's custom name, in characters (colour codes count). */
+    maxItemNameLength: 50,
+    maxLoreLines: 4,
+    /** The game cuts an item's lore line off at 50 characters. */
+    maxLoreLength: 50,
+    maxEnchants: 8,
+    maxEnchantLevel: 255,
+    /** How many of one item a single deal may ask for or hand over. */
+    maxAmount: 64,
+    maxCoins: 100000,
+    /** A saved shop longer than this many characters is refused up front, with nothing changed (a world property holds 32767). */
+    maxSavedChars: 24000,
+
+    // ---- The NPC that carries a shop.
+    npcType: "minecraft:npc",
+    /** Put on every shop NPC so one cheap query finds them all (and so a builder can target them with /tag selectors). */
+    npcTag: "rae_shop",
+    /** The dynamic property on the NPC that says which shop it is. */
+    npcProperty: "rae:shop",
+    /** The one dialogue scene (your_pack_name_BP/dialogue/rae_npc.json; assets.test.mjs checks the name) a shop NPC points at. */
+    dialogueScene: "rae_npc",
+    /**
+     * Right-clicking a shop NPC cancels the game's own dialogue and opens the shop at once. If the game ignores the cancel the
+     * player gets both screens: switch this off (/rae:config_set_bool shop.interceptClicks false) and the dialogue scene's
+     * button carries the click instead. Which one works is what systems/npcprobe.ts measures.
+     */
+    interceptClicks: true,
+    /** Point a new shop NPC at the dialogue scene (`dialogue change`), so the button route works when interception is off. */
+    useDialogueScene: true,
+    /** Put on the NPCs this addon spawned itself (and not on one a builder turned into a shop), so deleting a shop removes only those. */
+    npcMadeTag: "rae_shop_made",
+    /** How far in front of the builder a new shop NPC appears (blocks). */
+    spawnDistance: 1.5,
+    /** If pointing a new NPC at the dialogue scene did not take at once, it is tried once more after this long (ticks). */
+    sceneRetryTicks: 10,
+    /** How far a builder can be from a shop NPC and still aim at it (blocks). */
+    aimReach: 8,
+    /** A click on a shop NPC closer than this to the last one (ticks) is the same click: the game can report one twice. */
+    clickGapTicks: 5,
+    /** The most characters of the shop's greeting and the trade list the action bar repeats; the form itself shows everything. */
+    noticeChars: 56,
+
+    /** What each moment sounds like (private to the player). */
+    cues: {
+        bought: { id: "random.orb", volume: 1, pitch: 1.2 },
+        sold: { id: "random.orb", volume: 1, pitch: 0.9 },
+        denied: { id: "note.bass", volume: 0.8, pitch: 0.7 }
+    },
+
+    // ---- The probe (systems/npcprobe.ts): what the real game does with a vanilla NPC.
+    /** The probe's own dialogue scene (your_pack_name_BP/dialogue/rae_npc_probe.json). */
+    probeScene: "rae_npc_probe",
+    /** Probe: `cancel on` switches itself off after this long (ticks), so a forgotten flag can never leave NPCs unusable. */
+    probeCancelAutoOffTicks: 2400,
+    /** Probe: the tag every NPC it spawns carries. */
+    probeTag: "rae_npc_probe",
+    probeProperty: "rae:npc_probe"
+};
+
 export const LOOT = {
     trainVault: "chests/gold_2",
     fortReward: "chests/gold_2"

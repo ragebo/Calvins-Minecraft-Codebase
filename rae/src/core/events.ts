@@ -1,4 +1,4 @@
-import { world, system, type Entity, type Player } from "@minecraft/server";
+import { world, system, ScriptEventSource, type Entity, type Player } from "@minecraft/server";
 import { error } from "./log.js";
 
 /**
@@ -113,10 +113,26 @@ function reportHandlerError(kind: string, name: string, err: unknown): void {
  */
 
 /**
- * `message` is the text after the id (`/scriptevent rae:train_station Depot` passes "Depot"),
- * or "" when there is none. Handlers that do not need it can ignore the second argument.
+ * Where a script event came from, for the few handlers that care. An NPC's dialogue button runs `/scriptevent` with the NPC as
+ * the source and the player who pressed the button as the initiator (measured in the real game on 2026-10-06), and the first
+ * argument of a handler is only ever the source when that is a player, so for an NPC's button it is `undefined`. This is how a
+ * handler finds the player: `origin.initiator`.
  */
-export type ScriptEventHandler = (player: Player | undefined, message: string) => void;
+export interface ScriptEventOrigin {
+    /** True when an NPC's dialogue button ran it. */
+    readonly fromNpc: boolean;
+    /** The entity it ran as: the player who typed it, or the NPC whose button ran it. */
+    readonly entity: Entity | undefined;
+    /** For an NPC's button, the player who pressed it. */
+    readonly initiator: Entity | undefined;
+}
+
+/**
+ * `message` is the text after the id (`/scriptevent rae:train_station Depot` passes "Depot"),
+ * or "" when there is none. Handlers that do not need it can ignore the second argument, and
+ * the third (`origin`) is there for the ones that must tell an NPC's button from a typed command.
+ */
+export type ScriptEventHandler = (player: Player | undefined, message: string, origin: ScriptEventOrigin) => void;
 
 const scriptEvents = new Map<string, ScriptEventHandler>();
 
@@ -136,8 +152,14 @@ system.afterEvents.scriptEventReceive.subscribe((event) => {
         ? (source as Player)
         : undefined;
 
+    const origin: ScriptEventOrigin = {
+        fromNpc: event.sourceType === ScriptEventSource.NPCDialogue,
+        entity: source,
+        initiator: event.initiator
+    };
+
     try {
-        handler(player, event.message ?? "");
+        handler(player, event.message ?? "", origin);
     } catch (error) {
         reportHandlerError("EVENT", event.id, error);
     }

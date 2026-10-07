@@ -29,23 +29,111 @@ export const CustomCommandParamType = {
     PlayerSelector: "PlayerSelector", String: "String"
 };
 export const CustomCommandStatus = { Success: 0, Failure: 1 };
+// Where a /scriptevent came from (`sourceType` on the event; the fake's emit passes whatever a test gives it).
+export const ScriptEventSource = { Block: "Block", Entity: "Entity", NPCDialogue: "NPCDialogue", Server: "Server" };
 
-// A real item stack: the type, a count, a name, a lore, and (only for a non-stackable one) dynamic properties.
-// `fake.makeItemStack` below is the lighter stand-in most tests already use.
+// How many of an item one slot holds. The engine knows every item's own limit; the fake knows the common ones (tools, weapons,
+// armour and potions hold one, a few throwables sixteen) and everything else holds 64. `fake.maxStacks` overrides one by id.
+const HOLDS_ONE = /(?:sword|axe|pickaxe|shovel|hoe|helmet|chestplate|leggings|boots|bow|crossbow|trident|shield|saddle|fishing_rod|shears|elytra|flint_and_steel|water_bucket|lava_bucket|milk_bucket|potion|boat|minecart|wand|revolver|pistol|shotgun|rifle)$/;
+const HOLDS_SIXTEEN = /(?:ender_pearl|snowball|egg|sign|:bucket)$/;
+function maxStackOf(typeId) {
+    if (fake.maxStacks.has(typeId)) return fake.maxStacks.get(typeId);
+    if (HOLDS_ONE.test(typeId)) return 1;
+    if (HOLDS_SIXTEEN.test(typeId)) return 16;
+    return 64;
+}
+
+// What the engine says about enchantments (bare id -> highest level) and which kinds of item take them.
+const ENCHANTABLE = /(?:sword|axe|pickaxe|shovel|hoe|helmet|chestplate|leggings|boots|bow|crossbow|trident|shield|fishing_rod|shears|elytra|book)$/;
+const ENCHANT_ONLY_FOR = {
+    flame: /bow$/, power: /bow$/, punch: /bow$/, infinity: /bow$/,
+    multishot: /crossbow$/, quick_charge: /crossbow$/, piercing: /crossbow$/,
+    sharpness: /(?:sword|axe)$/, fire_aspect: /sword$/, lunge: /sword$/
+};
+const POTION_ITEMS = { Consume: "minecraft:potion", ThrowSplash: "minecraft:splash_potion", ThrowLingering: "minecraft:lingering_potion" };
+
+const bareId = (id) => String(id).replace(/^minecraft:/, "");
+
+export class EnchantmentType {
+    constructor(id) {
+        const bare = bareId(id);
+        if (!fake.enchantments.has(bare)) throw new Error(`EnchantmentTypeUnknownIdError: unknown enchantment ${id}`);
+        this.id = `minecraft:${bare}`;
+        this.maxLevel = fake.enchantments.get(bare);
+    }
+}
+export const EnchantmentTypes = {
+    get(id) { try { return new EnchantmentType(id); } catch { return undefined; } }
+};
+
+function makeEnchantable(stack) {
+    if (!ENCHANTABLE.test(stack.typeId)) return undefined;
+    const add = (enchantment) => {
+        restrictedCheck("ItemEnchantableComponent.addEnchantment");
+        const type = enchantment.type;
+        const bare = bareId(type.id);
+        if (!fake.enchantments.has(bare)) throw new Error(`EnchantmentTypeUnknownIdError: ${type.id}`);
+        if (!Number.isInteger(enchantment.level) || enchantment.level < 1 || enchantment.level > fake.enchantments.get(bare)) throw new Error(`EnchantmentLevelOutOfBoundsError: ${type.id} level ${enchantment.level}`);
+        if (ENCHANT_ONLY_FOR[bare] && !ENCHANT_ONLY_FOR[bare].test(stack.typeId)) throw new Error(`EnchantmentTypeNotCompatibleError: ${type.id} on ${stack.typeId}`);
+        stack.enchantments = [...stack.enchantments.filter((e) => e.type.id !== type.id), { type, level: enchantment.level }];
+    };
+    return {
+        getEnchantments() { return stack.enchantments.map((e) => ({ type: e.type, level: e.level })); },
+        addEnchantment: add,
+        addEnchantments(list) { for (const enchantment of list) add(enchantment); }
+    };
+}
+
+// A real item stack: the type, a count, a name, a lore, enchantments, a potion, and (only for a non-stackable one) dynamic
+// properties. `fake.makeItemStack` below is the lighter stand-in most tests already use.
 export class ItemStack {
     constructor(typeId, amount = 1) {
         this.typeId = typeId; this.amount = amount; this.nameTag = undefined; this.lore = [];
-        this.maxAmount = 64; this.properties = new Map();
+        this.maxAmount = maxStackOf(typeId); this.properties = new Map();
+        this.enchantments = [];        // [{ type: EnchantmentType, level }]
+        this.potion = undefined;       // { effect, delivery }: set on a stack Potions.resolve made
     }
-    clone() { const copy = new ItemStack(this.typeId, this.amount); copy.nameTag = this.nameTag; copy.lore = [...this.lore]; copy.maxAmount = this.maxAmount; return copy; }
+    clone() {
+        const copy = new ItemStack(this.typeId, this.amount);
+        copy.nameTag = this.nameTag; copy.lore = [...this.lore]; copy.maxAmount = this.maxAmount;
+        copy.enchantments = this.enchantments.map((e) => ({ type: e.type, level: e.level }));
+        copy.potion = this.potion ? { ...this.potion } : undefined;
+        for (const [k, v] of this.properties) copy.properties.set(k, v);
+        return copy;
+    }
+    isStackableWith(other) {
+        const sameList = (a, b) => a.length === b.length && a.every((x, i) => x === b[i]);
+        const enchants = (stack) => stack.enchantments.map((e) => `${e.type.id}:${e.level}`).sort();
+        return this.typeId === other.typeId && this.nameTag === other.nameTag && sameList(this.lore, other.lore)
+            && sameList(enchants(this), enchants(other)) && JSON.stringify(this.potion) === JSON.stringify(other.potion)
+            && this.properties.size === 0 && other.properties.size === 0;
+    }
     setLore(lines = []) { this.lore = [...lines]; }
     getLore() { return [...this.lore]; }
+    getComponent(id) {
+        if (id === "minecraft:enchantable") return makeEnchantable(this);
+        if (id === "minecraft:potion" && this.potion) return { potionEffectType: { id: this.potion.effect }, potionDeliveryType: { id: this.potion.delivery } };
+        return undefined;
+    }
     setDynamicProperty(k, v) {
         if (this.maxAmount > 1) throw new Error("ArgumentOutOfBoundsError: dynamic properties only work on non-stackable items");
         if (v === undefined || v === null) this.properties.delete(k); else this.properties.set(k, v);
     }
     getDynamicProperty(k) { return this.properties.get(k); }
 }
+
+// Potions.resolve(effect, delivery): a potion item, or the engine's own errors for an effect or delivery it does not know.
+export const Potions = {
+    resolve(effect, delivery) {
+        const e = typeof effect === "string" ? effect : effect?.id;
+        const d = typeof delivery === "string" ? delivery : delivery?.id;
+        if (!fake.potionEffects.has(e)) throw new Error(`InvalidPotionEffectTypeError: ${e}`);
+        if (!POTION_ITEMS[d]) throw new Error(`InvalidPotionDeliveryTypeError: ${d}`);
+        const stack = new ItemStack(POTION_ITEMS[d], 1);
+        stack.potion = { effect: e, delivery: d };
+        return stack;
+    }
+};
 
 // Text floating in the world (world.primitiveShapesManager.addText). Only what a test reads back is kept.
 export class TextPrimitive {
@@ -172,22 +260,29 @@ const CONTAINER_TYPES = new Set(["minecraft:chest", "minecraft:trapped_chest", "
 const DEFAULT_STATES = { open_bit: false };
 const hasOpenBit = (typeId) => /[:_](?:door|trapdoor|fence_gate)$/.test(typeId);
 
-/** A real container: slots, stacking addItem (answers the part that did not fit), clearAll. */
-function makeContainer(size) {
+/**
+ * A real container: slots, stacking addItem (answers the part that did not fit), clearAll. With `copies` it behaves as the
+ * engine's does about ownership: `getItem` answers a COPY of the stack in the slot (changing it changes nothing until it is
+ * put back with `setItem`) and `setItem` keeps a copy of what it is given. A player's inventory is made this way; a chest is not,
+ * so older tests that read a chest's stacks in place see what they always did.
+ */
+function makeContainer(size, { copies = false } = {}) {
     const slots = new Array(size).fill(undefined);
+    const copy = (stack) => (copies && stack?.clone ? stack.clone() : stack);
+    const stacks = (a, b) => (a.isStackableWith ? a.isStackableWith(b) : a.typeId === b.typeId);
     const container = {
         isValid: true,
         size,
         get emptySlotsCount() { return slots.filter((s) => s === undefined).length; },
-        getItem(i) { return slots[i]; },
-        setItem(i, stack) { restrictedCheck("Container.setItem"); slots[i] = stack; },
+        getItem(i) { return copy(slots[i]); },
+        setItem(i, stack) { restrictedCheck("Container.setItem"); slots[i] = copy(stack); },
         addItem(stack) {
             restrictedCheck("Container.addItem");
             let left = stack.amount;
             const max = stack.maxAmount ?? 64;
             for (let i = 0; i < slots.length && left > 0; i++) {
                 const here = slots[i];
-                if (here && here.typeId === stack.typeId && here.amount < (here.maxAmount ?? 64)) {
+                if (here && stacks(here, stack) && here.amount < (here.maxAmount ?? 64)) {
                     const moved = Math.min(left, (here.maxAmount ?? 64) - here.amount);
                     here.amount += moved; left -= moved;
                 }
@@ -255,7 +350,9 @@ function makeDimension(id) {
         getPlayers(options) { fake.calls.dimensionGetPlayers++; return queryPlayers(options).filter((p) => p._dimension === dim); },
         getEntities(options) { return fake.entities.filter((e) => e._dimension === dim && matchesQuery(e, options)); },
         spawnEntity(typeId, location) { restrictedCheck("Dimension.spawnEntity"); const e = fake.makeEntity({ typeId, location, dimension: dim }); dim.spawned.push(e); return e; },
-        spawnItem(stack, location) { restrictedCheck("Dimension.spawnItem"); return fake.makeEntity({ typeId: "minecraft:item", location, dimension: dim }); },
+        // Every item dropped into the world is kept in `spawnedItems` (the stack and where it landed).
+        spawnedItems: [],
+        spawnItem(stack, location) { restrictedCheck("Dimension.spawnItem"); dim.spawnedItems.push({ stack, location: { ...location } }); return fake.makeEntity({ typeId: "minecraft:item", itemStack: stack, location, dimension: dim }); },
         createExplosion(location, radius, options) { restrictedCheck("Dimension.createExplosion"); dim.explosions.push({ location, radius, options }); return true; },
         // Recorded as it always was; a BlockVolume (from/to) is also written into the block store, with the block's states.
         fillBlocks(volume, block) {
@@ -390,7 +487,9 @@ function makePlayer(name, options = {}) {
     fake.players.push(player);
 
     const slots = [];
-    const container = {
+    // `inventory: true` gives the player a real 36-slot inventory (stacking addItem that answers what did not fit, copies in and
+    // out as the engine does, restricted-execution checks). Without it the player has the minimal one every older test uses.
+    const container = options.inventory ? makeContainer(36, { copies: true }) : {
         size: 36,
         getItem(i) { return slots[i]; },
         setItem(i, stack) { slots[i] = stack; },
@@ -425,6 +524,12 @@ function makePlayer(name, options = {}) {
             if (!player.aimAt) return undefined;
             const block = player._dimension.getBlock(player.aimAt);
             return block ? { block, face: "Up", faceLocation: { x: 0.5, y: 1, z: 0.5 } } : undefined;
+        },
+        // The entities the player looks at, nearest first: a test sets `aimEntities`, and the raycast answers them.
+        aimEntities: [],
+        getEntitiesFromViewDirection() {
+            guard(player);
+            return player.aimEntities.filter((e) => e.isValid).map((entity, i) => ({ entity, distance: 2 + i }));
         },
         scoreboardIdentity: { displayName: name, id: name },
         onScreenDisplay: {
@@ -653,6 +758,17 @@ export const fake = {
     tickingAreas: new Map(),
     shapes: [],                         // world.primitiveShapesManager.addText calls
     itemTypes: new Set(["minecraft:stick", "minecraft:gold_ingot"]),
+    // What the engine knows about items: a per-id override of how many one slot holds, the enchantments (bare id -> highest
+    // level) and the potion effects that exist. Static tables: `reset` leaves them alone.
+    maxStacks: new Map(),
+    enchantments: new Map([
+        ["flame", 1], ["power", 5], ["punch", 2], ["infinity", 1], ["multishot", 1], ["quick_charge", 3], ["piercing", 4],
+        ["sharpness", 5], ["fire_aspect", 2], ["lunge", 3], ["unbreaking", 3], ["efficiency", 5], ["mending", 1], ["protection", 4]
+    ]),
+    potionEffects: new Set([
+        "Swiftness", "LongSwiftness", "StrongSwiftness", "Healing", "StrongHealing", "Regeneration", "Strength", "Poison",
+        "TurtleMaster", "Leaping", "FireResistance", "WaterBreathing", "NightVision", "Invisibility", "SlowFalling", "Weakness"
+    ]),
     calls: freshCalls(),
     // How bodies move (below), and the largest impulse applyImpulse accepts.
     // drag: what is left of a velocity after each tick. delivered: the share of a velocity that becomes movement (1 = all).
@@ -753,6 +869,6 @@ export const fake = {
             d.blocks.clear(); d.blockStates.clear(); d.containers.clear();
             if (d.fakeLoader && d.isChunkLoaded === d.fakeLoader) { d.isChunkLoaded = () => true; d.fakeLoader = undefined; }
         }
-        for (const d of Object.values(fake.dimensions)) { d.commands.length = 0; d.played.length = 0; d.spawned.length = 0; d.explosions.length = 0; d.filled.length = 0; d.particles.length = 0; }
+        for (const d of Object.values(fake.dimensions)) { d.commands.length = 0; d.played.length = 0; d.spawned.length = 0; d.explosions.length = 0; d.filled.length = 0; d.particles.length = 0; d.spawnedItems.length = 0; }
     }
 };
