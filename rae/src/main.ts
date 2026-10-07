@@ -30,6 +30,8 @@ import "./systems/menu.js";
 import "./systems/tumbleweed.js";
 import "./systems/liveconfig.js";
 import "./systems/robberyprobe.js";
+import "./systems/robberyrun.js";
+import "./systems/robberybuilder.js";
 
 // Not a system (no round-reset hook, by design — see core/telemetry.ts): only needs importing so
 // its onDeath/onPhase/persist registrations run.

@@ -1,5 +1,6 @@
 import { test } from "node:test";
-import { fake, fakeUi, world, load, checks, strip } from "./helpers.mjs";
+import { fake, world, load, checks, strip } from "./helpers.mjs";
+import { buttonsOf, close, fill, no, press, problems, script, titleOf, ui, yes } from "./robbery-ui.mjs";
 import { L, SITE, buildSite, ok } from "./robbery-fixtures.mjs";
 
 // core/robberyforms.ts: every screen the builder sees. Driven by a stand-in player (below) who presses buttons by their
@@ -15,70 +16,6 @@ const Run = await load("core/robberyrun.js");
 const state = await load("core/state.js");
 const { resetAllSystems } = await load("core/registry.js");
 const { ROBBERY: R } = await load("config/balance.js");
-
-const ui = fakeUi.uiFake;
-const problems = [];
-
-// ---------------------------------------------------------------------------------------------------------
-// A stand-in player
-// ---------------------------------------------------------------------------------------------------------
-
-const buttonsOf = (form) => form.calls.filter((c) => c[0] === "button").map((c) => String(c[1]));
-const titleOf = (form) => String(form.calls.find((c) => c[0] === "title")?.[1] ?? "");
-
-/** Presses the first button whose label contains `text`. */
-const press = (text) => (form) => {
-    const buttons = buttonsOf(form);
-    const index = buttons.findIndex((b) => strip(b).includes(text));
-    if (index < 0) {
-        problems.push(`no button "${text}" on "${strip(titleOf(form))}": ${buttons.map(strip).join(" | ")}`);
-        return { canceled: true, cancelationReason: "UserClosed" };
-    }
-    return { canceled: false, selection: index };
-};
-
-const close = () => ({ canceled: true, cancelationReason: "UserClosed" });
-
-/** Fills a form in: `answers` maps a fragment of a control's label to its value; anything not mentioned keeps its default. */
-const fill = (answers = {}) => (form) => {
-    const controls = form.calls.filter((c) => ["textField", "toggle", "dropdown", "slider"].includes(c[0]));
-    const used = new Set();
-
-    const values = controls.map((control) => {
-        const [kind, label] = control;
-        const key = Object.keys(answers).find((k) => strip(String(label)).includes(k));
-        if (key !== undefined) used.add(key);
-
-        if (kind === "textField") return key !== undefined ? String(answers[key]) : control[3]?.defaultValue ?? "";
-        if (kind === "toggle") return key !== undefined ? answers[key] : control[2]?.defaultValue ?? false;
-        if (kind === "slider") return key !== undefined ? answers[key] : control[4]?.defaultValue ?? control[2];
-
-        const items = control[2];
-        if (key === undefined) return control[3]?.defaultValueIndex ?? 0;
-        const wanted = answers[key];
-        const exact = items.findIndex((item) => strip(String(item)) === wanted);
-        const index = typeof wanted === "number" ? wanted : exact >= 0 ? exact : items.findIndex((item) => strip(String(item)).includes(wanted));
-        if (index < 0) problems.push(`no choice "${wanted}" in "${strip(String(label))}": ${items.join(" | ")}`);
-        return Math.max(0, index);
-    });
-
-    for (const key of Object.keys(answers)) if (!used.has(key)) problems.push(`no control matching "${key}" on "${strip(titleOf(form))}"`);
-
-    return { canceled: false, formValues: values };
-};
-
-/** Answers a yes/no question: pressing "yes" is the second button. */
-const yes = () => ({ canceled: false, selection: 1 });
-const no = () => ({ canceled: false, selection: 0 });
-
-/**
- * Queues what the stand-in does, replacing whatever an earlier script left unused, and follows it with enough closes that any
- * screen left open unwinds instead of looping.
- */
-function script(...steps) {
-    ui.responses.length = 0;
-    ui.responses.push(...steps, ...Array.from({ length: 40 }, () => close));
-}
 
 async function settle() {
     for (let i = 0; i < 8; i++) await new Promise((resolve) => setImmediate(resolve));

@@ -38,6 +38,7 @@ test("main.js loads under the fake game API and registers every system", () => {
     check("system names are unique", new Set(names).size === names.length, names.join(","));
     check("every system can reset", systems.every((s) => typeof s.reset === "function"));
     check("core systems are registered", ["roles", "jail", "jailbreak", "raids", "train", "transit", "aimprobe", "menu", "tumbleweed", "boat", "guns", "compass", "endgame"].every((n) => names.includes(n)), names.join(","));
+    check("the robbery framework's parts are registered", ["robbery", "robberyedit", "robberyglue", "robberybuilder", "robberyprobe"].every((n) => names.includes(n)), names.join(","));
     done();
 });
 
@@ -45,6 +46,34 @@ test("the public script-event ids are all still registered", () => {
     const registered = listScriptEvents();
     const missing = PUBLIC_SCRIPT_EVENTS.filter((id) => !registered.includes(id));
     assert.deepEqual(missing, [], `missing public script events: ${missing.join(", ")}`);
+});
+
+// Custom commands (/rae:...) are public API too: operators and command blocks type them. Every system that registers some does
+// it inside the one startup event, into ONE registry, so this loads them all together under the real registry's rules: a bare
+// name, an enum used before it exists, or two systems claiming the same name fails here instead of silently in the game.
+const PUBLIC_COMMANDS = [
+    "rae:config_get", "rae:config_list", "rae:config_reset", "rae:config_set_bool", "rae:config_set_coordinate", "rae:config_set_number",
+    "rae:robbery_probe_ctx",
+    ...["list", "info", "new", "select", "delete", "start", "stop", "reset", "activate", "wand", "edit", "view", "undo", "area", "set"].map((n) => `rae:robbery_${n}`)
+];
+
+test("every public custom command registers together under the real registry's rules", () => {
+    fake.reset();
+    const warnings = [];
+    const originalWarn = console.warn;
+    console.warn = (...args) => warnings.push(args.join(" "));
+    let started;
+    try {
+        started = fake.startUp();
+    } finally {
+        console.warn = originalWarn;
+    }
+
+    const missing = PUBLIC_COMMANDS.filter((name) => !started.commands.has(name));
+    const why = warnings.filter((w) => /registering/.test(w)).join(" | ");
+    assert.deepEqual(missing, [], `commands that did not register: ${missing.join(", ")} ${why}`);
+    assert.deepEqual(warnings.filter((w) => /registering .* failed/.test(w)), [], "a registration failed");
+    assert.ok(started.enums.has("rae:robbery_setting") && started.enums.has("rae:number_field"), "the enums are registered");
 });
 
 test("startup announces itself and reports no errors when the scoreboards exist", () => {

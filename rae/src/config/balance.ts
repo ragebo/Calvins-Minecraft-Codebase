@@ -451,6 +451,20 @@ export const ROBBERY = {
     noticeTicks: 50,
     /** How long the builder's wand waits for the click a menu asked for (a corner of the area, a block to bind), in seconds. */
     pendingSeconds: 60,
+    // ---- The builder's wand and view.
+    /** How far the wand's "what am I pointing at" readout reaches (blocks). */
+    wandReach: 6,
+    /** The builder view redraws this often (ticks). */
+    viewEvery: 10,
+    /** The view marks blocks and the area's edges within this many blocks of the builder. */
+    viewRange: 48,
+    /** At most this many particles per redraw. */
+    viewMaxPoints: 150,
+    /** The gap between particles along the area's edges (blocks). */
+    viewEdgeSpacing: 3,
+    /** The particle the view draws with. */
+    viewParticle: "minecraft:endrod",
+
     /** What each moment sounds like. The ping's pitch comes from the guess (see the pick settings above). */
     cues: {
         denied: { id: "note.bass", volume: 0.8, pitch: 0.7 },

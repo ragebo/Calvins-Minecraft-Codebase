@@ -370,38 +370,51 @@ function ensureRegistered(id: string): void {
 }
 
 /**
- * Starts a robbery if it can start: it exists, is finished, is not already under way or being put back, is not cooling
- * down (a test run ignores that and the round rule), its blocks are loaded, and, if it is exclusive, nothing else holds
- * the director's slot. The reason is for the player who asked.
+ * Why a robbery cannot be started right now, or undefined when it can: it exists, is finished, is not already under way or
+ * being put back, is not cooling down (a test run ignores that and the round rule), its blocks are loaded, and, if it is
+ * exclusive, nothing else holds the director's slot. Only reads, so a command callback (which may not change the world)
+ * can ask it before deferring the start itself.
  */
+export function whyCannotStart(id: string, options: { readonly test?: boolean } = {}): string | undefined {
+
+    const robbery = getRobbery(id);
+    if (!robbery) return `there is no robbery ${id}`;
+
+    const unfinished = whyNotRunnable(robbery);
+    if (unfinished.length > 0) return `it is not finished: ${unfinished.join("; ")}`;
+
+    const existing = runs.get(id);
+    if (existing && !existing.ended) return "it is already under way";
+    if (existing || robberyIsDirty(id)) return "it is still being put back";
+
+    if (options.test !== true) {
+        const wait = cooldownLeftSeconds(id);
+        if (wait > 0) return `it is closed for another ${clock(wait)}`;
+        if (robbery.settings.roundOnly && !isPhase("ACTIVE")) return "it can only be robbed during a round";
+    }
+
+    const unloaded = firstUnloaded(robbery);
+    if (unloaded) return `part of it is not loaded right now (${unloaded})`;
+
+    // Ask before asking the director: its own refusal is a line to the whole world, and this one is only for this player.
+    const holder = robbery.settings.exclusive ? activeEvent() : null;
+    if (holder !== null) return `${holder} is in progress, and only one event can run at a time`;
+
+    return undefined;
+}
+
+/** Starts a robbery if whyCannotStart finds nothing in the way. The reason is for the player who asked. */
 export function startRobbery(id: string, options: { readonly by?: Player; readonly test?: boolean } = {}): RunOutcome {
+
+    const why = whyCannotStart(id, options);
+    if (why) return fail(why);
 
     const robbery = getRobbery(id);
     if (!robbery) return fail(`there is no robbery ${id}`);
 
-    const unfinished = whyNotRunnable(robbery);
-    if (unfinished.length > 0) return fail(`it is not finished: ${unfinished.join("; ")}`);
-
-    const existing = runs.get(id);
-    if (existing && !existing.ended) return fail("it is already under way");
-    if (existing || robberyIsDirty(id)) return fail("it is still being put back");
-
     const test = options.test === true;
 
-    if (!test) {
-        const wait = cooldownLeftSeconds(id);
-        if (wait > 0) return fail(`it is closed for another ${clock(wait)}`);
-        if (robbery.settings.roundOnly && !isPhase("ACTIVE")) return fail("it can only be robbed during a round");
-    }
-
-    const unloaded = firstUnloaded(robbery);
-    if (unloaded) return fail(`part of it is not loaded right now (${unloaded})`);
-
     if (!robbery.settings.exclusive) return begin(id, options.by, test, false) ? ok : fail("it could not start");
-
-    // Ask before asking the director: its own refusal is a line to the whole world, and this one is only for this player.
-    const holder = activeEvent();
-    if (holder !== null) return fail(`${holder} is in progress, and only one event can run at a time`);
 
     ensureRegistered(id);
     launching = { id, by: options.by, test };
@@ -443,13 +456,22 @@ function endRun(run: Run, result: RunResult, reason?: string): void {
     if (run.holdsSlot) finishEvent(eventId(run.id));
 }
 
+/** Why a robbery cannot be stopped (it is not under way), or undefined. Only reads. */
+export function whyCannotStop(id: string): string | undefined {
+
+    const run = runs.get(id);
+
+    return !run || run.ended ? "it is not under way" : undefined;
+}
+
 /** Stops a robbery that is under way: no win or fail effects, and its site is put back at once. */
 export function stopRobbery(id: string): RunOutcome {
 
-    const run = runs.get(id);
-    if (!run || run.ended) return fail("it is not under way");
+    const why = whyCannotStop(id);
+    if (why) return fail(why);
 
-    endRun(run, "stopped");
+    const run = runs.get(id);
+    if (run) endRun(run, "stopped");
 
     return ok;
 }
@@ -490,11 +512,12 @@ export function resetSiteNow(id: string): { readonly cleaned: number; readonly l
  */
 export function activateElement(id: string, elementId: string, actor?: Player): RunOutcome {
 
-    const robbery = getRobbery(id);
-    if (!robbery) return fail(`there is no robbery ${id}`);
+    const why = whyCannotActivate(id, elementId);
+    if (why) return fail(why);
 
-    const element = findElement(robbery, elementId) ?? robbery.elements.find((e) => e.name.toLowerCase() === elementId.toLowerCase());
-    if (!element) return fail(`${robbery.name} has no element ${elementId}`);
+    const robbery = getRobbery(id);
+    const element = robbery ? elementNamed(robbery, elementId) : undefined;
+    if (!robbery || !element) return fail(`there is no robbery ${id}`);
 
     let run = runs.get(id);
 
@@ -504,15 +527,41 @@ export function activateElement(id: string, elementId: string, actor?: Player): 
         run = runs.get(id);
     }
 
-    if (!run || run.ended) return fail("it is over");
-    if (run.done.has(element.id)) return fail(`${element.name} is already done`);
-
-    const waiting = element.req.filter((required) => !run.done.has(required)).map((required) => findElement(robbery, required)?.name ?? required);
-    if (waiting.length > 0) return fail(`${element.name} waits on ${waiting.join(", ")}`);
+    if (!run) return fail("it could not start");
 
     complete(run, robbery, element, actor);
 
     return ok;
+}
+
+/** An element by its id ("e2") or, failing that, its name (any case). */
+function elementNamed(robbery: Robbery, text: string): Element | undefined {
+    return findElement(robbery, text) ?? robbery.elements.find((e) => e.name.toLowerCase() === text.toLowerCase());
+}
+
+/** Why an element cannot be activated from outside right now, or undefined. Only reads. */
+export function whyCannotActivate(id: string, elementId: string): string | undefined {
+
+    const robbery = getRobbery(id);
+    if (!robbery) return `there is no robbery ${id}`;
+
+    const element = elementNamed(robbery, elementId);
+    if (!element) return `${robbery.name} has no element ${elementId}`;
+
+    const run = runs.get(id);
+
+    // With no run it would start one, which has its own conditions, and nothing would be done yet.
+    if (!run) {
+        const blocked = whyCannotStart(id);
+        if (blocked) return blocked;
+    }
+
+    if (run?.ended) return "it is over";
+    if (run?.done.has(element.id)) return `${element.name} is already done`;
+
+    const waiting = element.req.filter((required) => run?.done.has(required) !== true).map((required) => findElement(robbery, required)?.name ?? required);
+
+    return waiting.length > 0 ? `${element.name} waits on ${waiting.join(", ")}` : undefined;
 }
 
 // ---------------------------------------------------------------------------------------------------------
