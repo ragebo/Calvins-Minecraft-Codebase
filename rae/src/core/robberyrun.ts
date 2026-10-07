@@ -2,7 +2,7 @@ import { system, type Container, type Player, type Vector3 } from "@minecraft/se
 import { ModalFormData } from "@minecraft/server-ui";
 import { ROBBERY as R } from "../config/balance.js";
 import { FRESH_PICK, pickStep, type PickCurve, type PickParams, type PickState } from "../logic/lockpick.js";
-import { sentence } from "../logic/robberymeta.js";
+import { briefly, sentence } from "../logic/robberymeta.js";
 import {
     boxContains, findElement, itemLabel, sameDimension, whyNotRunnable,
     type Audience, type Effect, type Element, type Lock, type PickLock, type Pos, type RewardEffect, type Robbery, type SayEffect
@@ -11,7 +11,7 @@ import { activeEvent, finishEvent, registerEvent, requestEvent } from "./directo
 import { addBounty, addCoins, getCoins, takeCoins } from "./economy.js";
 import { showForm } from "./forms.js";
 import { debug, error, warn } from "./log.js";
-import { aliveOutlaws, alivePlayers, lawPlayers, players } from "./players.js";
+import { aliveOutlaws, alivePlayers, isOperator, lawPlayers, players } from "./players.js";
 import { registerSystem } from "./registry.js";
 import { clearDirty, dirtyCount, dirtyEntries, getRobbery, markDirty, robberyIsDirty, type Bound, type Dirty } from "./robberystore.js";
 import { dimensionOf, emptyChest, fillChest, isLoaded, setDoor } from "./robberyworld.js";
@@ -102,6 +102,8 @@ const cooldownUntil = new Map<string, number>();
 const lastGuessTick = new Map<string, number>();
 /** Who is in a pick form right now, so a double click does not open two. */
 const picking = new Set<string>();
+/** The last whole reason each builder was given in chat, so a click held on an unfinished robbery does not repeat it. */
+const lastDetail = new Map<string, { readonly text: string; readonly tick: number }>();
 
 type StartRequest = { readonly id: string; readonly by: Player | undefined; readonly test: boolean };
 let launching: StartRequest | undefined;
@@ -174,11 +176,28 @@ function whyNotAllowed(player: Player, robbery: Robbery, test: boolean): string 
 // Telling the player
 // ---------------------------------------------------------------------------------------------------------
 
-/** A short refusal: a line on the action bar (it cannot be spammed into chat by clicking) and a dull thud. */
+/**
+ * A short refusal: one line on the action bar (it cannot be spammed into chat by clicking) and a dull thud. The bar is a
+ * single centred line that cuts off whatever does not fit, so a long reason (an unfinished robbery lists everything it
+ * lacks) is shortened there, and a builder, who can do something about it, is given the whole of it in chat, once.
+ */
 function deny(player: Player, reason: string): void {
 
-    setActionBar(player, SOURCE, format("warn", sentence(reason)), { priority: ACTION_BAR_PRIORITY.alert, ttlTicks: R.noticeTicks });
+    const full = sentence(reason);
+    const line = briefly(full, R.noticeChars);
+
+    setActionBar(player, SOURCE, format("warn", line), { priority: ACTION_BAR_PRIORITY.alert, ttlTicks: R.noticeTicks });
     playFor(player, R.cues.denied);
+
+    if (line === full || !isOperator(player)) return;
+
+    const now = system.currentTick;
+    const last = lastDetail.get(player.id);
+
+    if (last?.text === full && now - last.tick < R.noticeTicks * 4) return;
+
+    lastDetail.set(player.id, { text: full, tick: now });
+    tell(player, format("warn", full));
 }
 
 // ---------------------------------------------------------------------------------------------------------
@@ -875,7 +894,7 @@ function handleTouch(player: Player, ref: Bound): void {
     if (state === "done") return;
 
     if (state === "sealed") {
-        deny(player, "it is sealed tight; something else has to be done first");
+        deny(player, "it is sealed until something else is done");
         return;
     }
 
@@ -1033,6 +1052,7 @@ registerSystem({
         runs.clear();
         cooldownUntil.clear();
         lastGuessTick.clear();
+        lastDetail.clear();
         picking.clear();
         launching = undefined;
     }

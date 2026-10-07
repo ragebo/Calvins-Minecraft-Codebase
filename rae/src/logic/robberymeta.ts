@@ -111,6 +111,26 @@ export function sentence(text: string): string {
     return /[.!?]$/.test(capital) ? capital : `${capital}.`;
 }
 
+/**
+ * A line made short enough for the action bar, which is one centred line that is cut off at the screen's edges. Text that
+ * fits is left alone; otherwise it is the first clause (up to a colon or semicolon) when that fits, else the start of it
+ * cut at `limit` and ended with "...". "it is not finished: nothing ends it: add an End: win effect ...; it fails when..."
+ * becomes "It is not finished."; the caller keeps the whole text for wherever there is room for it.
+ */
+export function briefly(text: string, limit: number): string {
+
+    const trimmed = text.trim();
+
+    if (trimmed.length <= limit) return trimmed;
+
+    const stop = trimmed.search(/[:;]/);
+    const clause = stop > 0 ? trimmed.slice(0, stop).trim() : "";
+
+    if (clause.length > 0 && clause.length < limit) return `${clause}.`;
+
+    return `${trimmed.slice(0, Math.max(1, limit - 3)).trimEnd()}...`;
+}
+
 // ---------------------------------------------------------------------------------------------------------
 // The choices
 // ---------------------------------------------------------------------------------------------------------

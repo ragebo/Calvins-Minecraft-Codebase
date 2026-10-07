@@ -449,6 +449,14 @@ export const ROBBERY = {
     pickGuessCooldownTicks: 15,
     /** How long a "locked" or "jammed" line stays on the action bar (ticks). */
     noticeTicks: 50,
+    /**
+     * The longest refusal the action bar shows whole, in characters. It is one centred line and anything wider is cut off at
+     * the screen's edges (a reason that listed everything a robbery was missing was), so a longer one is shortened and a
+     * builder gets the whole of it in chat.
+     */
+    noticeChars: 56,
+    /** Wand clicks closer together than this (ticks) are one click: a swing and an item use can both report a single click. */
+    wandClickGapTicks: 6,
     /** How long the builder's wand waits for the click a menu asked for (a corner of the area, a block to bind), in seconds. */
     pendingSeconds: 60,
     // ---- The builder's wand and view.

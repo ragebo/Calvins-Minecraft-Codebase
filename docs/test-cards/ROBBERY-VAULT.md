@@ -6,8 +6,16 @@ itself, a lockbox with a price and a lock, a payout, and a site that puts itself
 command chains. Phase 0 (`ROBBERY-SPIKE.md`) measured how the real game reports and cancels right-clicks; this is the
 first thing built on those answers, so most of this card is "does the real game agree with what the tests assumed".
 
-- Behavior pack **0.1.41**, resource pack unchanged (1.0.27). BP only: no world needs to be open to deploy it, but a
+- Behavior pack **0.1.42**, resource pack unchanged (1.0.27). BP only: no world needs to be open to deploy it, but a
   fresh launch is the safest way to be sure the new scripts are what you are running.
+- **0.1.42 is the fix round after the first run of this card (0.1.41).** The first run found: the menu did not open from a
+  right-click in the air (it opens from a left-click in the air, or sneak plus right-click on any block now; both are
+  events the game is known to send); a refusal such as "this robbery is not finished" was cut off on the action bar (it is one
+  short line now, and a builder gets the whole reason in chat); the builder view's marker for a chest was inside the chest (it
+  floats just over every block now). Still open: a vanilla screen opening when a bound block is clicked (see "If a vanilla
+  screen opens" below).
+- RAE2's load line says a scoreboard objective is missing (`coins`). The price lock and the payouts need it, so create it
+  before step 13: `/scoreboard objectives add coins dummy`, and `/scoreboard objectives add bounty dummy` if that is missing too.
 - Operators only. Run it in your test world (RAE2) as an operator, on flat ground **away from the old Saint Diego Bank**
   (the old command-block build is untouched, and two builds in one place would fight).
 - `/rae:robbery_wand` (or `/give @s bountysys:robbery_wand`) gives you the wand. Everything is also a command:
@@ -15,7 +23,7 @@ first thing built on those answers, so most of this card is "does the real game 
   `undo`, `area`, `set`; type `/rae:robbery_` and the game completes them.
 - Problems go to the content log as `[robbery]` lines and, if they are real failures, to every operator in chat.
 
-`npm test` covers (787 tests, and 22 deliberate mutations of the core rules were each caught by one): the data model and its validation; the store (every edit written at once, an over-size
+`npm test` covers (796 tests, and 36 deliberate mutations of the core rules and the fixes were each caught by one): the data model and its validation; the store (every edit written at once, an over-size
 edit refused, an unreadable save listed and never overwritten, undo); every door and chest operation against a fake
 world, including a door always swung as a pair and a chunk that is not loaded; the whole run (starting, the director's
 slot, who may touch what, the locks, effects and their delays, the time limit, the empty-area fail, stop, reset, a round
@@ -30,12 +38,12 @@ particle, a double chest or a sound: that is this card.
 | # | Do | Expect |
 |---|---|---|
 | 1 | Build a small room (about 6 x 4 x 6) out of any blocks, with an **iron door** (two high) as its entrance, a **stone button** on the wall beside the door (outside), and a **chest** inside. Do NOT wire the button to the door with redstone. | Just a room. |
-| 2 | `/rae:robbery_wand`, hold it, right-click the **air**. | The wand is in your bag. A form "A new robbery" opens. Type the name `Test Vault`, leave the id blank, submit. Chat says you made it. Its menu opens: close it. |
+| 2 | `/rae:robbery_wand`, hold it, then **left-click the air** (or sneak and right-click any block). | The wand is in your bag. A form "A new robbery" opens. Type the name `Test Vault`, leave the id blank, submit. Chat says you made it. Its menu opens: close it. (A plain right-click in the air may do nothing: that is what the first run found, and why left-click is the way in now. If it opens the menu for you, tell me.) |
 | 3 | Right-click the **stone button** with the wand. | The button does NOT press. A form "Test Vault: bind a block" opens with "A switch..." chosen. Name it `Keypad`, submit. Chat says it is bound and the Keypad screen opens. |
 | 4 | In the Keypad screen: **Locks**, then **Add a pick lock**, accept the defaults (submit), then **Back**, **Back**. | The locks screen lists "Pick lock: 2 correct picks (+/-10), jams after 3 misses for 20s". |
 | 5 | Right-click the **iron door** (either half) with the wand. | The door does not swing. The form suggests "A door"; name it `Vault door`, submit. In its screen: **Waits for**, turn on `Waits for Keypad`, submit, **Back**. |
 | 6 | Right-click the **chest** with the wand: name it `Lockbox`. In its screen: **Locks**, add a **pick lock** (defaults) and a **price** (25); **Waits for** `Vault door`; **Loot**: table `chests/gold_2`, items `minecraft:diamond 2`; **When it is done**, **Add: pay out** (coins 0, bounty 250, everyone in the area), **Add: end the robbery** (won, wait 3 seconds). | Each step says "Saved/Added". A table the game does not have would be warned about. |
-| 7 | Stand in the middle of the room. Wand in the air, **Area**, **A box around where I stand**, radius about 10. Then **Back**, **Start, win and fail effects**, **When it is won**, **Add: say something**: "The vault is empty!", to Everyone. | "The area is set." The main menu says **Ready to run.** |
+| 7 | Stand in the middle of the room. Open the menu (left-click the air), **Area**, **A box around where I stand**, radius about 10. Then **Back**, **Start, win and fail effects**, **When it is won**, **Add: say something**: "The vault is empty!", to Everyone. | "The area is set." The main menu says **Ready to run.** |
 | 8 | `/rae:robbery_set outlawsOnly off` (you have no outlaw role outside a round). `/rae:robbery_info test_vault`. | Settings and all three elements described; "Ready to run". |
 | 9 | `/rae:robbery_view`. Hold the wand and point at the button, the door, the chest, a plain wall. | Sparkles mark the button, both door halves, the chest and the edges of the area. The action bar names what you point at ("Keypad (switch) Test Vault") or says to right-click to bind it. **Tell me if you see no sparkles.** `/rae:robbery_view` again turns it off. |
 | 10 | With an **empty hand**, right-click the **chest**. | It does not open: "sealed tight; something else has to be done first". |
@@ -58,7 +66,7 @@ particle, a double chest or a sound: that is this card.
 1. **Forms:** do the wand's forms open straight after the click or only after a moment (a "busy" retry)? Is the pick
    slider comfortable? Do any of the buttons or labels look cramped or cut off?
 2. **Clicking:** does a click on a bound block ever also open the vanilla screen, press the button or swing the door?
-   Does a click in the air always open the menu, and a click on a block never open it twice?
+   Does a left-click in the air always open the menu? Does a right-click in the air do anything? Does a click on a block never open it twice?
 3. **The door:** does an iron door always open and close as one door, both halves, never half-open?
 4. **Sounds:** the cues are `note.bass` (refused), `random.orb` (ping), `random.levelup` (hit), `random.anvil_use`
    (an element done), `random.break` (a jam), `block.bell.hit` (start). Any that are silent or wrong?
@@ -68,6 +76,23 @@ particle, a double chest or a sound: that is this card.
    keep the space?
 7. **The double chest** (step 22), and a pressure plate: bind one as a switch and step on it.
 8. Anything in the content log marked `[robbery]`, `[forms]` or `[Scripting][error]`.
+
+## If a vanilla screen opens when you click a bound block
+
+The framework asks the game not to do its own thing with a bound block (it sets `cancel` in the block-interaction event), and
+the Phase 0 spike only ever measured that working **with the wand in hand**; empty-handed it was never tested. If a chest's
+own screen opens when you click a bound chest, this settles whether `cancel` is ignored empty-handed (about a minute, with the
+probe that is already installed):
+
+1. `/scriptevent rae:robbery_probe clear`, then `/scriptevent rae:robbery_probe log on` and `/scriptevent rae:log_debug on`.
+2. `/scriptevent rae:robbery_probe cancel interact on` (it switches itself off after two minutes).
+3. **Empty hand:** right-click a chest, a barrel, a lever and a door (any, bound or not: the probe cancels them all while it is
+   on). Say which still opened, pulled or swung.
+4. **Holding the wand:** the same four clicks.
+5. `/scriptevent rae:robbery_probe cancel interact off`, `/scriptevent rae:robbery_probe report`,
+   `/scriptevent rae:robbery_probe log off`, `/scriptevent rae:log_debug off`.
+
+Then tell me what you saw; the report and the log (the wand's own clicks are logged too while `log_debug` is on) hold the rest.
 
 ## Known limits (by design, for this phase)
 

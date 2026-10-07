@@ -53,6 +53,9 @@ const BACK: Action = { label: "Back", run: () => "back" };
 
 /** Builders with a menu open right now: a second menu on top of the first would only fight it for the form. */
 const open = new Set<string>();
+
+/** Whether this builder has a menu open: a click that can only mean "open the menu" has nothing to do then. */
+export const hasMenuOpen = (player: Player): boolean => open.has(player.id);
 /** Builders whose whole menu stack should close (an action that needs a click in the world sets this). */
 const closing = new Set<string>();
 
@@ -309,7 +312,7 @@ async function areaScreen(player: Player, id: string): Promise<Step> {
                 label: "Set it by clicking two corners",
                 run: () => {
                     setPending(player, { kind: "corner", robbery: id });
-                    tell(player, ok("Click the first corner with the wand (the air counts as where you stand), then the opposite one."));
+                    tell(player, ok("Click the first corner with the wand (left-click the air to use where you stand), then the opposite one."));
                     closeAllMenus(player);
                 }
             },

@@ -260,6 +260,28 @@ test("a wand click in the air is the menu", () => {
     done();
 });
 
+test("sneaking with the wand, a click on any block is the menu; a click a menu asked for still gets that click", () => {
+    setup();
+    const { check, done } = checks();
+    const ann = builder("Ann");
+    const sneaking = builder("Sneaker");
+    sneaking.isSneaking = true;
+    save(bank("bank").r);
+    E.select(ann, "bank");
+    E.select(sneaking, "bank");
+
+    check("standing, a click on a bound block is its element screen", click(ann, SITE.keypad).kind === "element");
+    check("standing, a click on an unbound block is the bind form", click(ann, [1, 70, 1]).kind === "add");
+
+    check("sneaking, a click on a bound block is the main menu", click(sneaking, SITE.keypad).kind === "menu");
+    check("sneaking, a click on an unbound block is the main menu", click(sneaking, [1, 70, 1]).kind === "menu");
+
+    E.setPending(sneaking, { kind: "corner", robbery: "bank" });
+    const corner = click(sneaking, [5, 70, 5]);
+    check("sneaking, a corner the menu asked for is still taken as a corner", corner.kind === "say" && /Corner 1 is 5, 70, 5/.test(corner.text), JSON.stringify(corner));
+    done();
+});
+
 test("setting the area by clicking: two corners, in any order, or the air for where you stand", () => {
     setup();
     const { check, done } = checks();

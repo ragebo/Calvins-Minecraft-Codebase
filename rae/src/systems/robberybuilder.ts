@@ -3,11 +3,11 @@ import {
     type CustomCommandOrigin, type CustomCommandResult, type ItemStack, type Player, type Vector3
 } from "@minecraft/server";
 import { ROBBERY as R } from "../config/balance.js";
-import { error, info, warn } from "../core/log.js";
+import { debug, error, info, warn } from "../core/log.js";
 import { isOperator } from "../core/players.js";
 import { registerSystem } from "../core/registry.js";
 import { applyEdit, createRobbery, giveWand, select, selectedId, selectedRobbery, wandOnAir, wandOnBlock, type WandAction } from "../core/robberyedit.js";
-import { openAddElement, openElementMenu, openMainMenu, openNewRobbery, openPickRobbery } from "../core/robberyforms.js";
+import { hasMenuOpen, openAddElement, openElementMenu, openMainMenu, openNewRobbery, openPickRobbery } from "../core/robberyforms.js";
 import { activateElement, cooldownLeftSeconds, resetSiteNow, startRobbery, stopRobbery, viewOf, whyCannotActivate, whyCannotStart, whyCannotStop, clock } from "../core/robberyrun.js";
 import { boundAt, deleteRobbery, getRobbery, getStored, listStored, rawText, undoLast } from "../core/robberystore.js";
 import { onTick } from "../core/tick.js";
@@ -66,8 +66,24 @@ const holdsWand = (player: Player, item: ItemStack | undefined): boolean => item
 // The wand
 // ---------------------------------------------------------------------------------------------------------
 
-/** The last tick each builder used the wand on a block, so the swing that goes with it is not also taken for a click on nothing. */
-const lastBlockUse = new Map<string, number>();
+/**
+ * The last tick each builder's wand click was handled, on a block or on nothing. One click can be reported several ways (the
+ * block event, the swing, the item use), so anything that arrives within R.wandClickGapTicks of a click already handled is
+ * that same click and is ignored.
+ */
+const lastWandClick = new Map<string, number>();
+
+const sameClick = (player: Player): boolean => system.currentTick - (lastWandClick.get(player.id) ?? -Infinity) <= R.wandClickGapTicks;
+
+/** What the wand points at, for the debug log: a block type, or "(air)". Never throws. */
+function aimedAt(player: Player): string {
+
+    try {
+        return player.getBlockFromViewDirection({ maxDistance: R.wandReach })?.block.typeId ?? "(air)";
+    } catch {
+        return "(unreadable)";
+    }
+}
 
 /** Does what a wand click means: says something, or opens a screen. */
 function perform(player: Player, action: WandAction): void {
@@ -106,7 +122,10 @@ try {
             const pos: Pos = [block.location.x, block.location.y, block.location.z];
             const type = block.typeId;
 
-            lastBlockUse.set(player.id, system.currentTick);
+            lastWandClick.set(player.id, system.currentTick);
+
+            // Off unless /scriptevent rae:log_debug on: what the game reported, for when a click does not do what it should.
+            debug(SOURCE, `wand click on ${type} at ${pos.join(",")} face=${event.blockFace} sneak=${player.isSneaking}`);
 
             // Everything after this changes saved data or opens a form: not allowed in here.
             system.run(() => guarded("a wand click on a block", () => perform(player, wandOnBlock(player, dimension, pos, type))));
@@ -127,22 +146,61 @@ try {
     warn(SOURCE, `could not listen for the wand breaking blocks: ${err instanceof Error ? err.message : String(err)}`);
 }
 
+/**
+ * A click on nothing. What the game sends for one is not the same for every kind: a LEFT-click in the air is a swing with the
+ * source Attack, which the guns already rely on; a RIGHT-click in the air has only been seen as a swing (Interact) or an item
+ * use when the game counts it as one, and the spike never recorded a clean sample. So the wand listens for all of them, and
+ * for a click that is really the block event's or the same click reported twice it does nothing.
+ */
+function clickOnNothing(player: Player, how: string): void {
+
+    if (sameClick(player)) return;
+
+    lastWandClick.set(player.id, system.currentTick);
+
+    debug(SOURCE, `wand click on nothing: ${how}, aimed at ${aimedAt(player)}`);
+
+    // Already opening one (an impatient second click): nothing to add, and no reason to tell them off.
+    if (hasMenuOpen(player)) return;
+
+    perform(player, wandOnAir(player));
+}
+
+/** The swings that can be a click with the wand: a right-click (Interact, Use) or a left-click (Attack). Mining a block is not one. */
+const CLICK_SWINGS: readonly string[] = ["Interact", "Use", "Attack"];
+
 try {
-    // A click on nothing: the only thing the game sends for it is the swing.
     world.afterEvents.playerSwingStart.subscribe((event) => {
 
-        guarded("a wand click on nothing", () => {
+        guarded("a wand swing", () => {
 
-            if (event.swingSource !== "Interact" || !holdsWand(event.player, event.heldItemStack)) return;
+            if (!holdsWand(event.player, event.heldItemStack)) return;
 
-            // A click on a block also swings; the block's own event already handled it.
-            if (system.currentTick - (lastBlockUse.get(event.player.id) ?? -Infinity) <= 2) return;
+            if (!CLICK_SWINGS.includes(event.swingSource)) {
+                debug(SOURCE, `wand swing ignored: ${event.swingSource}`);
+                return;
+            }
 
-            perform(event.player, wandOnAir(event.player));
+            clickOnNothing(event.player, `swing ${event.swingSource}`);
         });
     });
 } catch (err) {
     warn(SOURCE, `could not listen for wand swings: ${err instanceof Error ? err.message : String(err)}`);
+}
+
+try {
+    // The game's own "this item was used": for a right-click with nothing to click on it is the likeliest to fire.
+    world.afterEvents.itemUse.subscribe((event) => {
+
+        guarded("a wand item use", () => {
+
+            if (!holdsWand(event.source, event.itemStack)) return;
+
+            clickOnNothing(event.source, "item use");
+        });
+    });
+} catch (err) {
+    warn(SOURCE, `could not listen for wand item uses: ${err instanceof Error ? err.message : String(err)}`);
 }
 
 // ---------------------------------------------------------------------------------------------------------
@@ -153,7 +211,8 @@ try {
 const viewers = new Set<string>();
 let particlesBroken = false;
 
-const centre = (pos: Pos): Vector3 => ({ x: pos[0] + 0.5, y: pos[1] + 0.5, z: pos[2] + 0.5 });
+/** Just over the top of a block. A marker at a block's centre is inside it, and a chest, a door or a button hides what is inside. */
+const markerAbove = (pos: Pos): Vector3 => ({ x: pos[0] + 0.5, y: pos[1] + 1.3, z: pos[2] + 0.5 });
 const gap = (a: Vector3, b: Vector3): number => Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z);
 
 function wandInHand(player: Player): boolean {
@@ -206,7 +265,12 @@ function showView(player: Player): void {
 
     for (const element of robbery.elements) {
         for (const cell of element.cells) {
-            const point = centre(cell);
+
+            // Over the block, not in it. A block with another block of the same element straight above it (a door's lower half)
+            // leaves the marking to the one above, so a door is marked once, over its top.
+            if (element.cells.some((other) => other[0] === cell[0] && other[1] === cell[1] + 1 && other[2] === cell[2])) continue;
+
+            const point = markerAbove(cell);
             if (gap(here, point) <= R.viewRange) points.push(point);
         }
     }
@@ -457,13 +521,13 @@ const COMMANDS: readonly CommandSpec[] = [
     },
     {
         name: "rae:robbery_wand",
-        description: "Gives you the builder's wand: right-click a door, chest or button to bind it, or the air for the menu.",
+        description: "Gives you the builder's wand: right-click a door, chest or button to bind it; left-click the air, or sneak and right-click, for the menu.",
         run: (origin) => {
             const player = playerOf(origin);
             if (!player) return failure("the wand goes to a player: run this as a player");
 
             system.run(() => {
-                tell(player, giveWand(player) ? format("ok", "You have the wand. Right-click a block to bind it, or the air for the menu.") : format("info", "You already have the wand."));
+                tell(player, giveWand(player) ? format("ok", "You have the wand. Right-click a block to bind it; left-click the air, or sneak and right-click, for the menu.") : format("info", "You already have the wand."));
             });
 
             return ok("Giving you the wand.");
@@ -471,7 +535,7 @@ const COMMANDS: readonly CommandSpec[] = [
     },
     {
         name: "rae:robbery_edit",
-        description: "Opens the builder's menu (the same as right-clicking the air with the wand).",
+        description: "Opens the builder's menu (the same as left-clicking the air with the wand).",
         run: (origin) => {
             const player = playerOf(origin);
             if (!player) return failure("the menu opens for a player: run this as a player");
@@ -576,7 +640,7 @@ system.beforeEvents.startup.subscribe((event) => {
 registerSystem({
     name: "robberybuilder",
     reset() {
-        lastBlockUse.clear();
+        lastWandClick.clear();
         viewers.clear();
     }
 });

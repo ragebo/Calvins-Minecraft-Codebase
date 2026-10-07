@@ -492,7 +492,66 @@ test("the wand on a bound block opens that element's screen and selects its robb
     done();
 });
 
-test("a wand click on nothing is the menu; a click on a block is not also one; other swings do nothing", async () => {
+/** A swing, or an item use, as the game reports a click with the wand. */
+const swing = (player, swingSource, held = R.wandItemId) => world.afterEvents.playerSwingStart.emit({ player, swingSource, heldItemStack: held ? { typeId: held } : undefined });
+const useItem = (player, held = R.wandItemId) => world.afterEvents.itemUse.emit({ itemStack: held ? { typeId: held } : undefined, source: player });
+const flush = async () => { for (let i = 0; i < 6; i++) await new Promise((resolve) => setImmediate(resolve)); };
+/** How many times the builder's main menu (titled with the robbery's name) has been shown. */
+const menus = () => ui.shown.filter((s) => strip(titleOf(s)) === "Bank").length;
+/** Moves past the "same click" window, so the next click is a new one. */
+const later = () => fake.advance(R.wandClickGapTicks + 1);
+
+test("a click on nothing opens the menu: a left-click in the air, a right-click swing, or an item use", async () => {
+    setup();
+    const { check, done } = checks();
+    const op = operator();
+    save(ok(L.newRobbery("bank", "Bank", "overworld")));
+    E.select(op, "bank");
+
+    const gestures = [
+        ["a left-click in the air (swing Attack)", () => swing(op, "Attack")],
+        ["a right-click swing (Interact)", () => swing(op, "Interact")],
+        ["a right-click swing (Use)", () => swing(op, "Use")],
+        ["an item use", () => useItem(op)]
+    ];
+
+    for (const [label, fire] of gestures) {
+        ui.shown.length = 0;
+        script(close);
+        fire();
+        await flush();
+        check(`${label} opens the menu`, menus() === 1, String(menus()));
+        later();
+    }
+    done();
+});
+
+test("one click reported twice opens one menu, and a click that is really a block click opens none", async () => {
+    setup();
+    const { check, done } = checks();
+    const op = operator();
+    save(ok(L.newRobbery("bank", "Bank", "overworld")));
+    E.select(op, "bank");
+
+    script(close);
+    swing(op, "Attack");                                   // one left-click, reported as a swing...
+    useItem(op);                                           // ...and as an item use
+    await flush();
+    check("the swing and the item use of one click opened one menu", menus() === 1, String(menus()));
+
+    later();
+    ui.shown.length = 0;
+    script(close);
+    useBlock(op, SITE.keypad, { held: R.wandItemId });     // a right-click on a block...
+    swing(op, "Interact");                                 // ...also swings...
+    useItem(op);                                           // ...and uses the item
+    fake.advance(1);
+    await flush();
+    check("a block click opened the block's own screen only", ui.shown.length === 1 && /bind a block/.test(strip(titleOf(ui.shown[0]))), ui.shown.map((s) => strip(titleOf(s))).join(" > "));
+    done();
+});
+
+test("what is not a click on nothing opens nothing: mining, placing, dropping, another item, a member's wand", async () => {
     setup();
     const { check, done } = checks();
     const op = operator();
@@ -500,29 +559,131 @@ test("a wand click on nothing is the menu; a click on a block is not also one; o
     save(ok(L.newRobbery("bank", "Bank", "overworld")));
     E.select(op, "bank");
 
-    const swing = (player, swingSource, heldType) => world.afterEvents.playerSwingStart.emit({ player, swingSource, heldItemStack: heldType ? { typeId: heldType } : undefined });
+    for (const source of ["Mine", "Build", "Place", "DropItem", "Throw", "Event", "None"]) swing(op, source);
+    swing(op, "Attack", "minecraft:stick");
+    useItem(op, "minecraft:stick");
+    swing(mem, "Attack");
+    useItem(mem);
+    await flush();
 
+    check("nothing opened", ui.shown.length === 0, String(ui.shown.length));
+    done();
+});
+
+test("a click while a menu is already open is ignored without a word; once it is closed the next click opens it again", async () => {
+    setup();
+    const { check, done } = checks();
+    const op = operator();
+    save(ok(L.newRobbery("bank", "Bank", "overworld")));
+    E.select(op, "bank");
+
+    let release;
+    const held = new Promise((resolve) => { release = resolve; });
+    ui.responses.length = 0;
+    ui.responses.push(() => held);                         // the menu stays up until it is released
+
+    swing(op, "Attack");
+    await flush();
+    check("the menu is up", menus() === 1);
+
+    later();
+    swing(op, "Attack");
+    useItem(op);
+    await flush();
+    check("a later click while it is up opens nothing more", menus() === 1, String(menus()));
+    check("and does not scold the builder in chat", !said(op).some((m) => /Finish or close the menu/.test(m)), said(op).join("|"));
+
+    release(close());
+    await flush();
+    later();
     script(close);
-    swing(op, "Interact", R.wandItemId);
-    await new Promise((resolve) => setImmediate(resolve));
-    check("a swing in the air with the wand is the menu", ui.shown.length === 1 && strip(titleOf(ui.shown[0])) === "Bank", String(ui.shown.length));
+    swing(op, "Attack");
+    await flush();
+    check("once it is closed, the next click opens it again", menus() === 2, String(menus()));
+    done();
+});
 
+test("sneaking and right-clicking a block with the wand opens the menu; standing, it opens the block's own screen", async () => {
+    setup();
+    fake.strictBefore = true;
+    const { check, done } = checks();
+    const op = operator();
+    save(ok(L.newRobbery("bank", "Bank", "overworld")));
+    E.select(op, "bank");
+
+    op.isSneaking = true;
+    script(close);
+    const event = useBlock(op, SITE.keypad, { held: R.wandItemId });
+    fake.advance(1);
+    await flush();
+    check("cancelled, as every wand click is", event.cancel === true);
+    check("sneaking: the main menu", menus() === 1 && ui.shown.length === 1, ui.shown.map((s) => strip(titleOf(s))).join(" > "));
+
+    op.isSneaking = false;
+    later();
     ui.shown.length = 0;
     script(close);
     useBlock(op, SITE.keypad, { held: R.wandItemId });
-    swing(op, "Interact", R.wandItemId);                  // the swing that goes with the block click, in the same tick
     fake.advance(1);
-    await new Promise((resolve) => setImmediate(resolve));
-    check("a block click and its own swing opened one screen, not two", ui.shown.length === 1, String(ui.shown.length));
+    await flush();
+    check("standing: the form for binding that block", ui.shown.length === 1 && /bind a block/.test(strip(titleOf(ui.shown[0]))), ui.shown.map((s) => strip(titleOf(s))).join(" > "));
+    done();
+});
 
-    ui.shown.length = 0;
-    fake.advance(5);
-    swing(op, "Mine", R.wandItemId);
-    swing(op, "Attack", R.wandItemId);
-    swing(op, "Interact", "minecraft:stick");
-    swing(mem, "Interact", R.wandItemId);
-    await new Promise((resolve) => setImmediate(resolve));
-    check("a left click, another item, and a member's wand do nothing", ui.shown.length === 0, String(ui.shown.length));
+test("left-clicking the air sets a corner of the area to where the builder stands, when the menu asked for one", async () => {
+    setup();
+    const { check, done } = checks();
+    const op = operator("Op", { x: 10.7, y: 64.2, z: 20.9 });
+    save(ok(L.newRobbery("bank", "Bank", "overworld")));
+    E.select(op, "bank");
+
+    E.setPending(op, { kind: "corner", robbery: "bank", first: [0, 60, 0] });
+    swing(op, "Attack");
+    await flush();
+
+    check("the area runs from the first corner to the block she stands in", JSON.stringify(S.getRobbery("bank").area) === JSON.stringify({ min: [0, 60, 0], max: [10, 64, 20] }), JSON.stringify(S.getRobbery("bank").area));
+    check("she was told", said(op).some((m) => /The area of Bank is now 11 x 5 x 21 blocks/.test(m)), said(op).join("|"));
+    check("and no menu opened", ui.shown.length === 0);
+    done();
+});
+
+test("with debug logging on, what the wand receives goes to the log; with it off, nothing does", async () => {
+    setup();
+    const { check, done } = checks();
+    const log = await load("core/log.js");
+    const op = operator();
+    save(ok(L.newRobbery("bank", "Bank", "overworld")));
+    E.select(op, "bank");
+
+    const lines = [];
+    const original = console.warn;
+    console.warn = (...args) => lines.push(args.join(" "));
+
+    try {
+        script(close, close);
+        swing(op, "Attack");
+        useBlock(op, SITE.keypad, { held: R.wandItemId });
+        fake.advance(1);
+        await flush();
+        check("off by default: nothing was written", lines.filter((l) => /\[robbery\]/.test(l)).length === 0, lines.join("|"));
+
+        log.setDebugLogging(true);
+        later();
+        script(close, close);
+        swing(op, "Attack");
+        swing(op, "Mine");
+        later();
+        useBlock(op, SITE.keypad, { held: R.wandItemId });
+        fake.advance(1);
+        await flush();
+    } finally {
+        log.setDebugLogging(false);
+        console.warn = original;
+    }
+
+    check("a click on nothing says how it arrived and what the wand was aimed at", lines.some((l) => /wand click on nothing: swing Attack, aimed at \(air\)/.test(l)), lines.join("|"));
+    check("a swing that is not a click says why it was ignored", lines.some((l) => /wand swing ignored: Mine/.test(l)), lines.join("|"));
+    check("a click on a block says what, where, and whether she was sneaking", lines.some((l) => /wand click on minecraft:stone_button at 103,66,171 face=Up sneak=false/.test(l)), lines.join("|"));
     done();
 });
 
@@ -544,7 +705,11 @@ test("the view draws the selected robbery near the builder, and reads out what t
     check("on", /view is on/.test(as(fromPlayer(op), "rae:robbery_view", true).message));
     fake.advance(R.viewEvery);
     check("it drew particles for the bound blocks and the area's edges", op.privateParticles.length > 4 && op.privateParticles.every((p) => p.id === R.viewParticle), String(op.privateParticles.length));
-    check("including the keypad's block, at its centre", op.privateParticles.some((p) => p.location.x === 103.5 && p.location.y === 66.5 && p.location.z === 171.5));
+    const near = (a, b) => Math.abs(a - b) < 1e-9;
+    const at = (x, y, z) => op.privateParticles.filter((p) => near(p.location.x, x) && near(p.location.y, y) && near(p.location.z, z)).length > 0;
+    check("the keypad is marked just OVER its block, not inside it (a marker at the centre of a chest or a button cannot be seen)", at(103.5, 67.3, 171.5) && !at(103.5, 66.5, 171.5));
+    check("the lockbox is marked over its top, where it can be seen", at(107.5, 66.3, 175.5) && !at(107.5, 65.5, 175.5));
+    check("a door is marked once, over its upper half, and not again over its lower half", at(104.5, 67.3, 170.5) && !at(104.5, 66.3, 170.5) && !at(104.5, 65.5, 170.5));
     check("never more than the cap in one redraw", op.privateParticles.length <= R.viewMaxPoints, String(op.privateParticles.length));
 
     check("without the wand in hand there is no aim line", op.actionBar.length === 0);

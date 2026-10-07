@@ -254,7 +254,7 @@ function finishPending(player: Player, action: Pending, dimension: string, pos: 
 
         if (!action.first) {
             setPending(player, { kind: "corner", robbery: robbery.id, first: pos });
-            return say(`Corner 1 is ${label(pos)}. Now click the opposite corner (click the air to use where you stand).`);
+            return say(`Corner 1 is ${label(pos)}. Now click the opposite corner (or left-click the air to use where you stand).`);
         }
 
         const first = action.first;
@@ -291,13 +291,19 @@ function finishPending(player: Player, action: Pending, dimension: string, pos: 
         : `${element.name} is now bound to ${cells.map(label).join(" and ")}.`);
 }
 
-/** The wand was used on a block. What that means depends on what is waiting for a click, and on whether the block is bound. */
+/**
+ * The wand was used on a block. What that means depends on what is waiting for a click, on whether the builder is sneaking
+ * (sneak and right-click anywhere is the main menu: the one gesture that needs nothing but a block to point at, so it is
+ * the way to the menu that cannot fail to be heard), and on whether the block is bound.
+ */
 export function wandOnBlock(player: Player, dimensionId: string, pos: Pos, blockType: string): WandAction {
 
     const dimension = sameDimension(dimensionId);
     const waiting = pendingFor(player);
 
     if (waiting) return finishPending(player, waiting, dimension, pos, blockType);
+
+    if (player.isSneaking) return { kind: "menu" };
 
     const bound = boundAt(dimension, pos[0], pos[1], pos[2]);
 
@@ -315,7 +321,10 @@ export function wandOnBlock(player: Player, dimensionId: string, pos: Pos, block
     return { kind: "add", robbery: robbery.id, pos, blockType };
 }
 
-/** The wand was used on nothing. If a corner is wanted, where the builder stands is the corner; otherwise it is the menu. */
+/**
+ * The wand was used on nothing: a left-click in the air (which the game reports reliably), or a right-click in the air where
+ * it reports one. If a corner is wanted, where the builder stands is the corner; otherwise it is the menu.
+ */
 export function wandOnAir(player: Player): WandAction {
 
     const waiting = pendingFor(player);

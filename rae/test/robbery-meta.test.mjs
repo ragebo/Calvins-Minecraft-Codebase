@@ -311,3 +311,32 @@ test("the main menu summary says whether it is ready and what is missing", () =>
     check("not ready: the reasons", /Not ready: it has no elements yet/.test(notReady) && /Area: not set/.test(notReady), notReady);
     done();
 });
+
+// ---------------------------------------------------------------------------------------------------------
+// One line on the action bar
+// ---------------------------------------------------------------------------------------------------------
+
+test("briefly shortens a line for the action bar: whole when it fits, else its first clause, else cut with dots", () => {
+    const { check, done } = checks();
+
+    check("a short line is left alone", M.briefly("It is sealed.", 56) === "It is sealed.");
+    check("a line exactly at the limit is left alone", M.briefly("x".repeat(56), 56) === "x".repeat(56));
+    check("surrounding spaces are dropped", M.briefly("  hello  ", 56) === "hello");
+
+    const everything = "It is not finished: nothing ends it: add an End: win effect (on the last element, or on the start of the win hook); it fails when the area is empty, but the area is not set; \"Lockbox\": a chest with no loot, lock or requirement does nothing.";
+    const short = M.briefly(everything, 56);
+    check("the long list of what is missing becomes its first clause", short === "It is not finished.", short);
+    check("and fits", short.length <= 56);
+
+    check("a clause cut at a semicolon", M.briefly("Part of it is not loaded right now; try again when you are closer to the vault and the chunk has loaded", 56) === "Part of it is not loaded right now.");
+
+    const noClause = M.briefly("this has no colon or semicolon in it and it simply goes on and on past the end of the screen", 40);
+    check("with no clause to take it is cut and ended with dots", noClause.length <= 40 && noClause.endsWith("...") && noClause.startsWith("this has no colon"), noClause);
+
+    const longClause = M.briefly("a clause that is itself far too long to fit on the line: and then more", 30);
+    check("a first clause that is too long is cut too", longClause.length <= 30 && longClause.endsWith("..."), longClause);
+
+    check("a colon at the very start is not a clause", M.briefly(": and then a long sentence follows that cannot possibly fit", 20).endsWith("..."));
+    check("always at most the limit, whatever the text", ["a".repeat(500), "b: " + "c".repeat(500), "d; e", "f".repeat(57)].every((t) => M.briefly(t, 56).length <= 56));
+    done();
+});

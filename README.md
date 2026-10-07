@@ -327,7 +327,7 @@ the train route), no coordinates in config and no command chains. Fort, ranch an
   protected blocks (a player cannot break or blow them up; operators can), outlaws only, cooldown, time limit, how long
   after it ends the site is put back, and fail-when-nobody-is-in-the-area.
 
-**Building one.** `/give @s bountysys:robbery_wand` or `/rae:robbery_wand`. Right-click the air for the menu (make a
+**Building one.** `/give @s bountysys:robbery_wand` or `/rae:robbery_wand`. Left-click the air, or sneak and right-click any block, for the menu (make a
 robbery, settings, area, effects, run it); right-click a block that is not bound to bind it (the form suggests door,
 chest or switch from the block); right-click a bound block for its screen (rename, locks, what it waits for, what
 happens when it is done or its lock jams, loot, change its blocks, delete). `/rae:robbery_view` marks the robbery's

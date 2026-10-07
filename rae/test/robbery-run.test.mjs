@@ -480,7 +480,41 @@ test("an element that waits on another is sealed, and an element nobody can star
 
     Run.startRobbery("bank", { by: ada });
     touch(ada, SITE.box);
-    check("once running, the lockbox is sealed until the door is open", bar(ada).some((m) => /sealed tight/.test(m)), bar(ada).join("|"));
+    check("once running, the lockbox is sealed until the door is open", bar(ada).some((m) => /sealed until something else is done/.test(m)), bar(ada).join("|"));
+    done();
+});
+
+test("a refusal that lists everything a robbery lacks is one short line on the bar, and a builder gets the whole reason in chat once", () => {
+    setup();
+    const { check, done } = checks();
+
+    // An unfinished robbery: one lever anybody could pull, nothing that ends it, and no area for the empty-area rule.
+    let raw = ok(L.newRobbery("raw", "Raw", "overworld"));
+    raw = L.addElement(raw, { kind: "switch", name: "Lever", cells: [[1, 70, 1]] }).robbery;
+    S.saveRobbery(raw);
+    fake.placeBlock("overworld", { x: 1, y: 70, z: 1 }, "minecraft:lever");
+
+    const builder = fake.makePlayer("Builder", { location: { ...IN_AREA }, permission: 2 });
+    state.update(builder, { role: "outlaw" });
+    const robber = outlaw("Robber");
+
+    Run.touch(builder, S.boundAt("overworld", 1, 70, 1));
+
+    const line = bar(builder).at(-1) ?? "";
+    check("the action bar says it in a few words", line === "It is not finished.", line);
+    check("and never more than fits on the bar", line.length <= R.noticeChars, String(line.length));
+    check("the builder is told everything in chat", said(builder).some((m) => /nothing ends it/.test(m) && /area is not set/.test(m)), said(builder).join("|"));
+    check("with one thud", builder.privateSounds.filter((s) => s.id === R.cues.denied.id).length === 1);
+
+    Run.touch(builder, S.boundAt("overworld", 1, 70, 1));
+    check("touched again at once, the bar is refreshed but the paragraph is not repeated", bar(builder).length === 2 && said(builder).length === 1, `${bar(builder).length} bar lines, ${said(builder).length} chat lines`);
+
+    fake.advance(R.noticeTicks * 4 + 1);
+    Run.touch(builder, S.boundAt("overworld", 1, 70, 1));
+    check("a while later it is given again", said(builder).length === 2);
+
+    Run.touch(robber, S.boundAt("overworld", 1, 70, 1));
+    check("a player who is not an operator sees only the short line and no builder's detail", bar(robber).at(-1) === "It is not finished." && said(robber).length === 0, said(robber).join("|"));
     done();
 });
 
