@@ -3,11 +3,8 @@ import { fake, system, world, fakeApi, load, checks } from "./helpers.mjs";
 
 // systems/liveconfig.ts: six /rae:config_* custom commands, registered inside
 // system.beforeEvents.startup (the one window CustomCommandRegistry allows registration in), each
-// delegating straight into core/configoverrides.ts. There is no real CustomCommandRegistry to test
-// against, so this file builds a minimal one locally (record what gets registered, let a test invoke a
-// registered command's callback directly) rather than adding registry-shaped machinery to the shared fake
-// file, which only needed the three missing enum exports (CommandPermissionLevel, CustomCommandParamType,
-// CustomCommandStatus) added for this feature — see that file's own "tell the orchestrator" policy.
+// delegating straight into core/configoverrides.ts. The registry comes from the shared fake (fake.startUp()), which
+// enforces the real one's rules; a test invokes a registered command's callback directly.
 
 const { PlayerPermissionLevel, CommandPermissionLevel, CustomCommandStatus } = fakeApi;
 await load("systems/liveconfig.js");
@@ -16,22 +13,13 @@ const { listSystems, resetAllSystems } = await load("core/registry.js");
 const { GUNS } = await load("config/guns.js");
 const { BOAT_NPC } = await load("config/world.js");
 
-/** A minimal stand-in for CustomCommandRegistry: records what liveconfig.ts registers, nothing more. */
-function fakeRegistry() {
-    const commands = new Map();
-    const enums = new Map();
-    return {
-        registerEnum(name, values) { enums.set(name, [...values]); },
-        registerCommand(def, callback) { commands.set(def.name, { def, callback }); },
-        commands, enums
-    };
-}
-
-/** Fires the one-shot startup event liveconfig.ts's commands register inside, with a fresh fake registry. */
+/**
+ * Fires the one-shot startup event liveconfig.ts's commands register inside. The registry is the fake's validating one
+ * (namespaced names, enums registered before the commands that use them, startup only), so the mistake that once
+ * silently killed all six commands in the real game now fails here.
+ */
 function startUp() {
-    const registry = fakeRegistry();
-    system.beforeEvents.startup.emit({ customCommandRegistry: registry });
-    return registry;
+    return fake.startUp();
 }
 
 const operator = () => fake.makePlayer("Op", { permission: PlayerPermissionLevel.Operator });

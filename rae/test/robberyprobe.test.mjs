@@ -632,11 +632,9 @@ test("a round reset turns logging, restricted mode and cancel off and forgets th
 // The command-context probe
 // ---------------------------------------------------------------------------------------------------------
 
+// The validating registry: a bare name, an unregistered enum or a bad permission level fails here, as it does in the game.
 function startUp() {
-    const commands = new Map();
-    const registry = { registerEnum() {}, registerCommand(def, callback) { commands.set(def.name, { def, callback }); } };
-    system.beforeEvents.startup.emit({ customCommandRegistry: registry });
-    return commands;
+    return fake.startUp().commands;
 }
 
 test("rae:robbery_probe_ctx is an operator command that logs who the origin is and what it may change", () => {

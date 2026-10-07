@@ -8,6 +8,14 @@
 // Don't edit this file from a feature branch. Extend behaviour inside your own test file
 // (e.g. `fake.itemTypes.add("bountysys:x")`, or replace `world.structureManager.get`).
 // If a permanent addition is needed, tell the orchestrator.
+//
+// Additions made on the main line stay opt-in, so every older test reads the same fake it always did:
+//   - a block store (`fake.placeBlock`, `dim.getBlock(...)` with real permutations and containers),
+//   - `fake.strictBefore`: "before" event handlers and custom-command callbacks run in RESTRICTED EXECUTION, where
+//     the engine refuses every call its typings tag `@privilege no-restricted-execution` (measured in the real game
+//     on 2026-10-06: they throw "cannot be used in restricted execution"),
+//   - `fake.startUp()`: a custom-command registry that enforces the rules the real one does (namespaced names,
+//     enum registered before the command that uses it, startup-only, typed arguments, permission level).
 
 export const EquipmentSlot = { Mainhand: "Mainhand", Offhand: "Offhand", Head: "Head", Chest: "Chest", Legs: "Legs", Feet: "Feet" };
 export const EntitySwingSource = { Attack: "Attack", Build: "Build", DropItem: "DropItem", Event: "Event", Interact: "Interact", Mine: "Mine", None: "None", Place: "Place", Throw: "Throw", Use: "Use" };
@@ -48,7 +56,27 @@ export class TextPrimitive {
     setText(text) { this.text = text; }
 }
 export class BlockVolume { constructor(from, to) { this.from = from; this.to = to; } }
-export const BlockPermutation = { resolve(id, states) { return { type: { id }, states }; } };
+
+// A block permutation: a type and its states. `withState` answers a NEW permutation, as the engine's does.
+function makePermutation(id, states = {}) {
+    const permutation = {
+        type: { id },
+        states: { ...states },
+        getState(name) { return permutation.states[name]; },
+        getAllStates() { return { ...permutation.states }; },
+        withState(name, value) { return makePermutation(id, { ...permutation.states, [name]: value }); },
+        matches(typeId, wanted) { return typeId === id && Object.entries(wanted ?? {}).every(([k, v]) => permutation.states[k] === v); },
+        getTags() { return []; }
+    };
+    return permutation;
+}
+export const BlockPermutation = { resolve(id, states) { return makePermutation(id, states ?? {}); } };
+
+// Restricted execution. While `fake.restricted` is above zero (a strict "before" event or a custom-command callback is
+// running) every call the engine's typings tag `@privilege no-restricted-execution` throws the engine's own error.
+function restrictedCheck(label) {
+    if (fake.restricted > 0) throw new ReferenceError(`Native function [${label}] cannot be used in restricted execution`);
+}
 
 export const ItemTypes = {
     get(id) { return fake.itemTypes.has(id) ? { id } : undefined; },
@@ -60,22 +88,31 @@ export const ItemTypes = {
 // Tests deliver events with `.emit(payload)`, which the real game would do itself.
 // ---------------------------------------------------------------------------
 
-function makeSignal() {
+function makeSignal(isBefore = false) {
     const handlers = [];
     return {
         subscribe(fn) { handlers.push(fn); return fn; },
         unsubscribe(fn) { const i = handlers.indexOf(fn); if (i >= 0) handlers.splice(i, 1); },
-        emit(payload) { for (const fn of [...handlers]) fn(payload); },
+        emit(payload) {
+            // A "before" event runs its handlers in restricted execution when a test asks for it (fake.strictBefore).
+            const strict = isBefore && fake.strictBefore;
+            if (strict) fake.restricted++;
+            try {
+                for (const fn of [...handlers]) fn(payload);
+            } finally {
+                if (strict) fake.restricted--;
+            }
+        },
         get count() { return handlers.length; }
     };
 }
 
-function signalBag() {
+function signalBag(isBefore = false) {
     const signals = new Map();
     return new Proxy({}, {
         get(_, name) {
             if (typeof name !== "string" || name === "then") return undefined;
-            if (!signals.has(name)) signals.set(name, makeSignal());
+            if (!signals.has(name)) signals.set(name, makeSignal(isBefore));
             return signals.get(name);
         }
     });
@@ -122,39 +159,137 @@ function matchesQuery(entity, options = {}) {
 
 function queryPlayers(options) { return fake.players.filter((p) => matchesQuery(p, options)); }
 
+// ---------------------------------------------------------------------------
+// Blocks: a type per position (dim.blocks, which predates this), its states, and a container for the types that have one.
+// ---------------------------------------------------------------------------
+
+const blockKey = (location) => `${Math.floor(location.x)},${Math.floor(location.y)},${Math.floor(location.z)}`;
+
+/** The block types that carry an inventory (the ones the robbery framework binds a chest element to). */
+const CONTAINER_TYPES = new Set(["minecraft:chest", "minecraft:trapped_chest", "minecraft:barrel"]);
+
+/** Added to a placed door/trapdoor/gate when the test names no state, because the real block always has one. */
+const DEFAULT_STATES = { open_bit: false };
+const hasOpenBit = (typeId) => /(?:_door|_trapdoor|_fence_gate)$/.test(typeId);
+
+/** A real container: slots, stacking addItem (answers the part that did not fit), clearAll. */
+function makeContainer(size) {
+    const slots = new Array(size).fill(undefined);
+    const container = {
+        isValid: true,
+        size,
+        get emptySlotsCount() { return slots.filter((s) => s === undefined).length; },
+        getItem(i) { return slots[i]; },
+        setItem(i, stack) { restrictedCheck("Container.setItem"); slots[i] = stack; },
+        addItem(stack) {
+            restrictedCheck("Container.addItem");
+            let left = stack.amount;
+            const max = stack.maxAmount ?? 64;
+            for (let i = 0; i < slots.length && left > 0; i++) {
+                const here = slots[i];
+                if (here && here.typeId === stack.typeId && here.amount < (here.maxAmount ?? 64)) {
+                    const moved = Math.min(left, (here.maxAmount ?? 64) - here.amount);
+                    here.amount += moved; left -= moved;
+                }
+            }
+            for (let i = 0; i < slots.length && left > 0; i++) {
+                if (slots[i] !== undefined) continue;
+                const moved = Math.min(left, max);
+                const placed = stack.clone ? stack.clone() : { ...stack };
+                placed.amount = moved;
+                slots[i] = placed; left -= moved;
+            }
+            if (left === 0) return undefined;
+            const rest = stack.clone ? stack.clone() : { ...stack };
+            rest.amount = left;
+            return rest;
+        },
+        clearAll() { restrictedCheck("Container.clearAll"); slots.fill(undefined); }
+    };
+    return container;
+}
+
+function makeBlock(dim, location) {
+    const x = Math.floor(location.x), y = Math.floor(location.y), z = Math.floor(location.z);
+    const key = blockKey(location);
+    const block = {
+        dimension: dim,
+        location: { x, y, z }, x, y, z,
+        // A block handle is only good while its chunk is loaded.
+        get isValid() { return dim.isChunkLoaded({ x, y, z }); },
+        get typeId() { return dim.blocks.get(key) ?? "minecraft:air"; },
+        get type() { return { id: block.typeId }; },
+        get permutation() { return makePermutation(block.typeId, dim.blockStates.get(key) ?? {}); },
+        setType(type) {
+            restrictedCheck("Block.setType");
+            dim.blocks.set(key, typeof type === "string" ? type : type.id);
+            dim.blockStates.delete(key); dim.containers.delete(key);
+        },
+        setPermutation(permutation) {
+            restrictedCheck("Block.setPermutation");
+            if (dim.blocks.get(key) !== permutation.type.id) dim.containers.delete(key);
+            dim.blocks.set(key, permutation.type.id);
+            dim.blockStates.set(key, permutation.getAllStates());
+        },
+        getComponent(id) {
+            if (id !== "minecraft:inventory" || !CONTAINER_TYPES.has(block.typeId)) return undefined;
+            if (!dim.containers.has(key)) dim.containers.set(key, makeContainer(27));
+            return { container: dim.containers.get(key) };
+        }
+    };
+    return block;
+}
+
 function makeDimension(id) {
     const dim = {
         id,
         commands: [], played: [], spawned: [], explosions: [], filled: [],
-        runCommand(command) { dim.commands.push(command); return { successCount: 1 }; },
+        runCommand(command) { restrictedCheck("Dimension.runCommand"); dim.commands.push(command); return { successCount: 1 }; },
         // Mirrors the engine's documented limits so a bad cue really throws.
         playSound(soundId, location, options = {}) {
+            restrictedCheck("Dimension.playSound");
             if (options.pitch !== undefined && options.pitch < 0.01) throw new Error("PropertyOutOfBoundsError: pitch");
             if (options.volume !== undefined && options.volume < 0) throw new Error("PropertyOutOfBoundsError: volume");
             dim.played.push({ tick: fake.tick, id: soundId, location: { ...location }, volume: options.volume, pitch: options.pitch });
         },
         getPlayers(options) { fake.calls.dimensionGetPlayers++; return queryPlayers(options).filter((p) => p._dimension === dim); },
         getEntities(options) { return fake.entities.filter((e) => e._dimension === dim && matchesQuery(e, options)); },
-        spawnEntity(typeId, location) { const e = fake.makeEntity({ typeId, location, dimension: dim }); dim.spawned.push(e); return e; },
-        spawnItem(stack, location) { return fake.makeEntity({ typeId: "minecraft:item", location, dimension: dim }); },
-        createExplosion(location, radius, options) { dim.explosions.push({ location, radius, options }); return true; },
-        fillBlocks(volume, permutation) { dim.filled.push({ volume, permutation }); },
+        spawnEntity(typeId, location) { restrictedCheck("Dimension.spawnEntity"); const e = fake.makeEntity({ typeId, location, dimension: dim }); dim.spawned.push(e); return e; },
+        spawnItem(stack, location) { restrictedCheck("Dimension.spawnItem"); return fake.makeEntity({ typeId: "minecraft:item", location, dimension: dim }); },
+        createExplosion(location, radius, options) { restrictedCheck("Dimension.createExplosion"); dim.explosions.push({ location, radius, options }); return true; },
+        // Recorded as it always was; a BlockVolume (from/to) is also written into the block store, with the block's states.
+        fillBlocks(volume, block) {
+            restrictedCheck("Dimension.fillBlocks");
+            dim.filled.push({ volume, permutation: block });
+            const from = volume?.from, to = volume?.to;
+            if (!from || !to) return;
+            const typeId = typeof block === "string" ? block : block?.type?.id ?? block?.id;
+            if (typeof typeId !== "string") return;
+            const states = typeof block === "object" && block?.getAllStates ? block.getAllStates() : undefined;
+            for (let x = Math.min(from.x, to.x); x <= Math.max(from.x, to.x); x++) {
+                for (let y = Math.min(from.y, to.y); y <= Math.max(from.y, to.y); y++) {
+                    for (let z = Math.min(from.z, to.z); z <= Math.max(from.z, to.z); z++) {
+                        const key = blockKey({ x, y, z });
+                        dim.blocks.set(key, typeId);
+                        if (states) dim.blockStates.set(key, { ...states }); else dim.blockStates.delete(key);
+                        dim.containers.delete(key);
+                    }
+                }
+            }
+        },
         // Sparse: an untouched location reads as air, like a real world. Keyed by whole-number
         // coordinates only (callers that care about sub-block position round first, same as the game).
         blocks: new Map(),
-        getBlock(location) {
-            const key = `${Math.floor(location.x)},${Math.floor(location.y)},${Math.floor(location.z)}`;
-            return {
-                typeId: dim.blocks.get(key) ?? "minecraft:air",
-                setType(typeId) { dim.blocks.set(key, typeId); }
-            };
-        },
+        blockStates: new Map(),
+        containers: new Map(),
+        // A location in an unloaded chunk has no block (the engine answers undefined).
+        getBlock(location) { return dim.isChunkLoaded(location) ? makeBlock(dim, location) : undefined; },
         getBlockFromRay() { return undefined; },
         getEntitiesFromRay() { return []; },
         // An ordinary, non-desert biome by default; a test that needs a specific one replaces this.
         getBiome() { return { id: "minecraft:plains" }; },
         particles: [],
-        spawnParticle(effectName, location) { dim.particles.push({ tick: fake.tick, id: effectName, location: { ...location } }); },
+        spawnParticle(effectName, location) { restrictedCheck("Dimension.spawnParticle"); dim.particles.push({ tick: fake.tick, id: effectName, location: { ...location } }); },
         // The whole fake world counts as loaded; a test that wants an unloaded stretch replaces this.
         isChunkLoaded() { return true; }
     };
@@ -178,8 +313,8 @@ function makeEntity(options = {}) {
         _location: { ...(options.location ?? { x: 0, y: 64, z: 0 }) },
         _dimension: options.dimension ?? fake.dimension("overworld"),
         hasTag(t) { guard(entity); return entity.tags.has(t); },
-        addTag(t) { guard(entity); entity.tags.add(t); return true; },
-        removeTag(t) { guard(entity); return entity.tags.delete(t); },
+        addTag(t) { guard(entity); restrictedCheck("Entity.addTag"); entity.tags.add(t); return true; },
+        removeTag(t) { guard(entity); restrictedCheck("Entity.removeTag"); return entity.tags.delete(t); },
         getTags() { guard(entity); return [...entity.tags]; },
         getViewDirection() { guard(entity); return entity.facing; },
         getHeadLocation() { guard(entity); return { x: entity._location.x, y: entity._location.y + 1.6, z: entity._location.z }; },
@@ -188,24 +323,24 @@ function makeEntity(options = {}) {
         velocity: { x: 0, y: 0, z: 0 },
         rotation: { x: 0, y: 0 },
         applyImpulse(v) {
-            guard(entity);
+            guard(entity); restrictedCheck("Entity.applyImpulse");
             if (Math.hypot(v.x, v.y, v.z) > fake.maxImpulse) throw new Error("ArgumentOutOfBoundsError: impulse too large");
             entity.velocity = { x: entity.velocity.x + v.x, y: entity.velocity.y + v.y, z: entity.velocity.z + v.z };
         },
-        clearVelocity() { guard(entity); entity.velocity = { x: 0, y: 0, z: 0 }; },
+        clearVelocity() { guard(entity); restrictedCheck("Entity.clearVelocity"); entity.velocity = { x: 0, y: 0, z: 0 }; },
         getVelocity() { guard(entity); return { ...entity.velocity }; },
-        setRotation(r) { guard(entity); entity.rotation = { ...r }; },
+        setRotation(r) { guard(entity); restrictedCheck("Entity.setRotation"); entity.rotation = { ...r }; },
         getRotation() { guard(entity); return { ...entity.rotation }; },
-        addEffect(id, duration, opts) { guard(entity); entity.effects.push({ id, duration, ...opts }); },
-        applyDamage(amount, opts) { guard(entity); entity.damage.push({ amount, ...opts }); return true; },
+        addEffect(id, duration, opts) { guard(entity); restrictedCheck("Entity.addEffect"); entity.effects.push({ id, duration, ...opts }); },
+        applyDamage(amount, opts) { guard(entity); restrictedCheck("Entity.applyDamage"); entity.damage.push({ amount, ...opts }); return true; },
         teleport(location, options = {}) {
-            guard(entity);
+            guard(entity); restrictedCheck("Entity.teleport");
             entity.teleports.push({ ...location });
             entity._location = { ...location };
             if (options.rotation) entity.rotation = { ...options.rotation };
             if (!options.keepVelocity) entity.velocity = { x: 0, y: 0, z: 0 };
         },
-        runCommand(command) { guard(entity); return entity._dimension.runCommand(command); },
+        runCommand(command) { guard(entity); restrictedCheck("Entity.runCommand"); return entity._dimension.runCommand(command); },
         getDynamicProperty(k) { guard(entity); return entity.dynamic.get(k); },
         setDynamicProperty(k, v) { guard(entity); if (v === undefined || v === null) entity.dynamic.delete(k); else entity.dynamic.set(k, v); },
         // Entity properties (declared per entity type in the real game, with a range/default/client_sync):
@@ -213,7 +348,7 @@ function makeEntity(options = {}) {
         // test of this file's own logic doesn't need modeled.
         properties: new Map(),
         getProperty(id) { guard(entity); return entity.properties.get(id); },
-        setProperty(id, v) { guard(entity); entity.properties.set(id, v); },
+        setProperty(id, v) { guard(entity); restrictedCheck("Entity.setProperty"); entity.properties.set(id, v); },
         // A vehicle: entities made with `seats` (and the train car, always) accept riders. A rider is moved along
         // with the vehicle by fake.advance and reads its mount back through minecraft:riding.
         seats: options.seats ?? (options.typeId === "bountysys:train_car" ? 4 : 0),
@@ -240,7 +375,7 @@ function makeEntity(options = {}) {
             return undefined;
         },
         kill() { entity.remove(); return true; },
-        remove() { entity.isValid = false; const i = fake.entities.indexOf(entity); if (i >= 0) fake.entities.splice(i, 1); const p = fake.players.indexOf(entity); if (p >= 0) fake.players.splice(p, 1); }
+        remove() { restrictedCheck("Entity.remove"); entity.isValid = false; const i = fake.entities.indexOf(entity); if (i >= 0) fake.entities.splice(i, 1); const p = fake.players.indexOf(entity); if (p >= 0) fake.players.splice(p, 1); }
     };
     Object.defineProperty(entity, "location", { get() { guard(entity); return entity._location; }, set(v) { entity._location = { ...v }; } });
     Object.defineProperty(entity, "dimension", { get() { guard(entity); return entity._dimension; } });
@@ -281,14 +416,23 @@ function makePlayer(name, options = {}) {
         messages: [], actionBar: [], titles: [], titleOptions: [], privateSounds: [], commands: [],
         // Player.spawnParticle: visible only to this player, so it is kept on the player, not on the dimension.
         privateParticles: [],
-        spawnParticle(id, location) { guard(player); player.privateParticles.push({ tick: fake.tick, id, location: { ...location } }); },
+        spawnParticle(id, location) { guard(player); restrictedCheck("Player.spawnParticle"); player.privateParticles.push({ tick: fake.tick, id, location: { ...location } }); },
+        // What the player is looking at: a test sets `aimAt` to a block position (or leaves it undefined for open air),
+        // and getBlockFromViewDirection answers that block, as the engine's raycast would.
+        aimAt: undefined,
+        getBlockFromViewDirection() {
+            guard(player);
+            if (!player.aimAt) return undefined;
+            const block = player._dimension.getBlock(player.aimAt);
+            return block ? { block, face: "Up", faceLocation: { x: 0.5, y: 1, z: 0.5 } } : undefined;
+        },
         scoreboardIdentity: { displayName: name, id: name },
         onScreenDisplay: {
-            setActionBar(text) { guard(player); player.actionBar.push(text); },
-            setTitle(text, options) { guard(player); player.titles.push(text); player.titleOptions.push(options); }
+            setActionBar(text) { guard(player); restrictedCheck("ScreenDisplay.setActionBar"); player.actionBar.push(text); },
+            setTitle(text, options) { guard(player); restrictedCheck("ScreenDisplay.setTitle"); player.titles.push(text); player.titleOptions.push(options); }
         },
         sendMessage(text) { guard(player); player.messages.push(text); },
-        playSound(id, opts) { guard(player); player.privateSounds.push({ id, ...opts }); },
+        playSound(id, opts) { guard(player); restrictedCheck("Player.playSound"); player.privateSounds.push({ id, ...opts }); },
         giveAmmo(itemId, amount = 64) { slots[0] = makeItemStack(itemId, amount); },
         getComponent(id) {
             guard(player);
@@ -388,7 +532,7 @@ export const world = {
         addObjective(id) { const o = makeObjective(id); objectives.set(id, o); return o; }
     },
     afterEvents: signalBag(),
-    beforeEvents: signalBag(),
+    beforeEvents: signalBag(true),
     getDynamicProperty(k) { return fake.dynamic.get(k); },
     setDynamicProperty(k, v) {
         if (v === undefined || v === null) { fake.dynamic.delete(k); return; }
@@ -400,6 +544,95 @@ export const world = {
     getDynamicPropertyIds() { return [...fake.dynamic.keys()]; },
     getDynamicPropertyTotalByteCount() { return dynamicBytes(); }
 };
+
+// ---------------------------------------------------------------------------
+// Custom commands: a CustomCommandRegistry that enforces what the real one does, so a registration mistake fails a
+// test instead of silently killing every command in the real game (the rae:config_* commands did exactly that
+// once: a bare enum name threw NamespaceNameError inside an unguarded startup callback).
+// ---------------------------------------------------------------------------
+
+const NAMESPACED = /^[a-z0-9_.-]+:[a-z0-9_.-]+$/i;
+
+/** Whether `value` is something a command parameter of `type` can arrive as. Enum values are checked by the caller. */
+function acceptsArgument(type, value) {
+    switch (type) {
+        case CustomCommandParamType.Integer: return Number.isInteger(value);
+        case CustomCommandParamType.Float: return typeof value === "number" && Number.isFinite(value);
+        case CustomCommandParamType.Boolean: return typeof value === "boolean";
+        case CustomCommandParamType.PlayerSelector: return Array.isArray(value);
+        case CustomCommandParamType.EntitySelector: return Array.isArray(value);
+        case CustomCommandParamType.Location: return typeof value === "object" && value !== null && ["x", "y", "z"].every((k) => typeof value[k] === "number");
+        default: return typeof value === "string"; // String, Enum, BlockType, ItemType, EntityType
+    }
+}
+
+function makeCommandRegistry() {
+    const enums = new Map();
+    const commands = new Map();
+    const state = { open: true };
+
+    const registry = {
+        registerEnum(name, values) {
+            if (!state.open) throw new Error("registerEnum can only be called during startup");
+            if (typeof name !== "string" || !NAMESPACED.test(name)) throw new Error(`NamespaceNameError: '${name}': string must be prefixed with a namespace`);
+            if (enums.has(name)) throw new Error(`the enum ${name} is already registered`);
+            if (!Array.isArray(values) || values.length === 0 || values.some((v) => typeof v !== "string" || v.length === 0)) throw new Error(`the enum ${name} needs a non-empty list of text values`);
+            enums.set(name, [...values]);
+        },
+        registerCommand(def, callback) {
+            if (!state.open) throw new Error("registerCommand can only be called during startup");
+            if (typeof def?.name !== "string" || !NAMESPACED.test(def.name)) throw new Error(`NamespaceNameError: '${def?.name}': string must be prefixed with a namespace`);
+            if (commands.has(def.name)) throw new Error(`the command ${def.name} is already registered`);
+            if (typeof callback !== "function") throw new Error(`the command ${def.name} has no callback`);
+            if (!Object.values(CommandPermissionLevel).includes(def.permissionLevel)) throw new Error(`the command ${def.name} has no valid permissionLevel`);
+            for (const param of [...(def.mandatoryParameters ?? []), ...(def.optionalParameters ?? [])]) {
+                if (typeof param?.name !== "string" || param.name.length === 0) throw new Error(`the command ${def.name} has a parameter with no name`);
+                if (!Object.values(CustomCommandParamType).includes(param.type)) throw new Error(`the command ${def.name} parameter ${param.name} has no valid type`);
+                // An Enum parameter's name doubles as the name of the enum it takes, which must exist by now.
+                if (param.type === CustomCommandParamType.Enum && !enums.has(param.name)) throw new Error(`the command ${def.name} parameter ${param.name} names an enum that is not registered (register the enum first)`);
+            }
+            commands.set(def.name, { def, callback });
+        }
+    };
+
+    /**
+     * Acts out a player typing the command: permission first, then the arguments (count and type), then the callback,
+     * in restricted execution as the real engine runs it. Answers the callback's result, or `{ refused, reason }` when
+     * the engine would have turned the command away before running it.
+     */
+    function run(name, origin, ...args) {
+        const entry = commands.get(name);
+        if (!entry) throw new Error(`no command ${name} is registered`);
+
+        const source = origin?.sourceEntity;
+        const operator = source?.typeId !== "minecraft:player" || source.playerPermissionLevel === PlayerPermissionLevel.Operator;
+        if (entry.def.permissionLevel !== CommandPermissionLevel.Any && !operator) return { refused: "permission", reason: `${name} needs operator permission` };
+
+        const mandatory = entry.def.mandatoryParameters ?? [];
+        const optional = entry.def.optionalParameters ?? [];
+        if (args.length < mandatory.length) return { refused: "syntax", reason: `${name} is missing ${mandatory[args.length].name}` };
+        if (args.length > mandatory.length + optional.length) return { refused: "syntax", reason: `${name} takes at most ${mandatory.length + optional.length} arguments` };
+
+        for (let i = 0; i < args.length; i++) {
+            const param = [...mandatory, ...optional][i];
+            if (args[i] === undefined && i >= mandatory.length) continue;
+            if (param.type === CustomCommandParamType.Enum) {
+                if (!enums.get(param.name)?.includes(args[i])) return { refused: "syntax", reason: `${args[i]} is not one of ${param.name}` };
+            } else if (!acceptsArgument(param.type, args[i])) {
+                return { refused: "syntax", reason: `${param.name} cannot be ${JSON.stringify(args[i])}` };
+            }
+        }
+
+        fake.restricted++;
+        try {
+            return entry.callback(origin, ...args);
+        } finally {
+            fake.restricted--;
+        }
+    }
+
+    return { registry, state, enums, commands, run };
+}
 
 // ---------------------------------------------------------------------------
 // Test controls
@@ -427,7 +660,56 @@ export const fake = {
     maxImpulse: Infinity,
     // When set, player.camera.setFov throws this message.
     cameraError: null,
+    // Restricted execution: above zero while a strict "before" event or a custom-command callback is running.
+    restricted: 0,
+    // Set true to run every "before" event handler in restricted execution, as the real engine does.
+    strictBefore: false,
     makePlayer, makeEntity, makeItemStack,
+    // Fires the one-shot startup event with a registry that enforces the real one's rules. Answers
+    // { commands, enums, run(name, origin, ...args) }: `run` acts out typing the command (permission, argument types,
+    // then the callback in restricted execution) and answers its result, or { refused, reason }.
+    startUp() {
+        const built = makeCommandRegistry();
+        try {
+            system.beforeEvents.startup.emit({ customCommandRegistry: built.registry });
+        } finally {
+            built.state.open = false;
+        }
+        return { commands: built.commands, enums: built.enums, run: built.run };
+    },
+    // Puts a block in the world: its type, its states (a door gets open_bit false unless told otherwise).
+    placeBlock(dimension, pos, typeId, states) {
+        const dim = typeof dimension === "string" ? fake.dimension(dimension) : dimension;
+        const key = blockKey(pos);
+        dim.blocks.set(key, typeId);
+        const merged = { ...(hasOpenBit(typeId) ? DEFAULT_STATES : {}), ...(states ?? {}) };
+        if (Object.keys(merged).length > 0) dim.blockStates.set(key, merged); else dim.blockStates.delete(key);
+        dim.containers.delete(key);
+        return makeBlock(dim, pos);
+    },
+    // The block at a position, even in an unloaded chunk (a test reading the world back, not the game asking).
+    blockAt(dimension, pos) {
+        return makeBlock(typeof dimension === "string" ? fake.dimension(dimension) : dimension, pos);
+    },
+    // Makes two chest blocks one double chest: they share a single 54-slot container.
+    pairChests(dimension, a, b) {
+        const dim = typeof dimension === "string" ? fake.dimension(dimension) : dimension;
+        const shared = makeContainer(54);
+        dim.containers.set(blockKey(a), shared);
+        dim.containers.set(blockKey(b), shared);
+    },
+    // Marks boxes ({ from, to }, whole blocks) of a dimension as unloaded; an empty list loads everything again.
+    setUnloaded(dimension, boxes) {
+        const dim = typeof dimension === "string" ? fake.dimension(dimension) : dimension;
+        const loader = (p) => !boxes.some((b) => {
+            const x = Math.floor(p.x), y = Math.floor(p.y), z = Math.floor(p.z);
+            return x >= Math.min(b.from.x, b.to.x) && x <= Math.max(b.from.x, b.to.x)
+                && y >= Math.min(b.from.y, b.to.y) && y <= Math.max(b.from.y, b.to.y)
+                && z >= Math.min(b.from.z, b.to.z) && z <= Math.max(b.from.z, b.to.z);
+        });
+        dim.isChunkLoaded = loader;
+        dim.fakeLoader = loader;
+    },
     dimension(id) { const key = id.replace(/^minecraft:/, ""); return (fake.dimensions[key] ??= makeDimension(`minecraft:${key}`)); },
     addObjective(id) { return world.scoreboard.addObjective(id); },
     setScore(objectiveId, target, value) { (objectives.get(objectiveId) ?? world.scoreboard.addObjective(objectiveId)).setScore(target, value); },
@@ -465,6 +747,12 @@ export const fake = {
         fake.structureMax = Infinity; fake.structureLog.length = 0; fake.lootTables.clear(); fake.tickingAreas.clear(); fake.shapes.length = 0;
         objectives.clear(); fake.calls = freshCalls();
         fake.physics.drag = 1; fake.physics.delivered = 1; fake.maxImpulse = Infinity; fake.cameraError = null;
+        fake.restricted = 0; fake.strictBefore = false;
+        // A loader a test installed by hand (the train tests do) is its own business; only setUnloaded's is undone here.
+        for (const d of Object.values(fake.dimensions)) {
+            d.blocks.clear(); d.blockStates.clear(); d.containers.clear();
+            if (d.fakeLoader && d.isChunkLoaded === d.fakeLoader) { d.isChunkLoaded = () => true; d.fakeLoader = undefined; }
+        }
         for (const d of Object.values(fake.dimensions)) { d.commands.length = 0; d.played.length = 0; d.spawned.length = 0; d.explosions.length = 0; d.filled.length = 0; d.particles.length = 0; }
     }
 };
