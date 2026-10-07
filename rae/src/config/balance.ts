@@ -407,6 +407,11 @@ export const ROBBERY = {
     maxItemStacks: 8,
     /** A saved robbery longer than this many characters is refused up front, with nothing changed. */
     maxSavedChars: 12000,
+    /**
+     * Most "this block was changed" notes kept for putting a site back after a crash or a reload. A run adds a note per
+     * door and chest it opens or fills and takes them off again when the site is reset, so this is never near full.
+     */
+    maxDirtyEntries: 400,
 
     // ---- What a new robbery starts with. Every one is editable in game, per robbery.
     defaultCooldownSeconds: 600,

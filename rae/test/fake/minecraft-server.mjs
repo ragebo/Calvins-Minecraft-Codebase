@@ -170,7 +170,7 @@ const CONTAINER_TYPES = new Set(["minecraft:chest", "minecraft:trapped_chest", "
 
 /** Added to a placed door/trapdoor/gate when the test names no state, because the real block always has one. */
 const DEFAULT_STATES = { open_bit: false };
-const hasOpenBit = (typeId) => /(?:_door|_trapdoor|_fence_gate)$/.test(typeId);
+const hasOpenBit = (typeId) => /[:_](?:door|trapdoor|fence_gate)$/.test(typeId);
 
 /** A real container: slots, stacking addItem (answers the part that did not fit), clearAll. */
 function makeContainer(size) {
