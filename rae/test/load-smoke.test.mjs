@@ -56,7 +56,7 @@ const PUBLIC_COMMANDS = [
     "rae:config_get", "rae:config_list", "rae:config_reset", "rae:config_set_bool", "rae:config_set_coordinate", "rae:config_set_number",
     "rae:robbery_probe_ctx",
     ...["list", "info", "new", "select", "delete", "start", "stop", "reset", "activate", "wand", "edit", "view", "undo", "area", "set"].map((n) => `rae:robbery_${n}`),
-    ...["list", "info", "new", "sell", "buy", "trade", "edit", "open", "select", "copy", "place", "delete", "undo"].map((n) => `rae:shop_${n}`)
+    ...["list", "info", "new", "sell", "buy", "trade", "service", "edit", "open", "select", "copy", "place", "delete", "undo"].map((n) => `rae:shop_${n}`)
 ];
 
 test("every public custom command registers together under the real registry's rules", () => {

@@ -2,18 +2,21 @@ import { SHOP as S } from "../config/balance.js";
 import { itemLabel } from "./robbery.js";
 
 /**
- * An NPC shop, as data: what the NPC sells, buys and swaps, and what each deal costs. Pure rules, no game imports: nothing
+ * An NPC shop, as data: what the NPC sells, buys, swaps and does, and what each deal costs. Pure rules, no game imports: nothing
  * here knows what an ItemStack or a Player is. core/shopstore.ts keeps shops in the world, core/shoptrade.ts carries a deal
  * out, and the builder edits them through the functions below.
  *
- * The one idea is a TRADE: a cost (coins, items, or both, or nothing) and one or more rewards (items, or coins). Everything an
- * NPC shop does is that one shape:
- *   buy    coins for goods              "Iron Sword for 60 coins"
- *   sell   items for coins              "Sell Feather x3 for 8 coins"
- *   trade  items (and maybe coins) for goods   "Diamond for Gold Ingot x3"
- *   gift   nothing for goods
+ * The one idea is a TRADE: a cost (coins, items, or both, or nothing) and one or more rewards. A reward is goods (items), coins,
+ * or a SERVICE done to the customer (a potion effect, an enchantment on the item they hold, a tame mount, a teleport). So
+ * everything an NPC shop does is that one shape:
+ *   buy      coins for goods                   "Iron Sword for 60 coins"
+ *   sell     items for coins                   "Sell Feather x3 for 8 coins"
+ *   trade    items (and maybe coins) for goods "Diamond for Gold Ingot x3"
+ *   gift     nothing for goods
+ *   service  coins (or items) for a service    "Regeneration 3 (10s) for 20 coins"
  * so a deal is checked and carried out in one place, all or nothing, instead of a chain of separate commands that can each
- * fail on their own (a button that charges and then fails to give, or gives and forgets to charge).
+ * fail on their own (a button that charges and then fails to give, or gives and forgets to charge). A deal may also require
+ * the customer to be on a side (law or outlaw) or to carry a bounty.
  *
  * Every edit is immutable and answers `{ok, shop}` or `{ok: false, reason}`, the way logic/robbery.ts's edits do, and every
  * result is validated as a whole, so a shop that exists is always one that can be saved, loaded and used. `parse` never throws
@@ -47,15 +50,54 @@ export interface Cost {
     readonly items: readonly ItemSpec[];
 }
 
-export type Reward =
-    | { readonly kind: "item"; readonly item: ItemSpec }
-    | { readonly kind: "coins"; readonly amount: number };
+export interface ItemReward { readonly kind: "item"; readonly item: ItemSpec }
+export interface CoinsReward { readonly kind: "coins"; readonly amount: number }
+
+/** A potion effect on the customer. `amplifier` 0 is level 1. */
+export interface EffectReward { readonly kind: "effect"; readonly effect: string; readonly seconds: number; readonly amplifier: number }
+
+/** An enchantment added to the item the customer is holding. */
+export interface EnchantReward { readonly kind: "enchant"; readonly enchantment: string; readonly level: number }
+
+/** A tame animal (a horse, a mule) that appears beside the customer, theirs to ride. */
+export interface MountReward { readonly kind: "mount"; readonly entity: string }
+
+/** The customer is taken somewhere. */
+export interface TeleportReward {
+    readonly kind: "teleport";
+    readonly x: number;
+    readonly y: number;
+    readonly z: number;
+    /** "overworld", "nether" or "the_end". */
+    readonly dimension: string;
+    /** What the place is called, for the button. */
+    readonly name?: string;
+}
+
+/** Something done to the customer rather than handed to them. */
+export type ServiceReward = EffectReward | EnchantReward | MountReward | TeleportReward;
+export type Reward = ItemReward | CoinsReward | ServiceReward;
+
+export const isService = (reward: Reward): reward is ServiceReward => reward.kind !== "item" && reward.kind !== "coins";
+
+export type Role = "law" | "outlaw";
+export const ROLES: readonly Role[] = ["law", "outlaw"];
+export const DIMENSIONS: readonly string[] = ["overworld", "nether", "the_end"];
+
+/** Who may take a deal. Both given means both must hold. */
+export interface Requirement {
+    readonly role?: Role;
+    /** The least bounty the customer must carry. */
+    readonly bounty?: number;
+}
 
 export interface Trade {
     /** "t1", "t2"...: stable for the life of the shop and never reused, so an open screen can tell a deal changed under it. */
     readonly id: string;
     readonly cost: Cost;
     readonly rewards: readonly Reward[];
+    /** Who may take it. Absent means anyone. */
+    readonly requires?: Requirement;
 }
 
 export interface Shop {
@@ -74,6 +116,7 @@ export interface Shop {
 export interface NewTrade {
     readonly cost: Cost;
     readonly rewards: readonly Reward[];
+    readonly requires?: Requirement;
 }
 
 export interface Fail { readonly ok: false; readonly reason: string }
@@ -93,7 +136,8 @@ const isWhole = (v: unknown, min: number, max: number): v is number => typeof v 
 const SLUG = /^[a-z][a-z0-9_]*$/;
 const TRADE_ID = /^t[1-9][0-9]*$/;
 const ITEM_ID = /^[a-z0-9_]+:[a-z0-9_./]+$/;
-const ENCHANT_ID = /^[a-z0-9_]+(?::[a-z0-9_]+)?$/;
+/** An id with or without a namespace: "flame", "minecraft:flame", "regeneration". */
+const GAME_ID = /^[a-z0-9_]+(?::[a-z0-9_]+)?$/;
 const POTION_PART = /^[A-Za-z0-9_]{1,40}$/;
 const FORMAT_CODE = /§./g;
 
@@ -180,7 +224,7 @@ function validateItem(raw: unknown, what: string): Result<ItemSpec> {
         if (!Array.isArray(enchants) || enchants.length > S.maxEnchants) return bad(`${what}: at most ${S.maxEnchants} enchantments`);
         const read: (readonly [string, number])[] = [];
         for (const pair of enchants) {
-            if (!Array.isArray(pair) || pair.length !== 2 || typeof pair[0] !== "string" || !ENCHANT_ID.test(pair[0]) || !isWhole(pair[1], 1, S.maxEnchantLevel)) {
+            if (!Array.isArray(pair) || pair.length !== 2 || typeof pair[0] !== "string" || !GAME_ID.test(pair[0]) || !isWhole(pair[1], 1, S.maxEnchantLevel)) {
                 return bad(`${what}: an enchantment is an id and a level from 1 to ${S.maxEnchantLevel}`);
             }
             read.push([pair[0], pair[1]]);
@@ -232,21 +276,73 @@ function validateCost(raw: unknown): Result<Cost> {
     return good({ coins, items: read });
 }
 
+const isCoordinate = (v: unknown): v is number => typeof v === "number" && Number.isFinite(v) && Math.abs(v) <= S.maxCoordinate;
+
 function validateReward(raw: unknown): Result<Reward> {
 
     if (!isRecord(raw)) return bad("a reward is missing");
 
-    if (raw["kind"] === "item") {
-        const item = validateItem(raw["item"], "a reward");
-        return item.ok ? good({ kind: "item", item: item.value }) : item;
-    }
+    switch (raw["kind"]) {
 
-    if (raw["kind"] === "coins") {
-        const amount = raw["amount"];
-        return isWhole(amount, 1, S.maxCoins) ? good({ kind: "coins", amount }) : bad(`a coin reward is a whole number from 1 to ${S.maxCoins}`);
-    }
+        case "item": {
+            const item = validateItem(raw["item"], "a reward");
+            return item.ok ? good({ kind: "item", item: item.value }) : item;
+        }
 
-    return bad("a reward is an item or coins");
+        case "coins": {
+            const amount = raw["amount"];
+            return isWhole(amount, 1, S.maxCoins) ? good({ kind: "coins", amount }) : bad(`a coin reward is a whole number from 1 to ${S.maxCoins}`);
+        }
+
+        case "effect": {
+            const { effect, seconds, amplifier } = raw;
+            if (typeof effect !== "string" || !GAME_ID.test(effect)) return bad("an effect needs an id like regeneration");
+            if (!isWhole(seconds, 1, S.maxEffectSeconds)) return bad(`an effect lasts a whole number of seconds from 1 to ${S.maxEffectSeconds}`);
+            if (!isWhole(amplifier, 0, S.maxAmplifier)) return bad(`an effect's strength is a whole number from 0 (level 1) to ${S.maxAmplifier}`);
+            return good({ kind: "effect", effect, seconds, amplifier });
+        }
+
+        case "enchant": {
+            const { enchantment, level } = raw;
+            if (typeof enchantment !== "string" || !GAME_ID.test(enchantment)) return bad("an enchantment needs an id like flame");
+            if (!isWhole(level, 1, S.maxEnchantLevel)) return bad(`an enchantment level is a whole number from 1 to ${S.maxEnchantLevel}`);
+            return good({ kind: "enchant", enchantment, level });
+        }
+
+        case "mount": {
+            const entity = raw["entity"];
+            if (typeof entity !== "string" || !ITEM_ID.test(entity)) return bad("a mount needs an animal id like minecraft:horse");
+            return good({ kind: "mount", entity });
+        }
+
+        case "teleport": {
+            const { x, y, z, dimension, name } = raw;
+            if (!isCoordinate(x) || !isCoordinate(y) || !isCoordinate(z)) return bad(`a teleport needs x, y and z within ${S.maxCoordinate} of the origin`);
+            if (typeof dimension !== "string" || !DIMENSIONS.includes(dimension)) return bad("a teleport goes to the overworld, the nether or the end");
+            if (name !== undefined && (typeof name !== "string" || name.length === 0 || name.length > S.maxNameLength)) return bad(`a place name is 1 to ${S.maxNameLength} characters`);
+            return good({ kind: "teleport", x, y, z, dimension, ...(name !== undefined ? { name } : {}) });
+        }
+
+        default:
+            return bad("a reward is an item, coins, an effect, an enchantment, a mount or a teleport");
+    }
+}
+
+/** A requirement with nothing in it is no requirement: the answer is `undefined`. */
+function validateRequirement(raw: unknown): Result<Requirement | undefined> {
+
+    if (raw === undefined) return good(undefined);
+    if (!isRecord(raw)) return bad("a requirement is a side and/or a bounty");
+
+    const role = raw["role"];
+    const bounty = raw["bounty"];
+
+    if (role !== undefined && (typeof role !== "string" || !ROLES.includes(role as Role))) return bad("a deal can be for law or for outlaws");
+    if (bounty !== undefined && !isWhole(bounty, 1, S.maxBounty)) return bad(`a bounty requirement is a whole number from 1 to ${S.maxBounty}`);
+
+    if (role === undefined && bounty === undefined) return good(undefined);
+
+    return good({ ...(role !== undefined ? { role: role as Role } : {}), ...(bounty !== undefined ? { bounty } : {}) });
 }
 
 function validateTrade(raw: unknown): Result<Trade> {
@@ -259,6 +355,9 @@ function validateTrade(raw: unknown): Result<Trade> {
 
     const cost = validateCost(raw["cost"]);
     if (!cost.ok) return cost;
+
+    const requires = validateRequirement(raw["requires"]);
+    if (!requires.ok) return requires;
 
     const rawRewards = raw["rewards"];
 
@@ -278,7 +377,16 @@ function validateTrade(raw: unknown): Result<Trade> {
     if (paysCoins === 1 && cost.value.items.length === 0) return bad("coins are paid for items handed over: a deal cannot pay coins for nothing");
     if (paysCoins === 1 && cost.value.coins > 0) return bad("a deal does not take coins and pay coins");
 
-    return good({ id, cost: cost.value, rewards });
+    if (rewards.filter((r) => r.kind === "teleport").length > 1) return bad("a deal can teleport the customer once");
+    if (rewards.filter((r) => r.kind === "mount").length > 1) return bad("a deal gives one mount");
+
+    const effects = rewards.flatMap((r) => (r.kind === "effect" ? [r.effect] : []));
+    if (new Set(effects).size !== effects.length) return bad("a deal gives each effect once");
+
+    const enchants = rewards.flatMap((r) => (r.kind === "enchant" ? [r.enchantment] : []));
+    if (new Set(enchants).size !== enchants.length) return bad("a deal gives each enchantment once");
+
+    return good({ id, cost: cost.value, rewards, ...(requires.value ? { requires: requires.value } : {}) });
 }
 
 export function validateShop(raw: unknown): Result<Shop> {
@@ -341,14 +449,49 @@ function readItem(raw: unknown): unknown {
 }
 
 function storeReward(reward: Reward): Record<string, unknown> {
-    return reward.kind === "item" ? { i: storeItem(reward.item) } : { c: reward.amount };
+
+    switch (reward.kind) {
+        case "item": return { i: storeItem(reward.item) };
+        case "coins": return { c: reward.amount };
+        case "effect": return { ef: [reward.effect, reward.seconds, reward.amplifier] };
+        case "enchant": return { en: [reward.enchantment, reward.level] };
+        case "mount": return { mo: reward.entity };
+        case "teleport": return { tp: [reward.x, reward.y, reward.z, reward.dimension, ...(reward.name !== undefined ? [reward.name] : [])] };
+    }
 }
 
 function readReward(raw: unknown): unknown {
+
     if (!isRecord(raw)) return raw;
+
     if (raw["i"] !== undefined) return { kind: "item", item: readItem(raw["i"]) };
     if (raw["c"] !== undefined) return { kind: "coins", amount: raw["c"] };
+
+    const effect = raw["ef"];
+    if (Array.isArray(effect)) return { kind: "effect", effect: effect[0], seconds: effect[1], amplifier: effect[2] };
+
+    const enchant = raw["en"];
+    if (Array.isArray(enchant)) return { kind: "enchant", enchantment: enchant[0], level: enchant[1] };
+
+    if (raw["mo"] !== undefined) return { kind: "mount", entity: raw["mo"] };
+
+    const teleport = raw["tp"];
+    if (Array.isArray(teleport)) return { kind: "teleport", x: teleport[0], y: teleport[1], z: teleport[2], dimension: teleport[3], name: teleport[4] };
+
     return raw;
+}
+
+const ROLE_CODES: Record<Role, string> = { law: "l", outlaw: "o" };
+const ROLE_FROM_CODE: Record<string, Role> = { l: "law", o: "outlaw" };
+
+function storeRequirement(requires: Requirement): Record<string, unknown> {
+    return { ...(requires.role !== undefined ? { r: ROLE_CODES[requires.role] } : {}), ...(requires.bounty !== undefined ? { b: requires.bounty } : {}) };
+}
+
+function readRequirement(raw: unknown): unknown {
+    if (!isRecord(raw)) return raw;
+    const code = raw["r"];
+    return { role: typeof code === "string" ? (ROLE_FROM_CODE[code] ?? code) : code, bounty: raw["b"] };
 }
 
 function storeTrade(trade: Trade): Record<string, unknown> {
@@ -356,7 +499,8 @@ function storeTrade(trade: Trade): Record<string, unknown> {
         i: trade.id,
         ...(trade.cost.coins > 0 ? { c: trade.cost.coins } : {}),
         ...(trade.cost.items.length > 0 ? { ci: trade.cost.items.map(storeItem) } : {}),
-        r: trade.rewards.map(storeReward)
+        r: trade.rewards.map(storeReward),
+        ...(trade.requires ? { q: storeRequirement(trade.requires) } : {})
     };
 }
 
@@ -365,7 +509,8 @@ function readTrade(raw: unknown): unknown {
     return {
         id: raw["i"],
         cost: { coins: raw["c"] ?? 0, items: Array.isArray(raw["ci"]) ? raw["ci"].map(readItem) : raw["ci"] ?? [] },
-        rewards: Array.isArray(raw["r"]) ? raw["r"].map(readReward) : raw["r"]
+        rewards: Array.isArray(raw["r"]) ? raw["r"].map(readReward) : raw["r"],
+        requires: raw["q"] === undefined ? undefined : readRequirement(raw["q"])
     };
 }
 
@@ -435,6 +580,9 @@ export function costSpec(item: ItemSpec): ItemSpec {
 const titled = (text: string): string => text.replace(/\b[a-z]/g, (c) => c.toUpperCase());
 const words = (camel: string): string => camel.replace(/([a-z0-9])([A-Z])/g, "$1 $2");
 
+/** "minecraft:jump_boost" -> "Jump Boost": a game id as a name, for a button or a message. */
+export const gameName = (id: string): string => titled(id.replace(/^[a-z0-9_]+:/, "").replace(/_/g, " "));
+
 /** "Iron Sword", "Splash Potion of Swiftness", or the custom name an item was given. */
 export function itemName(spec: ItemSpec): string {
 
@@ -458,16 +606,38 @@ export function describeCost(cost: Cost): string {
     return parts.length === 0 ? "nothing" : parts.join(" + ");
 }
 
+/** "Iron Sword", "8 coins", "Regeneration 3 (10s)", "Flame 1 on the item you hold", "Tame Horse", "Teleport to Saint Diego". */
 export function describeReward(reward: Reward): string {
-    return reward.kind === "item" ? describeItem(reward.item) : coinsText(reward.amount);
+
+    switch (reward.kind) {
+        case "item": return describeItem(reward.item);
+        case "coins": return coinsText(reward.amount);
+        case "effect": return `${gameName(reward.effect)} ${reward.amplifier + 1} (${reward.seconds}s)`;
+        case "enchant": return `${gameName(reward.enchantment)} ${reward.level} on the item you hold`;
+        case "mount": return `Tame ${gameName(reward.entity)}`;
+        case "teleport": return `Teleport to ${reward.name ?? `${Math.round(reward.x)}, ${Math.round(reward.y)}, ${Math.round(reward.z)}`}`;
+    }
 }
 
 export const describeRewards = (rewards: readonly Reward[]): string => rewards.map(describeReward).join(" + ");
 
-export type Face = "buy" | "sell" | "trade" | "gift";
+/** "law only", "outlaw only, bounty 100+", "bounty 50+". */
+export function describeRequirement(requires: Requirement): string {
 
-/** Which of the four familiar shapes a deal has. */
+    const parts = [
+        ...(requires.role !== undefined ? [`${requires.role} only`] : []),
+        ...(requires.bounty !== undefined ? [`bounty ${requires.bounty}+`] : [])
+    ];
+
+    return parts.join(", ");
+}
+
+export type Face = "buy" | "sell" | "trade" | "gift" | "service";
+
+/** Which of the familiar shapes a deal has. */
 export function faceOf(trade: Trade): Face {
+
+    if (trade.rewards.some(isService)) return "service";
 
     const itemsIn = trade.cost.items.length > 0;
     const paysCoins = trade.rewards.some((r) => r.kind === "coins");
@@ -479,15 +649,21 @@ export function faceOf(trade: Trade): Face {
     return "trade";
 }
 
-/** A deal in one plain line: "Iron Sword for 60 coins", "Sell Feather x3 for 8 coins", "Diamond for Gold Ingot x3". */
+const isFree = (trade: Trade): boolean => trade.cost.items.length === 0 && trade.cost.coins === 0;
+
+/**
+ * A deal in one plain line: "Iron Sword for 60 coins", "Sell Feather x3 for 8 coins", "Diamond for Gold Ingot x3",
+ * "Regeneration 3 (10s) for 20 coins (law only)".
+ */
 export function describeTrade(trade: Trade): string {
 
-    const face = faceOf(trade);
+    let text: string;
 
-    if (face === "gift") return `Free: ${describeRewards(trade.rewards)}`;
-    if (face === "sell") return `Sell ${describeCost(trade.cost)} for ${describeRewards(trade.rewards)}`;
+    if (isFree(trade)) text = `Free: ${describeRewards(trade.rewards)}`;
+    else if (faceOf(trade) === "sell") text = `Sell ${describeCost(trade.cost)} for ${describeRewards(trade.rewards)}`;
+    else text = `${describeRewards(trade.rewards)} for ${describeCost(trade.cost)}`;
 
-    return `${describeRewards(trade.rewards)} for ${describeCost(trade.cost)}`;
+    return trade.requires ? `${text} (${describeRequirement(trade.requires)})` : text;
 }
 
 /** What to tell a player after a deal went through: "Bought Iron Sword for 60 coins.", "Sold Feather x3 for 8 coins.". */
@@ -495,11 +671,11 @@ export function describeDone(trade: Trade): string {
 
     const face = faceOf(trade);
 
-    if (face === "gift") return `Took ${describeRewards(trade.rewards)}.`;
+    if (isFree(trade)) return `Took ${describeRewards(trade.rewards)}.`;
     if (face === "sell") return `Sold ${describeCost(trade.cost)} for ${describeRewards(trade.rewards)}.`;
-    if (face === "buy") return `Bought ${describeRewards(trade.rewards)} for ${describeCost(trade.cost)}.`;
+    if (face === "trade") return `Traded ${describeCost(trade.cost)} for ${describeRewards(trade.rewards)}.`;
 
-    return `Traded ${describeCost(trade.cost)} for ${describeRewards(trade.rewards)}.`;
+    return `Bought ${describeRewards(trade.rewards)} for ${describeCost(trade.cost)}.`;
 }
 
 /** A shop, for a list or an info screen. */
@@ -556,7 +732,7 @@ export function setGreeting(shop: Shop, text: string): Edit {
 
 export function addTrade(shop: Shop, deal: NewTrade): AddResult {
 
-    const trade: Trade = { id: `t${shop.nextTrade}`, cost: deal.cost, rewards: deal.rewards };
+    const trade: Trade = { id: `t${shop.nextTrade}`, cost: deal.cost, rewards: deal.rewards, ...(deal.requires ? { requires: deal.requires } : {}) };
     const result = checked({ ...shop, nextTrade: shop.nextTrade + 1, trades: [...shop.trades, trade] });
 
     if (!result.ok) return result;
@@ -564,12 +740,17 @@ export function addTrade(shop: Shop, deal: NewTrade): AddResult {
     return { ok: true, shop: result.shop, trade: findTrade(result.shop, trade.id) ?? trade };
 }
 
+/**
+ * Changes a deal's cost, its rewards or who may take it. A patch that names `requires` sets it, and one that names it as
+ * `undefined` clears it; a patch that leaves it out keeps what was there.
+ */
 export function updateTrade(shop: Shop, id: string, patch: Partial<NewTrade>): Edit {
 
     const old = findTrade(shop, id);
     if (!old) return bad(`there is no deal ${id}`);
 
-    const next: Trade = { id, cost: patch.cost ?? old.cost, rewards: patch.rewards ?? old.rewards };
+    const requires = "requires" in patch ? patch.requires : old.requires;
+    const next: Trade = { id, cost: patch.cost ?? old.cost, rewards: patch.rewards ?? old.rewards, ...(requires ? { requires } : {}) };
 
     return checked({ ...shop, trades: shop.trades.map((t) => (t.id === id ? next : t)) });
 }
@@ -607,10 +788,10 @@ export function copyShop(source: Shop, id: string, name: string): Edit {
 }
 
 // ---------------------------------------------------------------------------------------------------------
-// Making a deal from what a builder holds
+// Making a deal from what a builder holds, or from what they ask for
 // ---------------------------------------------------------------------------------------------------------
 
-/** The coins in a deal: what a player pays (buy, trade, gift) or gets (sell). */
+/** The coins in a deal: what a player pays (buy, trade, gift, service) or gets (sell). */
 export function priceOf(trade: Trade): number {
     const payout = trade.rewards.find((r) => r.kind === "coins");
     return payout && payout.kind === "coins" ? payout.amount : trade.cost.coins;
@@ -634,6 +815,22 @@ export const sellDeal = (items: ItemSpec, coins: number): NewTrade => ({ cost: {
 
 /** The NPC hands over `goods` for `give` (and `coins` besides, if any). */
 export const swapDeal = (goods: ItemSpec, give: readonly ItemSpec[], coins = 0): NewTrade => ({ cost: { coins, items: give.map(costSpec) }, rewards: [{ kind: "item", item: goods }] });
+
+/** A potion effect on the customer for `coins`. */
+export const effectDeal = (effect: string, seconds: number, amplifier: number, coins: number): NewTrade =>
+    ({ cost: { coins, items: [] }, rewards: [{ kind: "effect", effect, seconds, amplifier }] });
+
+/** An enchantment on the item the customer holds, for `coins`. */
+export const enchantDeal = (enchantment: string, level: number, coins: number): NewTrade =>
+    ({ cost: { coins, items: [] }, rewards: [{ kind: "enchant", enchantment, level }] });
+
+/** A tame mount for `coins`. */
+export const mountDeal = (entity: string, coins: number): NewTrade =>
+    ({ cost: { coins, items: [] }, rewards: [{ kind: "mount", entity }] });
+
+/** A trip to `to` for `coins`. */
+export const teleportDeal = (to: Omit<TeleportReward, "kind">, coins: number): NewTrade =>
+    ({ cost: { coins, items: [] }, rewards: [{ kind: "teleport", ...to }] });
 
 /** Why a shop is not worth showing yet, or undefined when it is. */
 export const whyNotOpen = (shop: Shop): string | undefined => (shop.trades.length === 0 ? "it has nothing to sell, buy or trade yet" : undefined);

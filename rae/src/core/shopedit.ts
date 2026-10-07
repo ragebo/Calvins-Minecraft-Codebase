@@ -1,10 +1,13 @@
 import type { Player } from "@minecraft/server";
+import { SHOP as S } from "../config/balance.js";
 import {
-    addTrade, buyDeal, cleanName, copyShop, sellDeal, slugify, swapDeal, uniqueId, newShop,
-    type Edit, type ItemSpec, type NewTrade, type Shop, type Trade
+    addTrade, buyDeal, cleanName, copyShop, effectDeal, enchantDeal, mountDeal, sellDeal, slugify, swapDeal, teleportDeal, uniqueId,
+    newShop, updateTrade,
+    type Edit, type ItemSpec, type NewTrade, type Requirement, type Shop, type Trade
 } from "../logic/shop.js";
 import { warn } from "./log.js";
 import { bagOf, heldStack, specOf } from "./shopitems.js";
+import { findAnimal, findEffect, findEnchantment } from "./shopservices.js";
 import { allShops, getShop, listStored, saveShop } from "./shopstore.js";
 
 /**
@@ -143,6 +146,77 @@ export function addHeldDeal(player: Player, shopId: string, kind: HeldKind, coin
     const spec = specOf(held);
 
     return addDeal(shopId, kind === "sells" ? buyDeal(spec, coins) : sellDeal(spec, coins));
+}
+
+export type ServiceKind = "effect" | "enchant" | "mount" | "teleport";
+
+/** What a builder types or picks for a service deal. Only the fields the kind uses are read. */
+export interface ServiceFields {
+    /** The effect, enchantment or animal, as typed ("regeneration", "jump boost", "horse"). Not used by a teleport. */
+    readonly what: string;
+    /** An effect's level (1 is normal) or an enchantment's level. */
+    readonly level: number;
+    /** How long an effect lasts, in seconds. */
+    readonly seconds: number;
+    readonly coins: number;
+    /** What a teleport's place is called. May be empty. */
+    readonly name: string;
+}
+
+/** "Jump Boost " -> "jump_boost": how a builder's typing becomes a game id. */
+const typedId = (text: string): string => text.trim().toLowerCase().replace(/\s+/g, "_");
+
+/** An id with the `minecraft:` namespace the game's lookups for enchantments and animals expect when none was typed. */
+const namespaced = (id: string): string => (id.includes(":") ? id : `minecraft:${id}`);
+
+/**
+ * A service deal from what a builder typed. The game is asked whether it knows the effect, enchantment or animal, so a typo
+ * is refused here with what to try, and not found out by a customer. A teleport is to where the builder stands, in their
+ * dimension, so the way to set one is to go there and say what it costs.
+ */
+export function addServiceDeal(player: Player, shopId: string, kind: ServiceKind, fields: ServiceFields): Outcome {
+
+    switch (kind) {
+
+        case "effect": {
+            const id = typedId(fields.what).replace(/^minecraft:/, "");
+            if (id.length === 0) return fail(`name the effect (${S.commonEffects})`);
+            if (!Number.isInteger(fields.level) || fields.level < 1) return fail("the level is a whole number from 1 (1 is the normal strength)");
+            if (!findEffect(id)) return fail(`the game does not know the effect "${fields.what.trim()}" (try ${S.commonEffects})`);
+            return addDeal(shopId, effectDeal(id, fields.seconds, fields.level - 1, fields.coins));
+        }
+
+        case "enchant": {
+            const id = namespaced(typedId(fields.what));
+            if (typedId(fields.what).length === 0) return fail("name the enchantment (flame, power, sharpness...)");
+            if (!findEnchantment(id)) return fail(`the game does not know the enchantment "${fields.what.trim()}"`);
+            return addDeal(shopId, enchantDeal(id, fields.level, fields.coins));
+        }
+
+        case "mount": {
+            const id = namespaced(typedId(fields.what));
+            if (typedId(fields.what).length === 0) return fail(`name the animal (${S.commonMounts})`);
+            if (!findAnimal(id)) return fail(`the game does not know the animal "${fields.what.trim()}" (try ${S.commonMounts})`);
+            return addDeal(shopId, mountDeal(id, fields.coins));
+        }
+
+        case "teleport": {
+            const here = player.location;
+            const hundredth = (n: number): number => Math.round(n * 100) / 100;
+            const name = cleanName(fields.name);
+
+            return addDeal(shopId, teleportDeal({
+                x: hundredth(here.x), y: hundredth(here.y), z: hundredth(here.z),
+                dimension: player.dimension.id.replace(/^minecraft:/, ""),
+                ...(name.length > 0 ? { name } : {})
+            }, fields.coins));
+        }
+    }
+}
+
+/** Who may take a deal: a side, a bounty, both, or (undefined) anyone. */
+export function setRequirement(shopId: string, tradeId: string, requires: Requirement | undefined): Outcome {
+    return applyEdit(shopId, (shop) => updateTrade(shop, tradeId, { requires }));
 }
 
 /** One stack in a builder's bag, to choose from. */

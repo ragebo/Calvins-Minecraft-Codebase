@@ -2,15 +2,16 @@ import type { Entity, Player } from "@minecraft/server";
 import { ActionFormData, ModalFormData } from "@minecraft/server-ui";
 import { SHOP as S } from "../config/balance.js";
 import {
-    describeItem, describeShop, describeTrade, faceOf, findTrade, moveTrade, priceOf, removeTrade, renameShop, setGreeting,
-    signature, updateTrade, whyNotOpen, withPrice, type Shop, type Trade
+    describeItem, describeRequirement, describeShop, describeTrade, faceOf, findTrade, moveTrade, priceOf, removeTrade, renameShop,
+    setGreeting, signature, updateTrade, whyNotOpen, withPrice, type Requirement, type Shop, type Trade
 } from "../logic/shop.js";
 import { getCoins } from "./economy.js";
 import { confirmForm, showForm } from "./forms.js";
 import { error } from "./log.js";
 import { BACK, createScreens, type Action, type Screen } from "./screens.js";
 import {
-    addHeldDeal, addSwapDeal, applyEdit, bagChoices, copyShopAs, createShop, select, selectedId, type HeldKind, type Outcome
+    addHeldDeal, addServiceDeal, addSwapDeal, applyEdit, bagChoices, copyShopAs, createShop, select, selectedId, setRequirement,
+    type HeldKind, type Outcome, type ServiceKind
 } from "./shopedit.js";
 import { bindNpc, npcsOf, placeNpcFor, retireNpcs, spawnShopNpc } from "./shopnpc.js";
 import { deleteShop, getShop, listStored, undoAvailable, undoLast } from "./shopstore.js";
@@ -249,6 +250,7 @@ async function dealScreen(player: Player, shopId: string, tradeId: string): Prom
 
         const actions: Action[] = [
             { label: "Change the price", run: () => priceForm(player, shopId, tradeId) },
+            { label: "Who can take it", run: () => requirementForm(player, shopId, tradeId) },
             { label: "Move up", run: () => { report(player, applyEdit(shopId, (s) => moveTrade(s, tradeId, -1)), "Moved up."); } },
             { label: "Move down", run: () => { report(player, applyEdit(shopId, (s) => moveTrade(s, tradeId, 1)), "Moved down."); } },
             {
@@ -288,10 +290,11 @@ async function addDealScreen(player: Player, shopId: string): Promise<void> {
             { label: "The NPC SELLS what I am holding", run: () => heldDealForm(player, shopId, "sells") },
             { label: "The NPC BUYS what I am holding", run: () => heldDealForm(player, shopId, "buys") },
             { label: "TRADE: players hand over an item for what I hold", run: () => swapForm(player, shopId) },
+            { label: "A SERVICE: effect, enchantment, tame animal, teleport", run: () => serviceScreen(player, shopId) },
             BACK
         ];
 
-        const body = "Hold the item in your hand first.\n§7SELLS: players pay coins and get what you hold (all of the stack).\nBUYS: players hand over what you hold and get coins.\nTRADE: players hand over another item from your bag, maybe with coins, for what you hold.";
+        const body = "Hold the item in your hand first.\n§7SELLS: players pay coins and get what you hold (all of the stack).\nBUYS: players hand over what you hold and get coins.\nTRADE: players hand over another item from your bag, maybe with coins, for what you hold.\nSERVICE: players pay coins for something done to them, no item needed.";
 
         return { title: heading(shop.name, "add a deal"), body, actions };
     });
@@ -346,6 +349,118 @@ async function swapForm(player: Player, shopId: string): Promise<void> {
 
 /** The trade form on its own (the /rae:shop_trade command). */
 export const openSwapDeal = (player: Player, shopId: string): Promise<void> => screens.menuFor(player, () => swapForm(player, shopId));
+
+/** The service screen on its own (the /rae:shop_service command). */
+export const openServiceScreen = (player: Player, shopId: string): Promise<void> => screens.menuFor(player, () => serviceScreen(player, shopId));
+
+async function serviceScreen(player: Player, shopId: string): Promise<void> {
+
+    await screens.run(player, () => {
+
+        const shop = getShop(shopId);
+        if (!shop) return undefined;
+
+        const actions: Action[] = [
+            { label: "A potion EFFECT", run: () => serviceForm(player, shopId, "effect") },
+            { label: "An ENCHANTMENT on the item they hold", run: () => serviceForm(player, shopId, "enchant") },
+            { label: "A tame ANIMAL (horse, mule, donkey)", run: () => serviceForm(player, shopId, "mount") },
+            { label: "A TELEPORT to where I stand now", run: () => serviceForm(player, shopId, "teleport") },
+            BACK
+        ];
+
+        const body = "What the customer pays coins for. The game is asked whether it knows what you type, so a typo is caught here.\n§7A teleport goes to the spot you are standing on, in your dimension: walk there first.";
+
+        return { title: heading(shop.name, "add a service"), body, actions };
+    });
+}
+
+/** A whole number from a form's text, or undefined when it is not one. */
+const wholeNumber = (value: unknown): number | undefined => {
+    const text = String(value ?? "").trim();
+    return /^-?\d+$/.test(text) ? Number(text) : undefined;
+};
+
+async function serviceForm(player: Player, shopId: string, kind: ServiceKind): Promise<void> {
+
+    const form = new ModalFormData();
+
+    if (kind === "effect") {
+        form.title("A potion effect")
+            .textField("Effect", "regeneration", { defaultValue: "" })
+            .textField("Level (1 is normal)", "1", { defaultValue: "1" })
+            .textField("Seconds it lasts", "10", { defaultValue: "10" })
+            .textField("Coins players pay", "20", { defaultValue: "20" });
+    } else if (kind === "enchant") {
+        form.title("An enchantment")
+            .textField("Enchantment", "flame", { defaultValue: "" })
+            .textField("Level", "1", { defaultValue: "1" })
+            .textField("Coins players pay", "100", { defaultValue: "100" });
+    } else if (kind === "mount") {
+        form.title("A tame animal")
+            .textField("Animal", "horse", { defaultValue: "horse" })
+            .textField("Coins players pay", "35", { defaultValue: "35" });
+    } else {
+        form.title("A teleport to where you stand")
+            .textField("Name of this place (optional)", "Saint Diego", { defaultValue: "" })
+            .textField("Coins players pay", "25", { defaultValue: "25" });
+    }
+
+    const response = await showForm(player, form);
+
+    if (!response || response.canceled) return;
+
+    const values = response.formValues ?? [];
+    const text = (index: number): string => String(values[index] ?? "").trim();
+
+    // The fields line up with the form above: effect (what, level, seconds, coins), enchant (what, level, coins),
+    // mount (what, coins), teleport (name, coins).
+    const coinsAt = kind === "effect" ? 3 : kind === "enchant" ? 2 : 1;
+    const coins = wholeNumber(values[coinsAt]);
+    const level = kind === "effect" || kind === "enchant" ? wholeNumber(values[1]) : 1;
+    const seconds = kind === "effect" ? wholeNumber(values[2]) : 0;
+
+    if (coins === undefined || level === undefined || seconds === undefined) {
+        tell(player, warn("The level, the seconds and the coins are whole numbers."));
+        return;
+    }
+
+    const outcome = addServiceDeal(player, shopId, kind, { what: kind === "teleport" ? "" : text(0), level, seconds, coins, name: kind === "teleport" ? text(0) : "" });
+
+    report(player, outcome, outcome.ok && outcome.trade ? `Added: ${describeTrade(outcome.trade)}.` : "Added.");
+}
+
+async function requirementForm(player: Player, shopId: string, tradeId: string): Promise<void> {
+
+    const shop = getShop(shopId);
+    const trade = shop ? findTrade(shop, tradeId) : undefined;
+
+    if (!trade) return;
+
+    const current = trade.requires;
+    const sides = ["Anyone", "Law only", "Outlaws only"];
+
+    const form = new ModalFormData()
+        .title("Who can take it")
+        .dropdown("Side", sides, { defaultValueIndex: current?.role === "law" ? 1 : current?.role === "outlaw" ? 2 : 0 })
+        .textField("Least bounty (0 for none)", "0", { defaultValue: String(current?.bounty ?? 0) });
+
+    const response = await showForm(player, form);
+
+    if (!response || response.canceled) return;
+
+    const [side, bountyText] = response.formValues ?? [];
+    const bounty = wholeNumber(bountyText);
+
+    if (bounty === undefined || bounty < 0) {
+        tell(player, warn("The least bounty is a whole number, 0 for none."));
+        return;
+    }
+
+    const role = side === 1 ? "law" : side === 2 ? "outlaw" : undefined;
+    const requires: Requirement | undefined = role === undefined && bounty === 0 ? undefined : { ...(role !== undefined ? { role } : {}), ...(bounty > 0 ? { bounty } : {}) };
+
+    report(player, setRequirement(shopId, tradeId, requires), requires ? `Now only for: ${describeRequirement(requires)}.` : "Anyone can take it now.");
+}
 
 async function greetingForm(player: Player, shopId: string): Promise<void> {
 

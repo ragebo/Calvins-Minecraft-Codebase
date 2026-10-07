@@ -120,8 +120,8 @@ export function unbindNpc(entity: Entity): void {
     entity.removeTag(S.npcTag);
 }
 
-/** The spot just in front of a builder, level with their feet. */
-function spotBefore(player: Player): Vector3 {
+/** The spot just in front of a player, level with their feet: a new shop NPC's, or a bought mount's. */
+export function spotBefore(player: Player, distance: number = S.spawnDistance): Vector3 {
 
     const here = player.location;
     const look = player.getViewDirection();
@@ -129,7 +129,7 @@ function spotBefore(player: Player): Vector3 {
 
     if (length < 0.01) return { x: here.x, y: here.y, z: here.z };
 
-    return { x: here.x + (look.x / length) * S.spawnDistance, y: here.y, z: here.z + (look.z / length) * S.spawnDistance };
+    return { x: here.x + (look.x / length) * distance, y: here.y, z: here.z + (look.z / length) * distance };
 }
 
 /** Makes a new NPC in front of the builder, facing them, carrying the shop. */

@@ -3,7 +3,7 @@ import { failure, later, ok, playerOf, registerOperatorCommands, type CommandSpe
 import { info } from "../core/log.js";
 import { registerSystem } from "../core/registry.js";
 import { addHeldDeal, copyShopAs, createShop, select, selectedId, selectedShop, type HeldKind } from "../core/shopedit.js";
-import { openShop, openShopEditor, openShopPicker, openSwapDeal } from "../core/shopforms.js";
+import { openServiceScreen, openShop, openShopEditor, openShopPicker, openSwapDeal } from "../core/shopforms.js";
 import { aimedShopNpc, npcsOf, placeNpcFor, retireNpcs, spawnShopNpc } from "../core/shopnpc.js";
 import { deleteShop, getShop, getStored, listStored, rawText, undoLast } from "../core/shopstore.js";
 import { format } from "../core/ui.js";
@@ -18,6 +18,7 @@ import { describeShop, describeTrade } from "../logic/shop.js";
  *   hold a sword                  /rae:shop_sell 60       the NPC sells it for 60 coins
  *   hold 3 feathers               /rae:shop_buy 8         the NPC buys 3 feathers for 8 coins
  *   hold a diamond                /rae:shop_trade         players hand over an item (maybe coins too) for it
+ *   stand where players should go /rae:shop_service       a small form: an effect, an enchantment, a tame animal or a teleport
  *
  * Which shop a command means: the one named, else the NPC you are looking at, else the one you last worked on.
  *
@@ -157,6 +158,21 @@ const COMMANDS: readonly CommandSpec[] = [
             system.run(() => { void openSwapDeal(player, wanted.id); });
 
             return ok("Opening the trade form. Close the chat to see it.");
+        }
+    },
+    {
+        name: "rae:shop_service",
+        description: "Opens the form to add a service to a shop: a potion effect, an enchantment on the held item, a tame animal, or a teleport to where you stand.",
+        run: (origin) => {
+            const player = playerOf(origin);
+            if (!player) return failure("the form opens for a player: run this as a player");
+
+            const wanted = target(origin);
+            if ("problem" in wanted) return failure(wanted.problem);
+
+            system.run(() => { void openServiceScreen(player, wanted.id); });
+
+            return ok("Opening the service form. Close the chat to see it.");
         }
     },
     {

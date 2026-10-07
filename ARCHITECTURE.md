@@ -48,12 +48,13 @@ own header comment where it has one.
 | `robberyworld.ts` | Everything a robbery does to blocks (swing a door, fill and empty a chest, chunk-loaded checks) in one place, because it is the one file that depends on engine behavior measured once. Never throws. |
 | `round.ts` | The one `IDLE -> SETUP -> ACTIVE -> ENDING -> ENDED` phase machine. Also a `Persistable`: the phase itself is never restored into an active state. |
 | `screens.ts` | Menu plumbing for a builder's screens: a title, some text and buttons, each button an action that may open another screen, and one menu of a kind open per player. The shop's screens use it; `robberyforms.ts` has its own copy of the same few lines. |
-| `shopedit.ts` | What a builder does to shops without a screen: which shop they are working on (kept on the player), making and copying one, the one `applyEdit` every change goes through, and deals made from what they hold. |
-| `shopforms.ts` | Every shop screen: the customer's (a deal is bought all or nothing, and one that changed while the screen was open is not bought at its new price) and the builder's (deals, prices, greeting, copy, place, delete, undo, and the wand's offer to make a plain NPC a shop). |
+| `shopedit.ts` | What a builder does to shops without a screen: which shop they are working on (kept on the player), making and copying one, the one `applyEdit` every change goes through, deals made from what they hold, services made from what they type (the game is asked whether it knows the effect, enchantment or animal), and who may take a deal. |
+| `shopforms.ts` | Every shop screen: the customer's (a deal is bought all or nothing, one the customer may not take is greyed, and one that changed while the screen was open is not bought at its new price) and the builder's (deals, services, who can take a deal, prices, greeting, copy, place, delete, undo, and the wand's offer to make a plain NPC a shop). |
 | `shopitems.ts` | Items between a shop's data and the game: reading what a builder holds (name, lore, enchantments, potion), making goods, and counting, taking and handing over items in a bag (a full bag drops the rest at the player's feet). |
 | `shopnpc.ts` | The vanilla NPC that carries a shop: finding it (a dynamic property says which shop), making, moving and retiring it, and pointing it at the dialogue scene. |
+| `shopservices.ts` | What a deal does TO a customer: a potion effect, an enchantment on the item they hold, a tame mount, a teleport. Each is two halves: `prepareService` only reads (does the game know it, does the customer hold something it fits) and answers a reason or an `apply` and an `undo`, which is what lets a deal stay all or nothing. |
 | `shopstore.ts` | Where shops live: `recordstore.ts` holding `logic/shop.ts`'s saved text, one world property each. |
-| `shoptrade.ts` | Carrying out a deal all or nothing: the goods are made first, the player's means checked, then the payment taken and the goods handed over; if the game throws part-way, the bag and the coins are put back exactly. |
+| `shoptrade.ts` | Carrying out a deal all or nothing: the goods are made first, the customer's side, bounty and means checked and every service prepared, then the payment taken, the goods handed over and the services done; if the game throws part-way, the services done are undone and the bag (every slot) and the coins are put back exactly. |
 | `sound.ts` | The one place `playSound` is called — `playFor` (private), `playAt` (positional, from a player), `playAtPoint` (positional, from a place, no player), `playSequence` (cue lists with a `shouldPlay` re-check). |
 | `state.ts` | The per-player record (role, eliminated, jail, ammo, flags), keyed by id. Tags are output only, adopted back on drift. |
 | `telemetry.ts` | Round-by-round history (outcome, kills, deaths, ending coin total). Deliberately outside the round-reset system: it must survive the reset of the round it's recording. |
@@ -90,7 +91,7 @@ problem — the label just describes most of the folder, not a strict rule every
 | `robberyprobe.ts` | Measurement spike, not a feature: Phase 0 of the in-game robbery framework (`rae:robbery_probe`, `rae:robbery_probe_ctx`). Records how the real game reports a right-click on a chest, door, button or lever, whether `cancel` stops it, and what structures, loot tables and ticking areas allow, before the framework is built on any of it. See `docs/test-cards/ROBBERY-SPIKE.md`. |
 | `raids.ts` | Two raids in one file — fort plugs into `core/raid.ts`'s shared engine; ranch is hand-rolled because its countdown-that-stretches-on-reinforcement doesn't fit that shape. |
 | `roles.ts` | The template file every other system was ported to match, and where role assignment and `pickRandom` live. |
-| `shopbuilder.ts` | Building a shop in game: thirteen operator-only `rae:shop_*` commands (hold an item and `/rae:shop_sell 60`). Hands the work to `core/shopedit.ts` and the screens to `core/shopforms.ts`. |
+| `shopbuilder.ts` | Building a shop in game: fourteen operator-only `rae:shop_*` commands (hold an item and `/rae:shop_sell 60`). Hands the work to `core/shopedit.ts` and the screens to `core/shopforms.ts`. |
 | `shoptalk.ts` | The player's side of a shop: a click on a shop NPC opens the shop (the "before" event cancelled, or the dialogue scene's one button running `rae:npc`). The wand edits, anything else plays. |
 | `train.ts` | The train-robbery structure swap and its movement (backup/restore, wave timing) — a different "train" from `transit.ts`. |
 | `transit.ts` | Self-described spike: the route recorder plus a one-car momentum/teleport experiment, driven by `logic/route.ts`'s math. |
@@ -113,7 +114,7 @@ condition, in separate files. None of this needs fixing — it's just what's act
 | `robberymeta.ts` | The builder's forms as data (a field list builds a form and reads its answers back into the validators) and the plain-language summaries of what was built. |
 | `route.ts` | The train's track math: smoothing, distance, heading, speed, steering. |
 | `schema.ts` | Config schema-version fingerprinting and migration for persisted data. |
-| `shop.ts` | An NPC shop as data: a deal is a cost (coins, items, both or nothing) and rewards, so buying, selling, item-for-item trades and gifts are one shape; immutable edits that validate the whole result; the saved short-key form; `parse` never throws. |
+| `shop.ts` | An NPC shop as data: a deal is a cost (coins, items, both or nothing), rewards (items, coins, or a service: effect, enchantment, mount, teleport) and optionally who may take it (law or outlaw, a least bounty), so buying, selling, item-for-item trades, gifts and services are one shape; immutable edits that validate the whole result; the saved short-key form; `parse` never throws. |
 
 All eight hold to "no game imports" exactly as documented, modulo `bearing.ts`/`route.ts` each
 importing `Vector3` as a type only (erased at compile time, so it costs nothing at runtime).
@@ -171,7 +172,8 @@ logic/shop.ts          the deal model, validation, edits, the saved form
         |
 core/recordstore.ts, shopstore.ts   saved shops               core/shopitems.ts   items <-> data, bags
 core/shoptrade.ts      a deal, all or nothing                 core/shopnpc.ts     the NPC that carries a shop
-core/shopedit.ts       what a builder does                    core/shopforms.ts   every screen
+core/shopservices.ts   what a deal does to a customer         core/shopedit.ts    what a builder does
+core/shopforms.ts      every screen
         |
 systems/shoptalk.ts      a click on a shop NPC, and the dialogue scene's button
 systems/shopbuilder.ts   the /rae:shop_* commands

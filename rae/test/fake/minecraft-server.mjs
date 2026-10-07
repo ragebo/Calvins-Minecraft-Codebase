@@ -54,6 +54,21 @@ const POTION_ITEMS = { Consume: "minecraft:potion", ThrowSplash: "minecraft:spla
 
 const bareId = (id) => String(id).replace(/^minecraft:/, "");
 
+// The engine's tick rate, which scripts convert seconds with.
+export const TicksPerSecond = 20;
+
+// Effect and entity types the engine knows, looked up by `EffectTypes.get(id)` / `EntityTypes.get(id)` with or without the
+// namespace. Static tables (`fake.effects`, `fake.entityTypes`): `reset` leaves them alone.
+export const EffectTypes = {
+    get(id) { const bare = bareId(id); return fake.effects.has(bare) ? { id: bare, getName: () => bare } : undefined; }
+};
+export const EntityTypes = {
+    get(id) { const bare = bareId(id); return fake.entityTypes.has(bare) ? { id: `minecraft:${bare}` } : undefined; }
+};
+
+/** The animals that carry a `minecraft:tamemount` component, as the real horse family does. */
+const RIDEABLE = /(?:^|:)(?:horse|mule|donkey|skeleton_horse|zombie_horse|camel|llama)$/;
+
 export class EnchantmentType {
     constructor(id) {
         const bare = bareId(id);
@@ -77,8 +92,16 @@ function makeEnchantable(stack) {
         if (ENCHANT_ONLY_FOR[bare] && !ENCHANT_ONLY_FOR[bare].test(stack.typeId)) throw new Error(`EnchantmentTypeNotCompatibleError: ${type.id} on ${stack.typeId}`);
         stack.enchantments = [...stack.enchantments.filter((e) => e.type.id !== type.id), { type, level: enchantment.level }];
     };
+    // The same checks `add` makes, answering false for an enchantment that does not fit and throwing for an unknown one or a bad level.
+    const canAdd = (enchantment) => {
+        const bare = bareId(enchantment.type.id);
+        if (!fake.enchantments.has(bare)) throw new Error(`EnchantmentTypeUnknownIdError: ${enchantment.type.id}`);
+        if (!Number.isInteger(enchantment.level) || enchantment.level < 1 || enchantment.level > fake.enchantments.get(bare)) throw new Error(`EnchantmentLevelOutOfBoundsError: ${enchantment.type.id} level ${enchantment.level}`);
+        return !(ENCHANT_ONLY_FOR[bare] && !ENCHANT_ONLY_FOR[bare].test(stack.typeId));
+    };
     return {
         getEnchantments() { return stack.enchantments.map((e) => ({ type: e.type, level: e.level })); },
+        canAddEnchantment: canAdd,
         addEnchantment: add,
         addEnchantments(list) { for (const enchantment of list) add(enchantment); }
     };
@@ -409,7 +432,7 @@ function makeEntity(options = {}) {
         tags: new Set(options.tags ?? []),
         isValid: true,
         facing: options.facing ?? { x: 0, y: 0, z: 1 },
-        effects: [], damage: [], teleports: [], dynamic: new Map(),
+        effects: [], damage: [], teleports: [], teleportLog: [], dynamic: new Map(),
         _location: { ...(options.location ?? { x: 0, y: 64, z: 0 }) },
         _dimension: options.dimension ?? fake.dimension("overworld"),
         hasTag(t) { guard(entity); return entity.tags.has(t); },
@@ -431,12 +454,22 @@ function makeEntity(options = {}) {
         getVelocity() { guard(entity); return { ...entity.velocity }; },
         setRotation(r) { guard(entity); restrictedCheck("Entity.setRotation"); entity.rotation = { ...r }; },
         getRotation() { guard(entity); return { ...entity.rotation }; },
-        addEffect(id, duration, opts) { guard(entity); restrictedCheck("Entity.addEffect"); entity.effects.push({ id, duration, ...opts }); },
+        // `id` may be an effect type handle (EffectTypes.get) as well as a string: it is recorded by its id either way.
+        addEffect(id, duration, opts) { guard(entity); restrictedCheck("Entity.addEffect"); entity.effects.push({ id: typeof id === "string" ? id : id?.id, duration, ...opts }); },
+        removeEffect(id) {
+            guard(entity); restrictedCheck("Entity.removeEffect");
+            const wanted = typeof id === "string" ? id : id?.id;
+            const before = entity.effects.length;
+            entity.effects = entity.effects.filter((e) => e.id !== wanted);
+            return entity.effects.length !== before;
+        },
         applyDamage(amount, opts) { guard(entity); restrictedCheck("Entity.applyDamage"); entity.damage.push({ amount, ...opts }); return true; },
         teleport(location, options = {}) {
             guard(entity); restrictedCheck("Entity.teleport");
             entity.teleports.push({ ...location });
+            entity.teleportLog.push({ location: { ...location }, dimension: options.dimension });
             entity._location = { ...location };
+            if (options.dimension) entity._dimension = options.dimension;
             if (options.rotation) entity.rotation = { ...options.rotation };
             if (!options.keepVelocity) entity.velocity = { x: 0, y: 0, z: 0 };
         },
@@ -472,6 +505,15 @@ function makeEntity(options = {}) {
             }
             if (id === "minecraft:riding" && entity.ridingOn?.isValid) return { entityRidingOn: entity.ridingOn };
             if (id === "minecraft:item" && options.itemStack) return { itemStack: options.itemStack };
+            // The horse family can be tamed: tame / tameToPlayer set `tamed` (and who by), as the real component does.
+            if (id === "minecraft:tamemount" && RIDEABLE.test(entity.typeId)) {
+                return {
+                    get isTamed() { return entity.tamed === true; },
+                    get tamedToPlayer() { return entity.tamedBy; },
+                    tame(showParticles) { restrictedCheck("EntityTameMountComponent.tame"); entity.tamed = true; entity.tamedParticles = showParticles; },
+                    tameToPlayer(showParticles, player) { restrictedCheck("EntityTameMountComponent.tameToPlayer"); entity.tamed = true; entity.tamedBy = player; entity.tamedParticles = showParticles; return true; }
+                };
+            }
             return undefined;
         },
         kill() { entity.remove(); return true; },
@@ -768,6 +810,11 @@ export const fake = {
         ["flame", 1], ["power", 5], ["punch", 2], ["infinity", 1], ["multishot", 1], ["quick_charge", 3], ["piercing", 4],
         ["sharpness", 5], ["fire_aspect", 2], ["lunge", 3], ["unbreaking", 3], ["efficiency", 5], ["mending", 1], ["protection", 4]
     ]),
+    effects: new Set([
+        "regeneration", "speed", "strength", "resistance", "invisibility", "jump_boost", "fire_resistance", "instant_health", "poison",
+        "slowness", "weakness", "night_vision", "water_breathing", "saturation", "absorption", "health_boost", "levitation", "nausea"
+    ]),
+    entityTypes: new Set(["horse", "mule", "donkey", "skeleton_horse", "pig", "cow", "sheep", "npc", "villager_v2"]),
     potionEffects: new Set([
         "Swiftness", "LongSwiftness", "StrongSwiftness", "Healing", "StrongHealing", "Regeneration", "Strength", "Poison",
         "TurtleMaster", "Leaping", "FireResistance", "WaterBreathing", "NightVision", "Invisibility", "SlowFalling", "Weakness"

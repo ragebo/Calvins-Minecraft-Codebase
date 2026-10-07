@@ -15,7 +15,7 @@ const L = await load("logic/shop.js");
 await load("systems/shopbuilder.js");
 const { SHOP } = await load("config/balance.js");
 
-const NAMES = ["list", "info", "new", "sell", "buy", "trade", "edit", "open", "select", "copy", "place", "delete", "undo"].map((n) => `rae:shop_${n}`);
+const NAMES = ["list", "info", "new", "sell", "buy", "trade", "service", "edit", "open", "select", "copy", "place", "delete", "undo"].map((n) => `rae:shop_${n}`);
 
 function setup() {
     fake.reset();
@@ -54,7 +54,7 @@ test("every command registers under the real registry's rules, operator-only, wi
     const { commands: registered } = commands();
 
     const names = [...registered.keys()].filter((n) => n.startsWith("rae:shop_")).sort();
-    check("exactly these thirteen", names.join(",") === [...NAMES].sort().join(","), names.join(","));
+    check("exactly these fourteen", names.join(",") === [...NAMES].sort().join(","), names.join(","));
     check("all operator-only", names.every((n) => registered.get(n).def.permissionLevel === CommandPermissionLevel.GameDirectors));
     check("sell and buy take whole coins", ["rae:shop_sell", "rae:shop_buy"].every((n) => registered.get(n).def.mandatoryParameters[0].type === CustomCommandParamType.Integer));
     check("new takes a name", registered.get("rae:shop_new").def.mandatoryParameters[0].type === CustomCommandParamType.String);

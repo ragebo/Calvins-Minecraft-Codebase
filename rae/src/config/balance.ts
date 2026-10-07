@@ -536,6 +536,21 @@ export const SHOP = {
     /** A saved shop longer than this many characters is refused up front, with nothing changed (a world property holds 32767). */
     maxSavedChars: 24000,
 
+    // ---- Services: what a deal can do besides hand over goods.
+    /** The longest a bought potion effect lasts, in seconds. */
+    maxEffectSeconds: 3600,
+    /** The strongest a bought effect can be (0 is level 1). The game's own limit. */
+    maxAmplifier: 255,
+    /** The highest bounty a deal can ask for. */
+    maxBounty: 1000000,
+    /** The farthest a teleport can send a customer from the origin, either way on any axis (blocks): the world border. */
+    maxCoordinate: 30000000,
+    /** How far in front of the customer a bought mount appears (blocks). */
+    mountSpawnDistance: 2,
+    /** Named in a message when a builder mistypes an effect or an animal, so the answer says what to type. */
+    commonEffects: "regeneration, speed, strength, resistance, invisibility, jump_boost, fire_resistance, instant_health",
+    commonMounts: "horse, mule, donkey",
+
     // ---- The NPC that carries a shop.
     npcType: "minecraft:npc",
     /** Put on every shop NPC so one cheap query finds them all (and so a builder can target them with /tag selectors). */
