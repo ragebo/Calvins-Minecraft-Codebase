@@ -117,6 +117,17 @@ try {
 }
 
 try {
+    // The wand is for pointing, not for mining: a builder in creative mode would otherwise knock out whatever they click.
+    world.beforeEvents.playerBreakBlock.subscribe((event) => {
+        guarded("breaking a block with the wand", () => {
+            if (holdsWand(event.player, event.itemStack)) event.cancel = true;
+        });
+    });
+} catch (err) {
+    warn(SOURCE, `could not listen for the wand breaking blocks: ${err instanceof Error ? err.message : String(err)}`);
+}
+
+try {
     // A click on nothing: the only thing the game sends for it is the swing.
     world.afterEvents.playerSwingStart.subscribe((event) => {
 

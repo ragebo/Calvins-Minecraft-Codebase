@@ -301,20 +301,51 @@ regardless (the scripted train's start/end/speed numbers are baked into a path b
 see the file's own header comment). Changes persist as a sparse diff through the existing
 `core/persist.ts` engine, the same mechanism `round.ts`/`telemetry.ts`/`state.ts` already use.
 
-### Robbery framework (in progress)
+### Robbery framework
 
 Today the fort raid, ranch raid and train robbery are code plus command-block chains plus NPC buttons on three
-separate clocks. The plan (approved 2026-10-06) is one in-game system: a builder wires up blocks they built (an
-iron door, a chest, a button...) with a **Robbery Wand** (`bountysys:robbery_wand`) and forms, in elements such
-as doors, lockable chests, switches, breakable walls, guard spawners and zones, each completed by a lock (lockpick
-minigame, key item, coins, a placed block) and gated by what must be done first; players then just interact with
-them. No custom blocks or art, operator-only authoring, robberies saved in the world (like the train route), and the
-first proof is a new robbery (the Saint Diego Bank) built entirely in game. Fort, ranch and train stay as they are.
+separate clocks. The framework is one in-game system for building new robberies: a builder binds blocks they built
+(an iron door, a chest, a button, a lever, a pressure plate) to **elements** with the **Robbery Wand**
+(`bountysys:robbery_wand`) and forms, each completed by a **lock** and gated by what must be done first; players then
+just interact with those blocks. No custom blocks or art, operator-only authoring, robberies saved in the world (like
+the train route), no coordinates in config and no command chains. Fort, ranch and train stay as they are for now.
 
-**Phase 0 (here now):** `/scriptevent rae:robbery_probe` (and `/rae:robbery_probe_ctx`) measure what the real game
-reports for right-clicks on vanilla blocks, whether a script can cancel them, and what the structure, loot-table and
-ticking-area APIs allow; `docs/test-cards/ROBBERY-SPIKE.md` is the run sheet and the decision table. The wand item
-exists so the probe can see what a right-click with it does. `logic/blockclass.ts` classifies block types.
+**What a robbery is made of (Phase 1a, "Vault").**
+- *Elements:* a **door** (a door, trapdoor or gate: both halves of a door are always bound and swung together), a
+  **chest** (a chest, barrel or shulker box: loot from a loot table plus fixed items goes in when it is unlocked and
+  comes out when the site is put back) and a **switch** (a button, lever, plate, or any block: the "keypad").
+- *Locks:* a **pick lock** (the jailbreak's slider game: a hidden target, a ping that rises as the guess gets closer,
+  a number of hits, a jam after too many misses), a **key** (an item the player carries, used up or not) and a
+  **price** (coins). All of an element's locks must be passed; coins and the key are taken only when it opens.
+- *Requirements:* an element can wait for others. An element with nothing to wait for can start the robbery by being
+  touched. An element that waits and has no lock opens by itself the moment what it waits for is done (a vault door
+  that opens when the keypad is picked).
+- *Effects:* say something (chat, action bar or title, with a sound, to the player, the area, outlaws, law or
+  everyone), pay out coins and bounty, and end the robbery as won or failed, each with an optional delay. They run
+  when an element is done, when its lock jams, and at the start, win and fail of the whole robbery.
+- *Settings, per robbery:* starts by touch, one event at a time (shares the fort/ranch/train slot), round only,
+  protected blocks (a player cannot break or blow them up; operators can), outlaws only, cooldown, time limit, how long
+  after it ends the site is put back, and fail-when-nobody-is-in-the-area.
+
+**Building one.** `/give @s bountysys:robbery_wand` or `/rae:robbery_wand`. Right-click the air for the menu (make a
+robbery, settings, area, effects, run it); right-click a block that is not bound to bind it (the form suggests door,
+chest or switch from the block); right-click a bound block for its screen (rename, locks, what it waits for, what
+happens when it is done or its lock jams, loot, change its blocks, delete). `/rae:robbery_view` marks the robbery's
+blocks and area in the world and shows what the wand points at. Everything also has a command (`/rae:robbery_list`,
+`info`, `new`, `select`, `delete`, `start [test]`, `stop`, `reset`, `activate`, `edit`, `view`, `undo`, `area`,
+`set`), all operator-only; `start`, `stop`, `reset` and `activate` take a robbery id and also work from a command block
+or an NPC button. A test run (`/rae:robbery_start <id> true`) lets anyone take part and sets no cooldown.
+
+**Putting the site back.** Before a door is opened or a chest filled, the block is noted in a saved list. A normal
+ending, a manual reset, a round reset, a deleted robbery, a crash and a reload all end the same way: a janitor reads
+that list and puts each block back (doors shut, chests emptied) once its chunk is loaded. A reload ends a robbery in
+progress; the site is restored and the next touch starts it afresh.
+
+**Status.** Phase 0 (`/scriptevent rae:robbery_probe`, `docs/test-cards/ROBBERY-SPIKE.md`) measured how the real game
+reports and cancels right-clicks, what a callback may do, loot tables, structures and doors. Phase 1a (this) is built
+on those measurements and covered by the tests; `docs/test-cards/ROBBERY-VAULT.md` is the run sheet for the things only
+the real game can answer. Later phases add breakable walls, guard spawners, zones, a placed-block lock and the full
+Saint Diego Bank; fort, ranch and train migrate behind their existing ids after that.
 
 ### Tumbleweeds
 

@@ -12,6 +12,7 @@ import {
 } from "../logic/robberymeta.js";
 import { confirmForm, showForm } from "./forms.js";
 import { error } from "./log.js";
+import { registerSystem } from "./registry.js";
 import {
     addElementAt, applyEdit, createRobbery, removeElementFrom, select, selectedRobbery, setPending, suggestedKind,
     type Pending
@@ -733,3 +734,12 @@ export function openNewRobbery(player: Player): Promise<void> {
 export function openPickRobbery(player: Player): Promise<void> {
     return menuFor(player, async () => { await pickScreen(player); });
 }
+
+registerSystem({
+    name: "robberyforms",
+    reset() {
+        // A menu that never finished (its form was dropped by the game) must not lock its builder out of menus for good.
+        open.clear();
+        closing.clear();
+    }
+});

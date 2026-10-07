@@ -453,6 +453,27 @@ test("a held click counts once; a member's wand does nothing; a click with anoth
     done();
 });
 
+test("the wand does not mine: an operator holding it cannot break a block with it, anyone else is unaffected", () => {
+    setup();
+    fake.strictBefore = true;
+    const { check, done } = checks();
+    const op = operator();
+    const mem = member();
+    fake.placeBlock("overworld", { x: 1, y: 70, z: 1 }, "minecraft:stone");
+
+    const mine = (player, held) => {
+        const event = { player, block: fake.dimension("overworld").getBlock({ x: 1, y: 70, z: 1 }), itemStack: held ? { typeId: held } : undefined, cancel: false };
+        world.beforeEvents.playerBreakBlock.emit(event);
+        return event.cancel;
+    };
+
+    check("an operator with the wand: cancelled", mine(op, R.wandItemId) === true);
+    check("an operator with a pickaxe: not", mine(op, "minecraft:iron_pickaxe") === false);
+    check("with an empty hand: not", mine(op, undefined) === false);
+    check("a member with the wand is not building, so the builder does not touch it", mine(mem, R.wandItemId) === false);
+    done();
+});
+
 test("the wand on a bound block opens that element's screen and selects its robbery", async () => {
     setup();
     const { check, done } = checks();

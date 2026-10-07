@@ -31,7 +31,7 @@ own header comment where it has one.
 | `director.ts` | The one shared "slot" the three scripted set-piece events (fort raid, ranch raid, train robbery) take turns through, replacing V1's hand-wired lock that could get stuck taken. |
 | `economy.ts` | The only place coin/bounty scores are read or written, plus the scoreboard-existence check `preflight.ts` builds on. |
 | `events.ts` | The one ordered `entityDie` dispatcher, plus the `onScriptEvent`/`onSpawn` registries. |
-| `forms.ts` | Shows a form to a player, retrying automatically when a right-click-opened form is refused as `UserBusy`. |
+| `forms.ts` | Shows a form to a player, retrying automatically when a right-click-opened form is refused as `UserBusy`; `confirmForm` is a yes/no where only the yes button counts. |
 | `game.ts` | Starting a round (assign roles, send everyone to a spawn) — shared by the old script events and the in-game menu, since a system can't import a system. |
 | `log.ts` | The one place a failure or diagnostic goes: console always, chat only for `error()`, and only to an operator. |
 | `persist.ts` | The save/restore contract and engine — one world dynamic property per registered key, survives a world reload. |
@@ -39,8 +39,13 @@ own header comment where it has one.
 | `preflight.ts` | Startup checks — scoreboards, the train structure, every gun/ammo item id, every hardcoded coordinate — one combined `error()` if anything's wrong. |
 | `raid.ts` | The shared wave-spawn/track/reward/cleanup engine a raid config plugs into. Fort does; ranch doesn't (see `systems/raids.ts`). |
 | `registry.ts` | Where a system registers itself and its reset, so a round reset can never again forget one. |
+| `robberyedit.ts` | The robbery framework's editing session without a screen: each builder's selected robbery (kept on the player), the one `applyEdit` every change goes through (pure edit, whole-robbery validation, no block claimed by two robberies, then the store), binding blocks, and what a wand click means. |
+| `robberyforms.ts` | Every screen the builder sees (menus, the add-element form, locks, requirements, effects, loot, settings, area), as presentation over `robberyedit.ts` and `logic/robberymeta.ts`. |
+| `robberyrun.ts` | Playing a robbery: starting it (and the director's slot), who may touch what, the locks, completing elements, effects, ending, and putting the site back through one idempotent janitor. One shared loop; nothing registered per robbery. |
+| `robberystore.ts` | Where robberies live: one world property each, written at once on every edit, refused up front when over the size cap, unreadable ones listed and never overwritten, one level of undo. Also the saved list of blocks a run changed and has not yet put back. |
+| `robberyworld.ts` | Everything a robbery does to blocks (swing a door, fill and empty a chest, chunk-loaded checks) in one place, because it is the one file that depends on engine behavior measured once. Never throws. |
 | `round.ts` | The one `IDLE -> SETUP -> ACTIVE -> ENDING -> ENDED` phase machine. Also a `Persistable`: the phase itself is never restored into an active state. |
-| `sound.ts` | The one place `playSound` is called — `playFor` (private), `playAt` (positional), `playSequence` (cue lists with a `shouldPlay` re-check). |
+| `sound.ts` | The one place `playSound` is called — `playFor` (private), `playAt` (positional, from a player), `playAtPoint` (positional, from a place, no player), `playSequence` (cue lists with a `shouldPlay` re-check). |
 | `state.ts` | The per-player record (role, eliminated, jail, ammo, flags), keyed by id. Tags are output only, adopted back on drift. |
 | `telemetry.ts` | Round-by-round history (outcome, kills, deaths, ending coin total). Deliberately outside the round-reset system: it must survive the reset of the round it's recording. |
 | `tick.ts` | The one `system.runInterval`. Every repeating job is a cadence-aware handler registered with `onTick`. |
@@ -70,6 +75,8 @@ problem — the label just describes most of the folder, not a strict rule every
 | `liveconfig.ts` | The `rae:config_*` custom commands (list/get/set/reset) that edit `core/configoverrides.ts`'s registry live, each operator-gated and autocompleted by the engine itself. |
 | `menu.ts` | The in-game menu item: start or reset the game, teleport to the key places. |
 | `probe.ts` | Measurement spike, not a feature: measures whether stacked `applyDamage` calls add up (`rae:probe_damage`). |
+| `robberybuilder.ts` | Building a robbery in game: the wand (used on a block or on nothing), fifteen operator-only `rae:robbery_*` commands, and the builder view. Hands every click to `core/robberyedit.ts` and every screen to `core/robberyforms.ts`. |
+| `robberyrun.ts` | The game-event side of playing a robbery: a right-click on a bound block (cancelled at once, the work a tick later), pressure plates and tripwires, and protecting bound blocks from breaking and explosions. Hands everything to `core/robberyrun.ts`. |
 | `robberyprobe.ts` | Measurement spike, not a feature: Phase 0 of the in-game robbery framework (`rae:robbery_probe`, `rae:robbery_probe_ctx`). Records how the real game reports a right-click on a chest, door, button or lever, whether `cancel` stops it, and what structures, loot tables and ticking areas allow, before the framework is built on any of it. See `docs/test-cards/ROBBERY-SPIKE.md`. |
 | `raids.ts` | Two raids in one file — fort plugs into `core/raid.ts`'s shared engine; ranch is hand-rolled because its countdown-that-stretches-on-reinforcement doesn't fit that shape. |
 | `roles.ts` | The template file every other system was ported to match, and where role assignment and `pickRandom` live. |
@@ -89,10 +96,13 @@ condition, in separate files. None of this needs fixing — it's just what's act
 |---|---|
 | `bearing.ts` | Compass direction math and display. |
 | `blockclass.ts` | What kind of block a type id is (door, trapdoor, gate, container, button, lever, plate, tripwire, other), by suffix, for the robbery framework. |
+| `lockpick.ts` | The pick lock's rules (a hidden target, hot/cold pings, hits to open, a jam after too many misses), with the random source and the tick passed in. |
+| `robbery.ts` | A robbery as data: elements (door, chest, switch), locks (pick, key, pay), requirements, effects, settings; immutable edits that validate the whole result; the saved short-key form; `parse` never throws. |
+| `robberymeta.ts` | The builder's forms as data (a field list builds a form and reads its answers back into the validators) and the plain-language summaries of what was built. |
 | `route.ts` | The train's track math: smoothing, distance, heading, speed, steering. |
 | `schema.ts` | Config schema-version fingerprinting and migration for persisted data. |
 
-All four hold to "no game imports" exactly as documented, modulo `bearing.ts`/`route.ts` each
+All seven hold to "no game imports" exactly as documented, modulo `bearing.ts`/`route.ts` each
 importing `Vector3` as a type only (erased at compile time, so it costs nothing at runtime).
 
 ### `rae/src/config/` — numbers and coordinates, mostly
@@ -108,10 +118,36 @@ minor stretch of "numbers and coordinates only," not a violation worth fixing: t
 exactly one home too, and `config/guns.ts` is already it for everything else about a gun.
 
 One deliberate exception to rule 3: **data authored in game is world data, not config.** The recorded train
-route (`systems/transit.ts`, a world dynamic property) is the precedent, and the robbery framework (planned;
-Phase 0 is `systems/robberyprobe.ts`) follows it: the robberies a builder wires up with the wand (positions,
-names, loot, effects) are saved in the world, and `config/balance.ts`'s `ROBBERY` block holds only caps,
+route (`systems/transit.ts`, a world dynamic property) is the precedent, and the robbery framework follows it:
+the robberies a builder wires up with the wand (positions, names, loot, effects) are saved in the world (one
+property per robbery, `core/robberystore.ts`), and `config/balance.ts`'s `ROBBERY` block holds only caps,
 defaults and tuning.
+
+### The robbery framework's shape
+
+It is deliberately core-heavy, and the reason is a rule, not taste: systems never import systems, and the legacy
+ratchet flags a systems file importing a sibling, so anything two systems would share lives in `core/`, and each
+system stays one thin file.
+
+```
+logic/robbery.ts       the data, its validation and edits        logic/lockpick.ts   the pick lock's rules
+logic/robberymeta.ts   forms as data, plain-language summaries   logic/blockclass.ts what a block is
+        |
+core/robberystore.ts   saved robberies + the "blocks to put back" list     core/robberyworld.ts   doors, chests, chunks
+core/robberyrun.ts     playing one: locks, effects, ending, the janitor    core/robberyedit.ts    editing without a screen
+core/robberyforms.ts   every builder screen
+        |
+systems/robberyrun.ts      game events -> core/robberyrun.ts (right-click, plates, protection)
+systems/robberybuilder.ts  the wand, the commands, the builder view
+```
+
+Two decisions carry the design. **Everything a before-event or command callback may not do is deferred**: those
+callbacks are restricted (a typings-level `@privilege no-restricted-execution`, measured in the real game), so a
+handler decides and cancels at once and hands the rest to `system.run`; the fake enforces the same rule
+(`fake.strictBefore`). **Putting a site back is one idempotent path**: every block a run changes is noted in a
+saved, position-keyed list *before* it changes, and a normal end, a manual reset, a round reset, a deleted
+robbery, a crash and a reload all end with the janitor reading that list and restoring each block once its chunk is
+loaded. What is not kept across a reload is the run itself; a reload ends a robbery in progress.
 
 ## `main.ts`: what it wires
 
@@ -119,7 +155,7 @@ Two kinds of content, both intentional:
 
 - **Imports that register things.** `core/economy.ts`, `core/events.ts`, `core/game.ts`,
   `core/log.ts`, `core/preflight.ts`, `core/registry.ts`, `core/tick.ts` and `systems/roles.ts`'s
-  `pickRandom` are imported for their exports. All 19 files in `systems/` are imported purely for
+  `pickRandom` are imported for their exports. All 21 files in `systems/` are imported purely for
   their self-registration side effect (per rule 6, importing a system is what makes it exist — order
   never matters, since handler ordering is declared explicitly wherever it's registered).
   `core/telemetry.ts` is imported the same way, for its `onDeath`/`onPhase`/persist registrations.

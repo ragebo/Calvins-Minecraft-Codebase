@@ -286,6 +286,33 @@ test("three misses in a row jam the lock: progress is lost, onFail runs, it is r
     done();
 });
 
+test("two players working one lock share its progress: one opens it while the other's form is open, or jams it under them", async () => {
+    setup();
+    const { check, done } = checks();
+    const ada = outlaw("Ada");
+    const bob = outlaw("Bob");
+
+    // Ada's form is open; while it is, Bob gets the keypad open another way. Her submission then finds it done.
+    fakeUi.uiFake.responses.push((form) => { Run.activateElement("bank", "Keypad", bob); return { canceled: false, formValues: [40] }; });
+    touch(ada, SITE.keypad);
+    await settle();
+    check("she is told someone else got it", said(ada).some((m) => /Someone else got it open/.test(m)), said(ada).join("|"));
+    check("and her guess did not count: the keypad is done once, by Bob", Run.viewOf("bank").elements.find((e) => e.name === "Keypad").state === "done");
+
+    // A fresh run: both pick, and their misses add up. Responses are taken in the order the forms are shown: A1, B1, A2, B2, A3, B3.
+    setup();
+    const cara = outlaw("Cara");
+    const dan = outlaw("Dan");
+    for (let i = 0; i < 6; i++) guess(95);
+    touch(cara, SITE.keypad);
+    touch(dan, SITE.keypad);
+    await settle();
+
+    check("the third miss, whoever made it, jammed the one lock", said(cara).some((m) => /The lock jams/.test(m)), said(cara).join("|"));
+    check("and the other player, whose form was still open, is told it is jammed", bar(dan).some((m) => /The lock is jammed/.test(m)), bar(dan).join("|"));
+    done();
+});
+
 test("guesses faster than the cooldown are not scored, so the slider cannot be mashed", async () => {
     setup();
     R.pickGuessCooldownTicks = 15;

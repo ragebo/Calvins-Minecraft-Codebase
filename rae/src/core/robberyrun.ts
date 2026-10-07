@@ -731,7 +731,16 @@ async function pickLoop(player: Player, run: Run, elementId: string): Promise<vo
             const after = liveTarget(run, elementId);
 
             if (!after) {
-                if (run.done.has(elementId)) tell(player, format("info", "Someone else got it open."));
+
+                // Why it is no longer up for a try: someone opened it, or someone else's misses jammed it while this form was open.
+                if (run.done.has(elementId)) {
+                    tell(player, format("info", "Someone else got it open."));
+                } else {
+                    const gone = getRobbery(run.id);
+                    const element = gone ? findElement(gone, elementId) : undefined;
+                    if (!run.ended && element && stateOf(run, element, system.currentTick) === "jammed") deny(player, "the lock is jammed");
+                }
+
                 return;
             }
 
