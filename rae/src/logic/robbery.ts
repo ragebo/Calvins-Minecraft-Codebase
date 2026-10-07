@@ -304,6 +304,9 @@ const SECOND_SETTINGS: readonly SettingKey[] = ["cooldownSeconds", "timeLimitSec
 const FLAG_SETTINGS: readonly SettingKey[] = ["autoStart", "exclusive", "roundOnly", "protect", "outlawsOnly"];
 export const SETTING_KEYS: readonly SettingKey[] = [...FLAG_SETTINGS, ...SECOND_SETTINGS];
 
+/** True for the settings that are on or off; the rest are a whole number of seconds. */
+export const isFlagSetting = (key: SettingKey): boolean => FLAG_SETTINGS.includes(key);
+
 function validateSettings(raw: unknown): Result<Settings> {
 
     if (typeof raw !== "object" || raw === null) return bad("settings are missing");
