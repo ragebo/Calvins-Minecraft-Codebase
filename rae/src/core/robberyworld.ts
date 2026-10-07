@@ -327,6 +327,35 @@ export function fillChest(dimension: string, cells: readonly Pos[], table: strin
 }
 
 /**
+ * The chest right beside this one (north, south, east or west, same type): most likely the other half of a double chest.
+ * Undefined when there is none, or more than one (then it cannot be told which).
+ */
+export function neighbourChest(dimension: string, pos: Pos): Pos | undefined {
+
+    const type = typeAt(dimension, pos);
+    if (type === undefined) return undefined;
+
+    const found: Pos[] = [];
+
+    for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]] as const) {
+        const next: Pos = [pos[0] + dx, pos[1], pos[2] + dz];
+        if (typeAt(dimension, next) === type) found.push(next);
+    }
+
+    return found.length === 1 ? found[0] : undefined;
+}
+
+/** Whether the game has a loot table at this path (this pack's and the game's own are both visible). Undefined if it cannot be asked. */
+export function lootTableExists(path: string): boolean | undefined {
+
+    try {
+        return world.getLootTableManager().getLootTable(path) !== undefined;
+    } catch {
+        return undefined;
+    }
+}
+
+/**
  * Takes everything out of a chest element's blocks. True when every block is now empty or is no longer a container;
  * false when one could not be reached (try again later). Whatever was in the chest is removed, the builder's own items
  * too: a bound chest holds only what the robbery puts in it.

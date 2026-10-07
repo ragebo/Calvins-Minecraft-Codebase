@@ -449,6 +449,8 @@ export const ROBBERY = {
     pickGuessCooldownTicks: 15,
     /** How long a "locked" or "jammed" line stays on the action bar (ticks). */
     noticeTicks: 50,
+    /** How long the builder's wand waits for the click a menu asked for (a corner of the area, a block to bind), in seconds. */
+    pendingSeconds: 60,
     /** What each moment sounds like. The ping's pitch comes from the guess (see the pick settings above). */
     cues: {
         denied: { id: "note.bass", volume: 0.8, pitch: 0.7 },

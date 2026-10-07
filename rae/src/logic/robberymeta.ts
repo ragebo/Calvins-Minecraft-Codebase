@@ -303,6 +303,25 @@ export function parseSettingValue(key: SettingKey, text: string): Result<boolean
 }
 
 // ---------------------------------------------------------------------------------------------------------
+// Ids
+// ---------------------------------------------------------------------------------------------------------
+
+/**
+ * A robbery id made from a name: "Saint Diego Bank!" becomes "saint_diego_bank". At most maxIdLength characters, always
+ * starting with a letter; empty when nothing usable is left (the caller asks for an id instead).
+ */
+export function slugify(text: string): string {
+
+    const slug = text.toLowerCase()
+        .replace(/[^a-z0-9]+/g, "_")
+        .replace(/^[0-9_]+/, "")
+        .slice(0, R.maxIdLength)
+        .replace(/_+$/, "");
+
+    return slug;
+}
+
+// ---------------------------------------------------------------------------------------------------------
 // Loot
 // ---------------------------------------------------------------------------------------------------------
 
