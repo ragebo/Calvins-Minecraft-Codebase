@@ -35,6 +35,9 @@ import { format, tell } from "./ui.js";
 const SOURCE = "robbery";
 
 const ok = (text: string): string => format("ok", text);
+
+/** The title of a screen about one thing: "Bank: settings". */
+const heading = (name: string, what: string): string => `${name}: ${what}`;
 const warn = (text: string): string => format("warn", text);
 
 // ---------------------------------------------------------------------------------------------------------
@@ -285,7 +288,7 @@ async function settingsForm(player: Player, id: string): Promise<Step> {
     const robbery = getRobbery(id);
     if (!robbery) return;
 
-    const answers = await ask(player, `${robbery.name}: settings`, settingsFields(robbery.settings));
+    const answers = await ask(player, heading(robbery.name, "settings"), settingsFields(robbery.settings));
     if (!answers) return;
 
     report(player, applyEdit(id, (current) => setSettings(current, settingsFromAnswers(answers))), "Settings saved.");
@@ -325,7 +328,7 @@ async function areaScreen(player: Player, id: string): Promise<Step> {
 
         const area = robbery.area ? `${robbery.area.min.join(", ")}  to  ${robbery.area.max.join(", ")}` : "not set";
 
-        return { title: `${robbery.name}: area`, body: `The area is where "everyone in the area" is counted, and what the empty-area fail watches.\n§7Now: §f${area}`, actions };
+        return { title: heading(robbery.name, "area"), body: `The area is where "everyone in the area" is counted, and what the empty-area fail watches.\n§7Now: §f${area}`, actions };
     });
 }
 
@@ -339,7 +342,7 @@ async function hooksScreen(player: Player, id: string): Promise<Step> {
         const names: Record<HookName, string> = { start: "When it starts", win: "When it is won", fail: "When it fails" };
 
         return {
-            title: `${robbery.name}: effects`,
+            title: heading(robbery.name, "effects"),
             body: "What happens at the start, and at the end, of the whole robbery.",
             actions: [...HOOK_NAMES.map((hook): Action => ({ label: `${names[hook]} (${robbery.hooks[hook].length})`, run: () => effectsScreen(player, id, { kind: "hook", hook }) })), BACK]
         };
@@ -369,7 +372,7 @@ async function runControls(player: Player, id: string): Promise<Step> {
             BACK
         ];
 
-        return { title: `${robbery.name}: run it`, body: statusLine(id), actions };
+        return { title: heading(robbery.name, "run it"), body: statusLine(id), actions };
     });
 }
 
@@ -393,7 +396,7 @@ async function elementsScreen(player: Player, id: string): Promise<Step> {
         ];
 
         return {
-            title: `${robbery.name}: elements`,
+            title: heading(robbery.name, "elements"),
             body: robbery.elements.length === 0
                 ? "None yet. Close this and right-click a door, chest, button, lever or plate with the wand to bind it."
                 : "Pick one to change it. To add another, right-click a block with the wand.",
@@ -497,7 +500,7 @@ async function locksScreen(player: Player, robberyId: string, elementId: string)
         actions.push(BACK);
 
         return {
-            title: `${element.name}: locks`,
+            title: heading(element.name, "locks"),
             body: element.locks.length === 0
                 ? "No locks. Touched with nothing in the way, it opens at once (once what it waits for is done)."
                 : `${element.locks.map(describeLock).join("\n")}\n§7All of them must be passed.`,
@@ -512,7 +515,7 @@ async function lockForm(player: Player, robberyId: string, elementId: string, ki
     if (!element) return;
 
     const current = element.locks.find((lock) => lock.kind === kind);
-    const answers = await ask(player, `${element.name}: ${LOCK_LABELS[kind].toLowerCase()}`, lockFields(kind, current));
+    const answers = await ask(player, heading(element.name, LOCK_LABELS[kind].toLowerCase()), lockFields(kind, current));
     if (!answers) return;
 
     const raw = lockFromAnswers(kind, answers);
@@ -535,7 +538,7 @@ async function requirementsForm(player: Player, robberyId: string, elementId: st
         return;
     }
 
-    const answers = await ask(player, `${element.name}: waits for`, others.map((other): Field => ({ kind: "toggle", key: other.id, label: `Waits for ${other.name}`, value: element.req.includes(other.id) })));
+    const answers = await ask(player, heading(element.name, "waits for"), others.map((other): Field => ({ kind: "toggle", key: other.id, label: `Waits for ${other.name}`, value: element.req.includes(other.id) })));
     if (!answers) return;
 
     const req = others.filter((other) => answers[other.id] === true).map((other) => other.id);
@@ -560,7 +563,7 @@ function effectsOf(robbery: Robbery, target: Target): readonly Effect[] | undefi
 
 function titleOf(robbery: Robbery, target: Target): string {
 
-    if (target.kind === "hook") return `${robbery.name}: ${target.hook === "start" ? "when it starts" : target.hook === "win" ? "when it is won" : "when it fails"}`;
+    if (target.kind === "hook") return heading(robbery.name, target.hook === "start" ? "when it starts" : target.hook === "win" ? "when it is won" : "when it fails");
 
     return `${findElement(robbery, target.element)?.name ?? "Element"}: ${target.kind === "done" ? "when it is done" : "when its lock jams"}`;
 }
@@ -632,7 +635,7 @@ async function lootForm(player: Player, robberyId: string, elementId: string): P
     const element = findElementOf(robberyId, elementId);
     if (!element || element.kind !== "chest") return;
 
-    const answers = await ask(player, `${element.name}: loot`, [
+    const answers = await ask(player, heading(element.name, "loot"), [
         { kind: "text", key: "table", label: "A loot table to roll (blank: none)", placeholder: "chests/gold_2", value: element.table ?? "" },
         { kind: "text", key: "items", label: "Items to add on top: item amount, item amount", placeholder: "minecraft:diamond 2, minecraft:emerald 5", value: formatItemList(element.items) }
     ]);
@@ -677,7 +680,7 @@ async function blocksScreen(player: Player, robberyId: string, elementId: string
 
         actions.push(BACK);
 
-        return { title: `${element.name}: blocks`, body: `Now at: ${element.cells.map((c) => c.join(", ")).join("  |  ")}`, actions };
+        return { title: heading(element.name, "blocks"), body: `Now at: ${element.cells.map((c) => c.join(", ")).join("  |  ")}`, actions };
     });
 }
 
@@ -702,7 +705,7 @@ export function openAddElement(player: Player, robberyId: string, pos: Pos, bloc
             { value: "switch", label: "A switch or keypad: a button, lever or plate to work" }
         ];
 
-        const answers = await ask(player, `${robbery.name}: bind a block`, [
+        const answers = await ask(player, heading(robbery.name, "bind a block"), [
             { kind: "choice", key: "kind", label: `Bind ${itemLabel(blockType)} at ${pos.join(", ")} as...`, options: kinds, value: suggested },
             { kind: "text", key: "name", label: "Its name (blank: a default like Door 3)", placeholder: "Vault door", value: "" },
             ...(twin ? [{ kind: "toggle", key: "twin", label: "Also bind the chest beside it (a double chest)", value: true } as const] : [])
