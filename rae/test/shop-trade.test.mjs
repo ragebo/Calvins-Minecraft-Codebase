@@ -215,6 +215,19 @@ test("a sale that names no custom name takes the kind however it is named, and o
     done();
 });
 
+test("a sale made from an enchanted item takes a plain one of that kind: a cost never asks for enchantments", () => {
+    const p = setup(0);
+    const enchanted = stack("minecraft:bow", 1, (s) => s.getComponent("minecraft:enchantable").addEnchantment({ type: fakeApi.EnchantmentTypes.get("minecraft:flame"), level: 1 }));
+    const sell = deal(L.sellDeal(items.specOf(enchanted), 30));
+
+    give(p, stack("minecraft:bow", 1));
+    const result = trade.carryOutTrade(p, sell);
+
+    assert.equal(result.ok, true, JSON.stringify(result));
+    assert.equal(coinsOf(p), 30);
+    assert.equal(countIn(p, "minecraft:bow"), 0);
+});
+
 test("trading item for item, with coins on top", () => {
     const p = setup(50);
     const { check, done } = checks();

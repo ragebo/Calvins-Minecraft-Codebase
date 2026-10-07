@@ -347,6 +347,18 @@ on those measurements and covered by the tests; `docs/test-cards/ROBBERY-VAULT.m
 the real game can answer. Later phases add breakable walls, guard spawners, zones, a placed-block lock and the full
 Saint Diego Bank; fort, ranch and train migrate behind their existing ids after that.
 
+### NPC shops
+
+Setting up an NPC shop by hand means typing a chain of commands into each button of the NPC editor, and each command succeeds or fails on its own: a button that charges and then fails to give, or gives and never charges (about 8 of the 72 priced buttons in the owner's main world do). The shop system replaces that with data and a screen. The NPC only carries a shop id, and a purchase is one function that checks everything and then moves it, all or nothing.
+
+**A deal.** A shop is a list of deals, and a deal is a cost (coins, items, both, or nothing) and what the player gets (items, or coins): *buy* (coins for goods), *sell* (items for coins), *trade* (items, maybe coins, for goods) and *gift*. Items keep their name, lore, enchantments and, for a potion, which one; a cost asks only for the kind (and its name and potion), never enchantments. Stock is unlimited. A full bag still delivers: the goods drop at the player's feet.
+
+**Building one.** `/rae:shop_new Habiti` puts an NPC in front of you. Hold an item and `/rae:shop_sell 60` (the NPC sells it, the whole stack, for 60 coins), `/rae:shop_buy 8` (the NPC buys it from players for 8) or `/rae:shop_trade` (a small form: players hand over an item from your bag, maybe with coins, for what you hold). The same from screens: click the NPC with the robbery wand, or `/rae:shop_edit`; an operator who sneaks and clicks gets the game's own NPC screen, where its skin is changed. A shop can be copied to a new NPC (`/rae:shop_copy`), its NPC brought to you (`/rae:shop_place`), renamed, given a greeting, and deleted and undone (`/rae:shop_delete <shop> true`, `/rae:shop_undo`). The wand clicked on a plain NPC offers to make it a shop. A command means the shop you name, else the NPC you are looking at, else the last one you worked on. All thirteen `rae:shop_*` commands are operator-only. Coins are the `coins` scoreboard objective the rest of the game uses; a deal says so if it is missing.
+
+**Reaching the shop.** A click on a shop NPC cancels the game's own dialogue and opens the shop (one screen), or, with `shop.interceptClicks` off, the NPC shows its dialogue with one button that runs `/scriptevent rae:npc shop`. Which of the two the real game honours is what the probe measures (`/scriptevent rae:npc_probe`, `docs/test-cards/NPC-PROBE.md`); `/rae:config_set_bool shop.interceptClicks false` switches route in the game with no redeploy.
+
+**Status.** Built and covered by the tests, none of it yet run in the real game: `docs/test-cards/NPC-PROBE.md` first (about ten minutes), then `docs/test-cards/NPC-SHOP.md`. Later phases: dialogue pages (a guidebook as data on one NPC instead of dozens), services (heal, teleport, a tame horse), conditions (law or outlaw), then quests that connect NPCs and robberies. The plan is in the owner's plans folder (`npc-shops-and-quests.md`).
+
 ### Tumbleweeds
 
 Purely ambient: `bountysys:tumbleweed`s roll across desert ground, nudged along by a steady "world

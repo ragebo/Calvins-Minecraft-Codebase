@@ -145,6 +145,16 @@ test("a cost never asks for enchantments or lore, only the kind, the amount, the
     assert.deepEqual(shop.costSpec(sword), { type: "minecraft:iron_sword", amount: 1 });
 });
 
+test("a deal made from what a builder holds asks for the kind, never its enchantments or lore, but hands over all of it", () => {
+    const { check, done } = checks();
+    const held = { type: "minecraft:bow", amount: 1, name: "Billy's Bow", lore: ["Fast"], enchants: [["minecraft:flame", 1]] };
+
+    check("a sale asks for the bow by name only", JSON.stringify(shop.sellDeal(held, 10).cost.items[0]) === JSON.stringify({ type: "minecraft:bow", amount: 1, name: "Billy's Bow" }), JSON.stringify(shop.sellDeal(held, 10).cost.items[0]));
+    check("so does a trade", JSON.stringify(shop.swapDeal(diamond, [held]).cost.items[0]) === JSON.stringify({ type: "minecraft:bow", amount: 1, name: "Billy's Bow" }));
+    check("a purchase hands over the whole thing", JSON.stringify(shop.buyDeal(held, 10).rewards[0].item) === JSON.stringify(held));
+    done();
+});
+
 test("which stacks a spec accepts", () => {
     const { check, done } = checks();
     check("the same kind matches", shop.specMatches(gold, { type: "minecraft:gold_ingot" }));

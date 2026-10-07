@@ -172,6 +172,18 @@ test("one click reported twice is one screen, and a later click opens it again",
     done();
 });
 
+test("a wand click reported twice opens the builder once, without telling the builder to close a menu they never opened", async () => {
+    const { op, npc } = setup();
+    script(close, close);
+
+    click(op, npc, ROBBERY.wandItemId);
+    click(op, npc, ROBBERY.wandItemId);
+    await afterClick();
+
+    assert.equal(ui.shown.length, 1, String(ui.shown.length));
+    assert.ok(!op.messages.map(strip).some((m) => /Finish or close the menu/.test(m)), op.messages.map(strip).join(" | "));
+});
+
 test("a click on the NPC of a shop that has been deleted says the shop has closed", async () => {
     const { ada, npc } = setup();
     store.deleteShop("habiti");
