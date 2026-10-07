@@ -5,7 +5,7 @@ A measurement, not a feature. The NPC shops (`/rae:shop_*`, see `NPC-SHOP.md`) h
 before any script sees it. This card records the facts first. Two live switches, `shop.interceptClicks` and
 `shop.useDialogueScene`, are then set from the answers with no redeploy. About ten minutes.
 
-- Behavior pack **0.1.43**, resource pack unchanged (1.0.27). BP only: no world needs to be open to deploy it, but a fresh launch
+- Behavior pack **0.2.0**, resource pack unchanged (1.0.27). BP only: no world needs to be open to deploy it, but a fresh launch
   is the safest way to be sure the new scripts and the new `dialogue/` folder are what you are running.
 - Operators only. Run it in your test world (RAE2) as an operator. For step 9 you also want a second account that is NOT an operator.
 - Everything is written to the content log as lines starting `[npc-probe]`; the findings are the `RESULT` lines. Turn the game off (or

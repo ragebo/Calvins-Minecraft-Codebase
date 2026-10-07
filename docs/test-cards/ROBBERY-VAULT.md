@@ -6,9 +6,9 @@ itself, a lockbox with a price and a lock, a payout, and a site that puts itself
 command chains. Phase 0 (`ROBBERY-SPIKE.md`) measured how the real game reports and cancels right-clicks; this is the
 first thing built on those answers, so most of this card is "does the real game agree with what the tests assumed".
 
-- Behavior pack **0.1.42**, resource pack unchanged (1.0.27). BP only: no world needs to be open to deploy it, but a
-  fresh launch is the safest way to be sure the new scripts are what you are running.
-- **0.1.42 is the fix round after the first run of this card (0.1.41).** The first run found: the menu did not open from a
+- Behavior pack **0.2.0** (it contains the 0.1.42 fix round below), resource pack unchanged (1.0.27). BP only: no world needs to
+  be open to deploy it, but a fresh launch is the safest way to be sure the new scripts are what you are running.
+- **0.1.42 (shipped inside 0.2.0) is the fix round after the first run of this card (0.1.41).** The first run found: the menu did not open from a
   right-click in the air (it opens from a left-click in the air, or sneak plus right-click on any block now; both are
   events the game is known to send); a refusal such as "this robbery is not finished" was cut off on the action bar (it is one
   short line now, and a builder gets the whole reason in chat); the builder view's marker for a chest was inside the chest (it

@@ -6,7 +6,7 @@ all or nothing (the coins and the goods move together, or nothing does). Run `NP
 ways a click reaches the shop works in the real game, and step 1 here applies the answer. Most of this card is "does the real game
 agree with what the tests assumed".
 
-- Behavior pack **0.1.43**, resource pack unchanged (1.0.27). BP only; a fresh launch is the safest way to be sure the new scripts
+- Behavior pack **0.2.0**, resource pack unchanged (1.0.27). BP only; a fresh launch is the safest way to be sure the new scripts
   are what you are running.
 - Run it as an operator in your test world (RAE2), on flat ground. `/scoreboard objectives add coins dummy` first if the world
   has no `coins` objective: a deal that uses coins says so and refuses until it exists.
