@@ -79,6 +79,21 @@ export function rightClick(player) {
 }
 
 /**
+ * A right-click on a block, as the "before" event reports it (the engine's own: it repeats every tick while the button is
+ * held, with isFirstEvent false after the first). `pos` is [x, y, z]; `held` is the type id of what the player holds. Answers
+ * the event, so a test can read what a handler did to it (`cancel`).
+ */
+export function useBlock(player, pos, { held, first = true, face = "Up", dimension = "overworld" } = {}) {
+    const block = fake.dimension(dimension).getBlock({ x: pos[0], y: pos[1], z: pos[2] });
+    const event = {
+        player, block, blockFace: face, faceLocation: { x: 0.5, y: 1, z: 0.5 }, isFirstEvent: first,
+        itemStack: held === undefined ? undefined : { typeId: held }, cancel: false
+    };
+    world.beforeEvents.playerInteractWithBlock.emit(event);
+    return event;
+}
+
+/**
  * Presses Q with the held item: it drops as an item entity, its slot empties, and the arm swings with source
  * DropItem, in that order and in one tick. Returns the dropped item entity.
  */
