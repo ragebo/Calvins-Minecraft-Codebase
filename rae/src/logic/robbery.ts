@@ -143,7 +143,7 @@ export interface SwitchElement extends ElementBase {
 export type Element = DoorElement | ChestElement | SwitchElement;
 
 export interface Settings {
-    /** Touching an element nothing is waiting on starts the robbery by itself. */
+    /** Touching an element that waits on nothing (one with no requirements) starts the robbery by itself. */
     readonly autoStart: boolean;
     /** Takes the director's one slot, so it cannot run beside the fort, ranch or train. */
     readonly exclusive: boolean;
@@ -153,10 +153,11 @@ export interface Settings {
     /** How long after it ends the site is put back. */
     readonly resetAfterSeconds: number;
     readonly roundOnly: boolean;
-    /** Players cannot break or blow up a block an element is bound to while it is armed (operators can). */
+    /** Players cannot break or blow up a block an element is bound to, running or not (operators can). */
     readonly protect: boolean;
     /** Fails when nobody has been inside the area for this long. 0 means never. */
     readonly failWhenEmptySeconds: number;
+    /** Only outlaws can work the elements and count as being inside the area. Off: any player can. */
     readonly outlawsOnly: boolean;
 }
 
@@ -830,6 +831,12 @@ export const dependentsOf = (robbery: Robbery, id: string): readonly Element[] =
 
 const KIND_LABELS: Record<ElementKind, string> = { door: "Door", chest: "Chest", switch: "Switch" };
 export const kindLabel = (kind: ElementKind): string => KIND_LABELS[kind];
+
+/** An item id as a player would say it: "minecraft:iron_pickaxe" becomes "iron pickaxe". */
+export function itemLabel(typeId: string): string {
+    const colon = typeId.indexOf(":");
+    return (colon === -1 ? typeId : typeId.slice(colon + 1)).replace(/_/g, " ");
+}
 
 function uniqueName(robbery: Robbery, base: string): string {
 

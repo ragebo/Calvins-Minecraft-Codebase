@@ -44,10 +44,13 @@ export function bank(id = "bank", extra = {}) {
     return { r, keypad: keypad.element, door: door.element, box: box.element };
 }
 
+/** A block position as the fake wants it: { x, y, z }. */
+export const at = ([x, y, z]) => ({ x, y, z });
+
 /** Puts the bank's blocks in the fake world: a button, an iron door (two halves) and a chest. */
 export function buildSite(dimension = "overworld") {
-    fake.placeBlock(dimension, SITE.keypad, "minecraft:stone_button");
-    fake.placeBlock(dimension, SITE.doorLow, "minecraft:iron_door", { upper_block_bit: false });
-    fake.placeBlock(dimension, SITE.doorHigh, "minecraft:iron_door", { upper_block_bit: true });
-    fake.placeBlock(dimension, SITE.box, "minecraft:chest");
+    fake.placeBlock(dimension, at(SITE.keypad), "minecraft:stone_button");
+    fake.placeBlock(dimension, at(SITE.doorLow), "minecraft:iron_door", { upper_block_bit: false });
+    fake.placeBlock(dimension, at(SITE.doorHigh), "minecraft:iron_door", { upper_block_bit: true });
+    fake.placeBlock(dimension, at(SITE.box), "minecraft:chest");
 }

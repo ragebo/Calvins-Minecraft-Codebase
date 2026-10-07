@@ -438,6 +438,27 @@ export const ROBBERY = {
     pickPitchFloor: 0.5,
     pickPitchSpread: 1.5,
 
+    // ---- Running one. One shared loop looks at every robbery's timers, delayed effects and the site janitor.
+    /** How often that loop runs (ticks). Delays and limits are in whole seconds, so a quarter second is plenty. */
+    tickEvery: 5,
+    /** How often it counts who is inside a robbery's area (ticks). */
+    areaCheckEvery: 20,
+    /** How often the janitor looks for blocks still waiting to be put back (ticks). */
+    janitorEvery: 20,
+    /** A player's pick guesses closer together than this (ticks) are ignored, so the slider cannot be mashed. */
+    pickGuessCooldownTicks: 15,
+    /** How long a "locked" or "jammed" line stays on the action bar (ticks). */
+    noticeTicks: 50,
+    /** What each moment sounds like. The ping's pitch comes from the guess (see the pick settings above). */
+    cues: {
+        denied: { id: "note.bass", volume: 0.8, pitch: 0.7 },
+        ping: { id: "random.orb", volume: 1 },
+        hit: { id: "random.levelup", volume: 1, pitch: 1 },
+        done: { id: "random.anvil_use", volume: 0.8, pitch: 1.2 },
+        jam: { id: "random.break", volume: 1, pitch: 0.8 },
+        start: { id: "block.bell.hit", volume: 1.4, pitch: 0.8 }
+    },
+
     /** Probe: `cancel on` switches itself off after this long (ticks), so a forgotten flag can never leave chests unopenable. */
     probeCancelAutoOffTicks: 2400,
     /** Probe: how long after a right-click the outcome (door swung? container opened?) is judged (ticks). */

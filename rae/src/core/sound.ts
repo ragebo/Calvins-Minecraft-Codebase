@@ -1,4 +1,4 @@
-import { system, type Player, type Vector3 } from "@minecraft/server";
+import { system, type Dimension, type Player, type Vector3 } from "@minecraft/server";
 import { error } from "./log.js";
 
 /**
@@ -75,6 +75,18 @@ export function playFor(player: Player, cue: SoundCue): void {
 export function playAt(player: Player, cue: SoundCue, at?: Vector3): void {
     try {
         player.dimension.playSound(cue.id, at ?? player.location, soundOptions(cue));
+    } catch (err) {
+        reportBadCue(cue, err);
+    }
+}
+
+/**
+ * Positional with no player at all: everyone near `at` in `dimension` hears it. For a sound that belongs to a place
+ * (a vault door swinging open) and not to someone, so it can be played when nobody in particular caused it.
+ */
+export function playAtPoint(dimension: Dimension, cue: SoundCue, at: Vector3): void {
+    try {
+        dimension.playSound(cue.id, at, soundOptions(cue));
     } catch (err) {
         reportBadCue(cue, err);
     }
