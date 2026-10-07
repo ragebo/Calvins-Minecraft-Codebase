@@ -1,5 +1,5 @@
 import { system, type Player } from "@minecraft/server";
-import { FormCancelationReason } from "@minecraft/server-ui";
+import { FormCancelationReason, MessageFormData } from "@minecraft/server-ui";
 import { MENU } from "../config/balance.js";
 import { warn } from "./log.js";
 
@@ -58,4 +58,15 @@ export async function showForm<R extends Response>(player: Player, form: Showabl
     }
 
     return undefined;
+}
+
+/**
+ * A yes-or-no question. True only when the player picked the yes button: closing the form, a busy player and a form that
+ * could not be shown all count as no, so a careless dismissal can never confirm something destructive.
+ */
+export async function confirmForm(player: Player, title: string, body: string, yes: string, no = "Cancel"): Promise<boolean> {
+
+    const response = await showForm(player, new MessageFormData().title(title).body(body).button1(no).button2(yes));
+
+    return response !== undefined && !response.canceled && response.selection === 1;
 }

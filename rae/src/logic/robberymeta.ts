@@ -104,6 +104,13 @@ export function readAnswers(fields: readonly Field[], values: readonly unknown[]
     return ok(answers);
 }
 
+/** "it is closed" -> "It is closed." For turning a reason into a line a player reads. */
+export function sentence(text: string): string {
+    const trimmed = text.trim();
+    const capital = trimmed.charAt(0).toUpperCase() + trimmed.slice(1);
+    return /[.!?]$/.test(capital) ? capital : `${capital}.`;
+}
+
 // ---------------------------------------------------------------------------------------------------------
 // The choices
 // ---------------------------------------------------------------------------------------------------------

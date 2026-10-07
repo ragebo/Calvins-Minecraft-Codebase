@@ -2,6 +2,7 @@ import { system, type Container, type Player, type Vector3 } from "@minecraft/se
 import { ModalFormData } from "@minecraft/server-ui";
 import { ROBBERY as R } from "../config/balance.js";
 import { FRESH_PICK, pickStep, type PickCurve, type PickParams, type PickState } from "../logic/lockpick.js";
+import { sentence } from "../logic/robberymeta.js";
 import {
     boxContains, findElement, itemLabel, sameDimension, whyNotRunnable,
     type Audience, type Effect, type Element, type Lock, type PickLock, type Pos, type RewardEffect, type Robbery, type SayEffect
@@ -49,13 +50,6 @@ const center = (pos: Pos): Vector3 => ({ x: pos[0] + 0.5, y: pos[1] + 0.5, z: po
 export function clock(totalSeconds: number): string {
     const whole = Math.max(0, Math.ceil(totalSeconds));
     return `${Math.floor(whole / 60)}:${String(whole % 60).padStart(2, "0")}`;
-}
-
-/** "it is closed" -> "It is closed." */
-function sentence(text: string): string {
-    const trimmed = text.trim();
-    const capital = trimmed.charAt(0).toUpperCase() + trimmed.slice(1);
-    return /[.!?]$/.test(capital) ? capital : `${capital}.`;
 }
 
 // ---------------------------------------------------------------------------------------------------------
