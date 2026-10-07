@@ -52,7 +52,8 @@ This targets a very recent Bedrock build (`1.26.x`); schemas and APIs drift, and
 
 Known gotchas (details in `README.md`):
 - In an `entityDie` handler the dead entity can already be invalid: `hasTag()` throws `InvalidEntityError`. `typeId`, `id` and `scoreboardIdentity` still work. Guard with `isValid`.
-- Item dynamic properties are refused on stackable items (every custom item counts), so per-item state lives in Maps for now.
+- Item dynamic properties are refused on stackable items, but a custom item with `"minecraft:max_stack_size": 1` accepts them (measured 2026-10-06 on `bountysys:robbery_wand`); the guns still keep per-item state in Maps.
+- Block interaction (measured 2026-10-06, `docs/test-cards/ROBBERY-SPIKE.md`): `world.beforeEvents.playerInteractWithBlock` fires for every right-click on any block and `cancel = true` stops containers, levers, buttons and doors; it repeats while the button is held, so gate on `isFirstEvent`. The after event only fires when the interaction does something. A before-event or custom-command callback is restricted: `spawnEntity`, `runCommand`, `setPermutation`, `spawnParticle` and `addTag` throw there, so defer world changes with `system.run` (`sendMessage`, dynamic properties, `getLootTable` and `getBlock` are fine).
 - `Dimension.playSound` throws for pitch < 0.01 or volume < 0.
 - The game's font has no arrow or geometric-shape glyphs; use ASCII plus `« »`.
 - Player-list queries (`getAllPlayers`, `getPlayers`) cost real time per call; prefer one shared snapshot per tick.

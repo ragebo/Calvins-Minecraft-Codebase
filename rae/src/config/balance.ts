@@ -392,6 +392,47 @@ export const ROBBERY = {
     /** The builder wand. Must equal the identifier in your_pack_name_BP/items/robbery_wand.json (assets.test.mjs checks it). */
     wandItemId: "bountysys:robbery_wand",
 
+    // ---- What one robbery may hold. A whole robbery is saved as one world property, so size is the real limit.
+    maxRobberies: 12,
+    maxElements: 40,
+    maxEffectsPerList: 8,
+    maxLocks: 2,
+    /** Blocks one element may be bound to (a door is two halves, a double chest two chests, a bank of switches more). */
+    maxCells: 8,
+    /** The game's world border: no block position beyond this (either way, any axis) can exist. */
+    maxCoordinate: 30000000,
+    maxIdLength: 16,
+    maxNameLength: 24,
+    maxTextLength: 120,
+    maxItemStacks: 8,
+    /** A saved robbery longer than this many characters is refused up front, with nothing changed. */
+    maxSavedChars: 12000,
+
+    // ---- What a new robbery starts with. Every one is editable in game, per robbery.
+    defaultCooldownSeconds: 600,
+    defaultTimeLimitSeconds: 900,
+    defaultResetAfterSeconds: 60,
+    defaultFailWhenEmptySeconds: 30,
+    /** The longest any time setting or effect delay may be. */
+    maxSettingSeconds: 86400,
+    maxDelaySeconds: 120,
+    maxPayCoins: 100000,
+    maxRewardAmount: 100000,
+
+    // ---- The pick lock: the jailbreak's slider game, one per element. Defaults, and how far each may be turned.
+    pickHits: 2,
+    pickTolerance: 10,
+    pickStrikes: 3,
+    pickJamSeconds: 20,
+    maxPickHits: 10,
+    maxPickStrikes: 10,
+    maxPickJamSeconds: 600,
+    /** The slider runs 0 to this, and a miss pings higher the closer it was: pitch = floor + (1 - distance / range) * spread. */
+    pickSliderMax: 100,
+    pickProximityRange: 50,
+    pickPitchFloor: 0.5,
+    pickPitchSpread: 1.5,
+
     /** Probe: `cancel on` switches itself off after this long (ticks), so a forgotten flag can never leave chests unopenable. */
     probeCancelAutoOffTicks: 2400,
     /** Probe: how long after a right-click the outcome (door swung? container opened?) is judged (ticks). */
