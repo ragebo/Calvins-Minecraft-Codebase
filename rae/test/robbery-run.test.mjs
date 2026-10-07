@@ -313,6 +313,23 @@ test("two players working one lock share its progress: one opens it while the ot
     done();
 });
 
+test("touching a lock twice in a row opens one form, not two", async () => {
+    setup();
+    const { check, done } = checks();
+    const ada = outlaw();
+
+    closeForm();
+    closeForm();
+    touch(ada, SITE.keypad);                    // the first touch starts the robbery and opens the slider
+    touch(ada, SITE.keypad);                    // a double click: the slider is already up for her
+    await settle();
+
+    check("one form was shown", fakeUi.uiFake.shown.length === 1, String(fakeUi.uiFake.shown.length));
+    check("and she can open it again once it is closed", (() => { closeForm(); touch(ada, SITE.keypad); return fakeUi.uiFake.shown.length === 2; })());
+    await settle();
+    done();
+});
+
 test("guesses faster than the cooldown are not scored, so the slider cannot be mashed", async () => {
     setup();
     R.pickGuessCooldownTicks = 15;

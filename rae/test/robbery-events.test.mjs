@@ -112,6 +112,25 @@ test("a held right-click repeats the event every tick, but only the first is a u
     done();
 });
 
+test("a held click on a sealed element is one refusal, not one per tick", () => {
+    setup();
+    const { check, done } = checks();
+    const ada = outlaw();
+
+    // The lockbox is sealed until the vault door is open. Each tick of a held click that was taken for a fresh use would
+    // post another refusal, so this is the thing that tells a first event from a repeat (a pick form would hide it: the
+    // run refuses to open two forms for one player).
+    Run.startRobbery("bank", { by: ada });
+    const events = [useBlock(ada, SITE.box, { first: true }), ...[1, 2, 3, 4].map(() => useBlock(ada, SITE.box, { first: false }))];
+    fake.advance(1);
+
+    const refusals = ada.actionBar.filter((m) => /sealed tight/.test(strip(m))).length;
+    check("every event is cancelled", events.every((e) => e.cancel === true));
+    check("but she was refused once", refusals === 1, String(refusals));
+    check("with one thud", ada.privateSounds.filter((s) => s.id === R.cues.denied.id).length === 1, String(ada.privateSounds.length));
+    done();
+});
+
 test("a chest that was unlocked this run is left to the game; before that it is cancelled", () => {
     setup();
     const { check, done } = checks();
