@@ -1,7 +1,7 @@
 import { ROBBERY as R } from "../config/balance.js";
 import { bareId, classOfBlockType, swingsOpen, type BlockClass } from "./blockclass.js";
 import {
-    AUDIENCES, CHANNELS, SETTING_KEYS, isFlagSetting, itemLabel, kindLabel,
+    AUDIENCES, CHANNELS, SETTING_KEYS, holdsLoot, isFlagSetting, itemLabel, kindLabel,
     type Audience, type Channel, type Effect, type EffectKind, type Element, type ElementKind, type Lock, type LockKind, type Result,
     type Robbery, type SettingKey, type Settings
 } from "./robbery.js";
@@ -385,6 +385,7 @@ export function suggestKind(blockClass: BlockClass): ElementKind {
 
     if (swingsOpen(blockClass)) return "door";
     if (blockClass === "container") return "chest";
+    if (blockClass === "frame") return "frame";
 
     return "switch";
 }
@@ -410,6 +411,10 @@ export function whyBlockCannotBe(kind: ElementKind, typeId: string): string | un
         return `${name} cannot hold loot: a ${kindLabel("chest")} element needs a chest, trapped chest, barrel or shulker box`;
     }
 
+    if (kind === "frame" && classOfBlockType(typeId) !== "frame") {
+        return `${name} is not an item frame: a ${kindLabel("frame")} element needs an item frame or a glow item frame`;
+    }
+
     return undefined;
 }
 
@@ -417,7 +422,7 @@ export function whyBlockCannotBe(kind: ElementKind, typeId: string): string | un
 // Reading a robbery
 // ---------------------------------------------------------------------------------------------------------
 
-const KIND_NOUNS: Record<ElementKind, string> = { door: "door", chest: "chest", switch: "switch" };
+const KIND_NOUNS: Record<ElementKind, string> = { door: "door", chest: "chest", switch: "switch", frame: "item frame" };
 
 export const nounOf = (kind: ElementKind): string => KIND_NOUNS[kind];
 
@@ -434,7 +439,7 @@ export function describeElement(robbery: Robbery, element: Element): string[] {
         `§7Waits for: §f${needs.length > 0 ? needs.join(", ") : "nothing (it can start the robbery)"}`
     ];
 
-    if (element.kind === "chest") {
+    if (holdsLoot(element)) {
         const loot = [element.table !== undefined ? `table ${element.table}` : "", element.items.length > 0 ? formatItemList(element.items) : ""].filter((p) => p.length > 0);
         lines.push(`§7Loot: §f${loot.length > 0 ? loot.join(" + ") : "none"}`);
     }

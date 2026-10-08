@@ -45,8 +45,8 @@ export type Channel = "chat" | "bar" | "title";
 export const AUDIENCES: readonly Audience[] = ["actor", "area", "outlaws", "law", "all"];
 export const CHANNELS: readonly Channel[] = ["chat", "bar", "title"];
 
-export type ElementKind = "door" | "chest" | "switch";
-export const ELEMENT_KINDS: readonly ElementKind[] = ["door", "chest", "switch"];
+export type ElementKind = "door" | "chest" | "switch" | "frame";
+export const ELEMENT_KINDS: readonly ElementKind[] = ["door", "chest", "switch", "frame"];
 
 export interface PickLock {
     readonly kind: "pick";
@@ -140,7 +140,26 @@ export interface SwitchElement extends ElementBase {
     readonly cells: readonly Pos[];
 }
 
-export type Element = DoorElement | ChestElement | SwitchElement;
+/**
+ * An item frame: what is in it can be stolen. Done means the thief has been given the loot and the frame has been emptied; the
+ * site being put back shows the item in it again. One block (an item frame or a glow item frame). The loot is what the thief
+ * receives, set here because a script cannot read what a frame shows: the builder puts the same item in the frame to be seen.
+ */
+export interface FrameElement extends ElementBase {
+    readonly kind: "frame";
+    readonly cells: readonly Pos[];
+    /** A loot table path such as "chests/gold_2", rolled when the frame is taken from. */
+    readonly table?: string;
+    /** Items the thief gets on top of the table: [item id, amount]. */
+    readonly items: readonly (readonly [string, number])[];
+}
+
+export type Element = DoorElement | ChestElement | SwitchElement | FrameElement;
+
+/** The elements that hold loot: a chest has it put in, a frame has it taken. */
+export type LootElement = ChestElement | FrameElement;
+
+export const holdsLoot = (element: Element): element is LootElement => element.kind === "chest" || element.kind === "frame";
 
 export interface Settings {
     /** Touching an element that waits on nothing (one with no requirements) starts the robbery by itself. */
@@ -467,7 +486,7 @@ function validateCells(raw: unknown, dimension: string, max: number): Result<Pos
 function validateItems(raw: unknown): Result<(readonly [string, number])[]> {
 
     if (!Array.isArray(raw)) return bad("the items must be a list");
-    if (raw.length > R.maxItemStacks) return bad(`a chest can be given at most ${R.maxItemStacks} kinds of item`);
+    if (raw.length > R.maxItemStacks) return bad(`a chest or a frame can be given at most ${R.maxItemStacks} kinds of item`);
 
     const items: (readonly [string, number])[] = [];
 
@@ -530,14 +549,16 @@ function validateElement(raw: unknown, dimension: string): Result<Element> {
         return good({ ...common, kind: "switch", cells: cells.value });
     }
 
-    if (raw["kind"] === "chest") {
-        const cells = validateCells(raw["cells"], dimension, 2);
+    if (raw["kind"] === "chest" || raw["kind"] === "frame") {
+        const isFrame = raw["kind"] === "frame";
+        const cells = validateCells(raw["cells"], dimension, isFrame ? 1 : 2);
         if (!cells.ok) return bad(`${name}: ${cells.reason}`);
         const table = validateTable(raw["table"]);
         if (!table.ok) return bad(`${name}: ${table.reason}`);
         const items = validateItems(raw["items"] ?? []);
         if (!items.ok) return bad(`${name}: ${items.reason}`);
-        return good({ ...common, kind: "chest", cells: cells.value, items: items.value, ...(table.value !== undefined ? { table: table.value } : {}) });
+        const loot = { cells: cells.value, items: items.value, ...(table.value !== undefined ? { table: table.value } : {}) };
+        return good(isFrame ? { ...common, kind: "frame", ...loot } : { ...common, kind: "chest", ...loot });
     }
 
     return bad(`${name}: unknown kind ${String(raw["kind"])}`);
@@ -687,8 +708,8 @@ export function validateRobbery(raw: unknown): Result<Robbery> {
 // The saved form: short keys. Only this section knows them.
 // ---------------------------------------------------------------------------------------------------------
 
-const KIND_CODES: Record<ElementKind, string> = { door: "dr", chest: "ch", switch: "sw" };
-const KIND_FROM_CODE: Record<string, ElementKind> = { dr: "door", ch: "chest", sw: "switch" };
+const KIND_CODES: Record<ElementKind, string> = { door: "dr", chest: "ch", switch: "sw", frame: "fr" };
+const KIND_FROM_CODE: Record<string, ElementKind> = { dr: "door", ch: "chest", sw: "switch", fr: "frame" };
 const RESULT_CODES = { win: "w", fail: "f" } as const;
 
 function storeLock(lock: Lock): Record<string, unknown> {
@@ -736,8 +757,8 @@ function storeElement(element: Element): Record<string, unknown> {
         ...(element.req.length > 0 ? { r: [...element.req] } : {}),
         ...(element.onDone.length > 0 ? { x: storeEffects(element.onDone) } : {}),
         ...(element.onFail.length > 0 ? { y: storeEffects(element.onFail) } : {}),
-        ...(element.kind === "chest" && element.table !== undefined ? { lt: element.table } : {}),
-        ...(element.kind === "chest" && element.items.length > 0 ? { it: element.items.map((i) => [i[0], i[1]]) } : {})
+        ...(holdsLoot(element) && element.table !== undefined ? { lt: element.table } : {}),
+        ...(holdsLoot(element) && element.items.length > 0 ? { it: element.items.map((i) => [i[0], i[1]]) } : {})
     };
 }
 
@@ -832,7 +853,7 @@ export const rootElements = (robbery: Robbery): readonly Element[] => robbery.el
 /** Elements that wait on this one. */
 export const dependentsOf = (robbery: Robbery, id: string): readonly Element[] => robbery.elements.filter((e) => e.req.includes(id));
 
-const KIND_LABELS: Record<ElementKind, string> = { door: "Door", chest: "Chest", switch: "Switch" };
+const KIND_LABELS: Record<ElementKind, string> = { door: "Door", chest: "Chest", switch: "Switch", frame: "Frame" };
 export const kindLabel = (kind: ElementKind): string => KIND_LABELS[kind];
 
 /** An item id as a player would say it: "minecraft:iron_pickaxe" becomes "iron pickaxe". */
@@ -950,7 +971,7 @@ export function updateElement(robbery: Robbery, id: string, patch: ElementPatch)
     const current = findElement(robbery, id);
     if (!current) return bad(`there is no element ${id}`);
 
-    if (current.kind !== "chest" && (patch.table !== undefined || patch.items !== undefined)) return bad("only a chest has loot");
+    if (!holdsLoot(current) && (patch.table !== undefined || patch.items !== undefined)) return bad("only a chest or an item frame has loot");
 
     const others = robbery.elements.filter((e) => e.id !== id);
     const wantedName = patch.name === undefined ? current.name : cleanName(patch.name);
@@ -1027,6 +1048,11 @@ export function whyNotRunnable(robbery: Robbery): string[] {
     for (const element of robbery.elements) {
         if (element.kind === "chest" && element.table === undefined && element.items.length === 0 && element.locks.length === 0 && element.req.length === 0) {
             problems.push(`"${element.name}": a chest with no loot, lock or requirement does nothing`);
+        }
+
+        // A frame hands out its loot when it is taken from: with none, and nothing set to happen when it is done, taking from it does nothing.
+        if (element.kind === "frame" && element.table === undefined && element.items.length === 0 && element.onDone.length === 0) {
+            problems.push(`"${element.name}": an item frame with no loot and nothing set to happen when it is done does nothing`);
         }
     }
 

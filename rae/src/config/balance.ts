@@ -476,6 +476,22 @@ export const ROBBERY = {
     /** The particle the view draws with. */
     viewParticle: "minecraft:endrod",
 
+    // ---- Item frames: what is in one can be stolen. A script can neither read nor set the item in a frame (it is a block, with no
+    // scripting API), so a frame is saved as a one-block structure when it is bound and put back from that. A punch on a frame pops
+    // its item out and cannot be stopped, only seen, so it is undone a moment later.
+    /** Saved frames are structures named this, then the robbery's id and the frame's position. */
+    frameStructurePrefix: "rae:rb_",
+    /** On: a punch on a bound frame is undone (the popped item is taken back, the frame put back) and counts as trying to take it. Off: punches are left to the game. */
+    guardFramePunches: true,
+    /** After a punch on a frame, the popped item is looked for and the frame put back this long after (ticks): the pop has happened by then. */
+    frameCleanupTicks: 2,
+    /** The popped item is looked for within this many blocks of the frame's centre. */
+    frameCleanupReach: 1.5,
+    /** An item that appeared up to this long before the punch was seen counts as part of it (ticks): the game may report either one first. */
+    frameRecentTicks: 4,
+    /** Punches on one frame by one player closer together than this (ticks) are one punch. */
+    frameHitGapTicks: 10,
+
     /** What each moment sounds like. The ping's pitch comes from the guess (see the pick settings above). */
     cues: {
         denied: { id: "note.bass", volume: 0.8, pitch: 0.7 },

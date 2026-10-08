@@ -2,7 +2,7 @@ import type { Player } from "@minecraft/server";
 import { ActionFormData, ModalFormData } from "@minecraft/server-ui";
 import { ROBBERY as R } from "../config/balance.js";
 import {
-    ELEMENT_KINDS, HOOK_NAMES, clearArea, findElement, itemLabel, setArea, setHook, setSettings, updateElement, whyNotRunnable,
+    ELEMENT_KINDS, HOOK_NAMES, clearArea, findElement, holdsLoot, itemLabel, setArea, setHook, setSettings, updateElement, whyNotRunnable,
     type Effect, type Element, type ElementKind, type HookName, type Lock, type LockKind, type Pos, type Robbery
 } from "../logic/robbery.js";
 import {
@@ -14,12 +14,12 @@ import { confirmForm, showForm } from "./forms.js";
 import { error } from "./log.js";
 import { registerSystem } from "./registry.js";
 import {
-    addElementAt, applyEdit, createRobbery, removeElementFrom, select, selectedRobbery, setPending, suggestedKind,
+    addElementAt, applyEdit, createRobbery, recaptureFrame, removeElementFrom, select, selectedRobbery, setPending, suggestedKind,
     type Pending
 } from "./robberyedit.js";
 import { clock, cooldownLeftSeconds, resetSiteNow, startRobbery, stopRobbery, viewOf } from "./robberyrun.js";
 import { deleteRobbery, getRobbery, listStored, undoAvailable, undoLast } from "./robberystore.js";
-import { lootTableExists, neighbourChest } from "./robberyworld.js";
+import { frameIsCaptured, lootTableExists, neighbourChest } from "./robberyworld.js";
 import { format, tell } from "./ui.js";
 
 /**
@@ -432,7 +432,8 @@ async function elementScreen(player: Player, robberyId: string, elementId: strin
             { label: `Waits for (${element.req.length})`, run: () => requirementsForm(player, robberyId, elementId) },
             { label: `When it is done (${element.onDone.length})`, run: () => effectsScreen(player, robberyId, { kind: "done", element: elementId }) },
             ...(hasPick ? [{ label: `When its lock jams (${element.onFail.length})`, run: () => effectsScreen(player, robberyId, { kind: "fail", element: elementId }) }] : []),
-            ...(element.kind === "chest" ? [{ label: "Loot", run: () => lootForm(player, robberyId, elementId) }] : []),
+            ...(holdsLoot(element) ? [{ label: "Loot", run: () => lootForm(player, robberyId, elementId) }] : []),
+            ...(element.kind === "frame" ? [{ label: "Save what the frame shows now", run: () => saveFrameNow(player, robberyId, elementId) }] : []),
             { label: "Change its blocks", run: () => blocksScreen(player, robberyId, elementId) },
             { label: "Delete it", run: async () => { if (await deleteElementConfirmed(player, robberyId, elementId)) return "back"; } },
             BACK
@@ -440,7 +441,12 @@ async function elementScreen(player: Player, robberyId: string, elementId: strin
 
         const state = view ? `\n§7Right now: §f${view.state}` : "";
 
-        return { title: element.name, body: `${describeElement(robbery, element).join("\n")}${state}`, actions };
+        // A frame is put back from a saved copy of what it shows; the builder should be able to see whether there is one.
+        const cell = element.kind === "frame" ? element.cells[0] : undefined;
+        const saved = cell ? frameIsCaptured(robbery.id, cell) : undefined;
+        const frame = cell ? `\n§7Saved copy of the frame: §f${saved === true ? "yes" : saved === false ? "NO (press \"Save what the frame shows now\")" : "unknown"}` : "";
+
+        return { title: element.name, body: `${describeElement(robbery, element).join("\n")}${frame}${state}`, actions };
     });
 }
 
@@ -634,10 +640,18 @@ async function effectForm(player: Player, robberyId: string, target: Target, ind
 // Loot and blocks
 // ---------------------------------------------------------------------------------------------------------
 
+/** Saves the frame as it is now, with the item it shows, to be what it is put back to after a theft. */
+async function saveFrameNow(player: Player, robberyId: string, elementId: string): Promise<Step> {
+
+    const saved = recaptureFrame(robberyId, elementId);
+
+    report(player, saved, "Saved. The frame will be put back looking like this.");
+}
+
 async function lootForm(player: Player, robberyId: string, elementId: string): Promise<Step> {
 
     const element = findElementOf(robberyId, elementId);
-    if (!element || element.kind !== "chest") return;
+    if (!element || !holdsLoot(element)) return;
 
     const answers = await ask(player, heading(element.name, "loot"), [
         { kind: "text", key: "table", label: "A loot table to roll (blank: none)", placeholder: "chests/gold_2", value: element.table ?? "" },
@@ -656,10 +670,14 @@ async function lootForm(player: Player, robberyId: string, elementId: string): P
     const table = String(answers["table"]);
     const saved = applyEdit(robberyId, (current) => updateElement(current, elementId, { table: table.length > 0 ? table : null, items: items.value }));
 
-    if (!report(player, saved, "Loot saved. It goes in the chest when the chest is unlocked, and out again when the site is put back.")) return;
+    const done = element.kind === "frame"
+        ? "Loot saved. It is what the thief is given when they take from the frame; put the same item in the frame so it can be seen, then press \"Save what the frame shows now\"."
+        : "Loot saved. It goes in the chest when the chest is unlocked, and out again when the site is put back.";
+
+    if (!report(player, saved, done)) return;
 
     if (table.length > 0 && lootTableExists(table) === false) {
-        tell(player, warn(`The game has no loot table called ${table}, so only the items you listed will be in the chest.`));
+        tell(player, warn(`The game has no loot table called ${table}, so only the items you listed will be ${element.kind === "frame" ? "given" : "in the chest"}.`));
     }
 }
 
@@ -679,7 +697,7 @@ async function blocksScreen(player: Player, robberyId: string, elementId: string
 
         const actions: Action[] = [{ label: "Move it: click the new block", run: ask("replace") }];
 
-        const most = element.kind === "switch" ? R.maxCells : 2;
+        const most = element.kind === "switch" ? R.maxCells : element.kind === "frame" ? 1 : 2;
         if (element.cells.length < most && element.kind !== "door") actions.push({ label: "Add another block (click it)", run: ask("add") });
 
         actions.push(BACK);
@@ -706,7 +724,8 @@ export function openAddElement(player: Player, robberyId: string, pos: Pos, bloc
         const kinds: readonly { readonly value: ElementKind; readonly label: string }[] = [
             { value: "door", label: "A door: it opens when it is done" },
             { value: "chest", label: "A chest: loot goes in when it is unlocked" },
-            { value: "switch", label: "A switch or keypad: a button, lever or plate to work" }
+            { value: "switch", label: "A switch or keypad: a button, lever or plate to work" },
+            { value: "frame", label: "An item frame: what it shows can be stolen" }
         ];
 
         const answers = await ask(player, heading(robbery.name, "bind a block"), [
@@ -723,6 +742,8 @@ export function openAddElement(player: Player, robberyId: string, pos: Pos, bloc
         const added = addElementAt(robberyId, { kind, name: String(answers["name"]), pos, withNeighbour: answers["twin"] === true });
 
         if (!report(player, added, added.ok ? `Bound ${added.element.name}. Set what it does:` : "") || !added.ok) return;
+
+        if (added.note) tell(player, warn(added.note));
 
         await elementScreen(player, robberyId, added.element.id);
     });

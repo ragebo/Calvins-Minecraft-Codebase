@@ -1,6 +1,6 @@
 import { world } from "@minecraft/server";
 import { ROBBERY as R } from "../config/balance.js";
-import { parse, posKey, sameDimension, serialize, type Pos, type Robbery } from "../logic/robbery.js";
+import { parse, posKey, sameDimension, serialize, type ElementKind, type Pos, type Robbery } from "../logic/robbery.js";
 import { warn } from "./log.js";
 
 /**
@@ -266,32 +266,42 @@ export function forgetLoaded(): void {
 // Which block belongs to which element
 // ---------------------------------------------------------------------------------------------------------
 
-/** An element, found by the block it is bound to. */
+/** An element, found by the block it is bound to. `kind` is there so a handler that fires for every block can tell a frame without loading the robbery. */
 export interface Bound {
     readonly robbery: string;
     readonly element: string;
+    readonly kind?: ElementKind;
 }
 
-let index: { readonly forVersion: number; readonly byPosition: ReadonlyMap<string, Bound> } | undefined;
+let index: { readonly forVersion: number; readonly byPosition: ReadonlyMap<string, Bound>; readonly frames: boolean } | undefined;
 
-function positions(): ReadonlyMap<string, Bound> {
+function build(): NonNullable<typeof index> {
 
     ensureLoaded();
 
-    if (index && index.forVersion === version) return index.byPosition;
+    if (index && index.forVersion === version) return index;
 
     const byPosition = new Map<string, Bound>();
+    let frames = false;
 
     for (const stored of entries.values()) {
         if (!stored.ok) continue;
         for (const element of stored.robbery.elements) {
-            for (const cell of element.cells) byPosition.set(posKey(stored.robbery.dimension, cell), { robbery: stored.id, element: element.id });
+            if (element.kind === "frame") frames = true;
+            for (const cell of element.cells) byPosition.set(posKey(stored.robbery.dimension, cell), { robbery: stored.id, element: element.id, kind: element.kind });
         }
     }
 
-    index = { forVersion: version, byPosition };
+    index = { forVersion: version, byPosition, frames };
 
-    return byPosition;
+    return index;
+}
+
+const positions = (): ReadonlyMap<string, Bound> => build().byPosition;
+
+/** Whether any robbery has an item frame bound. Most worlds have none, and the handlers for punches and dropped items stop here. */
+export function anyBoundFrames(): boolean {
+    return build().frames;
 }
 
 /**
@@ -316,8 +326,8 @@ export function anyBoundBlocks(): boolean {
 // Blocks a run has changed and not yet put back
 // ---------------------------------------------------------------------------------------------------------
 
-/** What putting a block back means: shut the door, or empty the chest. */
-export type CleanAction = "close" | "empty";
+/** What putting a block back means: shut the door, empty the chest, or put what an item frame showed back in it. */
+export type CleanAction = "close" | "empty" | "refill";
 
 export interface Dirty {
     /** The robbery that changed it. While that robbery is running or waiting for its reset, the janitor leaves it alone. */
@@ -327,8 +337,8 @@ export interface Dirty {
     readonly action: CleanAction;
 }
 
-const ACTION_CODES: Record<CleanAction, string> = { close: "c", empty: "e" };
-const ACTION_FROM_CODE: Record<string, CleanAction> = { c: "close", e: "empty" };
+const ACTION_CODES: Record<CleanAction, string> = { close: "c", empty: "e", refill: "r" };
+const ACTION_FROM_CODE: Record<string, CleanAction> = { c: "close", e: "empty", r: "refill" };
 
 const dirty = new Map<string, Dirty>();
 let dirtyLoaded = false;

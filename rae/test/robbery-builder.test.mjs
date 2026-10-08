@@ -833,4 +833,97 @@ test("a viewer who loses operator or leaves is dropped; a particle the game reje
     done();
 });
 
+// ---------------------------------------------------------------------------------------------------------
+// Item frames and the wand's ray
+// ---------------------------------------------------------------------------------------------------------
+
+const FRAME = [200, 65, 200];
+const GRASS = { x: 205, y: 65, z: 200 };
+
+/** A site with a frame, and a game whose ray looks straight through frames and tall grass: the worry that was never measured. */
+function frameSetup() {
+    setup();
+    fake.placeBlock("overworld", at(FRAME), "minecraft:frame", { facing_direction: 2 });
+    fake.setFrameItem("overworld", at(FRAME), "minecraft:diamond");
+    fake.placeBlock("overworld", GRASS, "minecraft:tallgrass");
+    fake.passableBlocks.add("minecraft:frame");
+    fake.passableBlocks.add("minecraft:tallgrass");
+}
+
+test("a swing at an item frame is that frame's click even if the game's ray looks through frames; tall grass is still air", async () => {
+    frameSetup();
+    const { check, done } = checks();
+    const op = operator();
+    save(ok(L.newRobbery("bank", "Bank", "overworld")));
+    E.select(op, "bank");
+
+    op.aimAt = at(FRAME);
+    check("the plain ray misses the frame and a passable-aware one finds it (the fake models the worry)",
+        op.getBlockFromViewDirection({}) === undefined && op.getBlockFromViewDirection({ includePassableBlocks: true })?.block.typeId === "minecraft:frame");
+
+    swing(op, "Interact");
+    swing(op, "Attack");
+    useItem(op);
+    await flush();
+    check("pointing at a frame, no swing or item use is a click on nothing", ui.shown.length === 0, String(ui.shown.length));
+
+    op.aimAt = GRASS;
+    later();
+    script(close);
+    swing(op, "Attack");
+    await flush();
+    check("pointing at tall grass, the same swing still is, and opens the menu", menus() === 1, String(menus()));
+    done();
+});
+
+test("the frame's own screen is the only one a click on a frame opens, whenever the game reports the swing", async () => {
+    frameSetup();
+    fake.strictBefore = true;
+    const { check, done } = checks();
+    const op = operator();
+    save(ok(L.newRobbery("bank", "Bank", "overworld")));
+    E.select(op, "bank");
+    op.aimAt = at(FRAME);
+
+    script(close);
+    useBlock(op, FRAME, { held: R.wandItemId });
+    fake.advance(1);
+    await flush();
+    fake.advance(R.wandClickGapTicks * 4);
+    swing(op, "Interact");
+    useItem(op);
+    await flush();
+
+    check("one screen, the frame's bind form", ui.shown.length === 1 && /bind a block/.test(strip(titleOf(ui.shown[0]))), ui.shown.map((s) => strip(titleOf(s))).join(" > "));
+    done();
+});
+
+test("the builder view names a frame the game's ray looks through, and invites binding one that is not bound", () => {
+    frameSetup();
+    const { check, done } = checks();
+    const { as } = commands();
+    const op = operator();
+    save(bank("bank").r);
+    E.select(op, "bank");
+    ok(E.addElementAt("bank", { kind: "frame", name: "Necklace", pos: FRAME, withNeighbour: false }));
+    fake.placeBlock("overworld", { x: 202, y: 65, z: 200 }, "minecraft:glow_frame", { facing_direction: 2 });
+
+    as(fromPlayer(op), "rae:robbery_view", true);
+    op.holding = R.wandItemId;
+
+    op.aimAt = at(FRAME);
+    fake.advance(R.viewEvery);
+    check("a bound frame is named, with its kind and robbery", bar(op).some((m) => /Necklace \(frame.*\) Saint Diego Bank/.test(m)), bar(op).join("|"));
+
+    op.aimAt = { x: 202, y: 65, z: 200 };
+    fake.advance(R.viewEvery);
+    check("a frame that is not bound invites binding it", bar(op).some((m) => /right-click it with the wand to bind it/.test(m)), bar(op).join("|"));
+
+    op.aimAt = GRASS;
+    op.actionBar.length = 0;
+    fake.advance(R.viewEvery);
+    check("tall grass says nothing at all", bar(op).length === 0, bar(op).join("|"));
+    done();
+});
+
 test.after(() => { Math.random = originalRandom; });

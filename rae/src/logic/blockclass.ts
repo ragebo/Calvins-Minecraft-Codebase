@@ -8,7 +8,7 @@
  * (stone, a crafting table), not an error.
  */
 
-export type BlockClass = "door" | "trapdoor" | "gate" | "container" | "button" | "lever" | "plate" | "tripwire" | "other";
+export type BlockClass = "door" | "trapdoor" | "gate" | "container" | "button" | "lever" | "plate" | "tripwire" | "frame" | "other";
 
 /** Containers whose id doesn't end in a recognisable suffix. */
 const CONTAINERS = new Set([
@@ -28,6 +28,8 @@ export function classOfBlockType(typeId: string): BlockClass {
 
     if (id === "lever") return "lever";
     if (id === "trip_wire" || id === "tripwire_hook") return "tripwire";
+    // An item frame is a BLOCK in Bedrock (not an entity as in Java): `frame`, and `glow_frame` for the glowing one.
+    if (id === "frame" || id === "glow_frame") return "frame";
     if (id === "trapdoor" || id.endsWith("_trapdoor")) return "trapdoor";
     if (id === "fence_gate" || id.endsWith("_fence_gate")) return "gate";
     if (id.endsWith("_door")) return "door";

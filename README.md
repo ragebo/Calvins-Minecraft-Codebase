@@ -313,7 +313,9 @@ the train route), no coordinates in config and no command chains. Fort, ranch an
 **What a robbery is made of (Phase 1a, "Vault").**
 - *Elements:* a **door** (a door, trapdoor or gate: both halves of a door are always bound and swung together), a
   **chest** (a chest, barrel or shulker box: loot from a loot table plus fixed items goes in when it is unlocked and
-  comes out when the site is put back) and a **switch** (a button, lever, plate, or any block: the "keypad").
+  comes out when the site is put back), an **item frame** (an item frame or glow item frame: whoever opens it is given
+  its loot and the frame is emptied; see "Item frames" below) and a **switch** (a button, lever, plate, or any block:
+  the "keypad").
 - *Locks:* a **pick lock** (the jailbreak's slider game: a hidden target, a ping that rises as the guess gets closer,
   a number of hits, a jam after too many misses), a **key** (an item the player carries, used up or not) and a
   **price** (coins). All of an element's locks must be passed; coins and the key are taken only when it opens.
@@ -329,23 +331,44 @@ the train route), no coordinates in config and no command chains. Fort, ranch an
 
 **Building one.** `/give @s bountysys:robbery_wand` or `/rae:robbery_wand`. Left-click the air, or sneak and right-click any block, for the menu (make a
 robbery, settings, area, effects, run it); right-click a block that is not bound to bind it (the form suggests door,
-chest or switch from the block); right-click a bound block for its screen (rename, locks, what it waits for, what
-happens when it is done or its lock jams, loot, change its blocks, delete). `/rae:robbery_view` marks the robbery's
+chest, item frame or switch from the block); right-click a bound block for its screen (rename, locks, what it waits
+for, what happens when it is done or its lock jams, loot, change its blocks, delete). `/rae:robbery_view` marks the robbery's
 blocks and area in the world and shows what the wand points at. Everything also has a command (`/rae:robbery_list`,
 `info`, `new`, `select`, `delete`, `start [test]`, `stop`, `reset`, `activate`, `edit`, `view`, `undo`, `area`,
 `set`), all operator-only; `start`, `stop`, `reset` and `activate` take a robbery id and also work from a command block
 or an NPC button. A test run (`/rae:robbery_start <id> true`) lets anyone take part and sets no cooldown.
 
-**Putting the site back.** Before a door is opened or a chest filled, the block is noted in a saved list. A normal
-ending, a manual reset, a round reset, a deleted robbery, a crash and a reload all end the same way: a janitor reads
-that list and puts each block back (doors shut, chests emptied) once its chunk is loaded. A reload ends a robbery in
-progress; the site is restored and the next touch starts it afresh.
+**Item frames.** A jewelry store's cases can be item frames. The game's scripts cannot read what a frame holds (the
+installed typings have no item-frame API at all), so a frame's **loot is set on the element**, the same way as a
+chest's (a loot table, fixed items, or both), and what the frame shows is only the display. Binding a frame also saves
+what it shows as a one-block structure named `rae:rb_<robbery>_<x>_<y>_<z>`; change the display later and press "Save
+what the frame shows now" in the frame's screen to save it again. Touching a bound frame (a right-click) is an attempt
+to take from it, with the same locks and requirements as any element; when it opens, the loot goes into the thief's bag
+(what does not fit falls at their feet) and the frame is emptied. A frame has one block and waits to be touched even
+when everything it waits for is done. A **punch**, which the game answers by popping the item out, can be seen but not
+stopped, so it is undone a moment later: the item that appeared is taken away, the frame is put back, and the punch
+counts as an attempt to take it. (`/rae:config_set_bool robbery.guardFramePunches false` turns that off.) When the site
+is put back, **every** frame of the robbery is shown again from its saved copy, taken from or not: a script cannot read
+what a frame shows, so it cannot know that one was emptied behind its back (a punch the game never reported), and
+re-placing the small saved copy is cheaper and safer than trusting a guess. `/rae:robbery_reset` does the same by hand,
+so it is the fix for a frame that ever looks wrong. For the same reason "Save what the frame shows now" is refused while a
+frame is waiting to be put back (it might be empty): save it once the site has been put back. A frame whose copy is
+missing is reported in the log and does not hold the robbery up. Breaking the block a frame hangs on drops the frame; that
+is not protected.
+
+**Putting the site back.** Before a door is opened or a chest filled, and for every item frame the moment a run starts,
+the block is noted in a saved list. A normal ending, a manual reset, a round reset, a deleted robbery, a crash and a
+reload all end the same way: a janitor reads that list and puts each block back (doors shut, chests emptied, frames
+shown again) once its chunk is loaded. A reload ends a robbery in progress; the site is restored and the next touch
+starts it afresh.
 
 **Status.** Phase 0 (`/scriptevent rae:robbery_probe`, `docs/test-cards/ROBBERY-SPIKE.md`) measured how the real game
 reports and cancels right-clicks, what a callback may do, loot tables, structures and doors. Phase 1a (this) is built
 on those measurements and covered by the tests; `docs/test-cards/ROBBERY-VAULT.md` is the run sheet for the things only
-the real game can answer. Later phases add breakable walls, guard spawners, zones, a placed-block lock and the full
-Saint Diego Bank; fort, ranch and train migrate behind their existing ids after that.
+the real game can answer. Item frames came afterwards (BP 0.2.1, for the owner's jewelry store) and only the tests have
+run them: whether a saved frame brings its item back, what a punch does and which events it sends are unmeasured, and
+`docs/test-cards/ROBBERY-FRAME.md` is the run sheet. Later phases add breakable walls, guard spawners, zones, a
+placed-block lock and the full Saint Diego Bank; fort, ranch and train migrate behind their existing ids after that.
 
 ### NPC shops
 

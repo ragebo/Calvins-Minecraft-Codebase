@@ -41,11 +41,11 @@ own header comment where it has one.
 | `raid.ts` | The shared wave-spawn/track/reward/cleanup engine a raid config plugs into. Fort does; ranch doesn't (see `systems/raids.ts`). |
 | `recordstore.ts` | A generic store for things a builder authors in game: one world property per record, written at once, refused up front when over the size cap, unreadable ones listed and never overwritten, one level of undo. `shopstore.ts` is one instance; `robberystore.ts` has the same contract and could move onto it. |
 | `registry.ts` | Where a system registers itself and its reset, so a round reset can never again forget one. |
-| `robberyedit.ts` | The robbery framework's editing session without a screen: each builder's selected robbery (kept on the player), the one `applyEdit` every change goes through (pure edit, whole-robbery validation, no block claimed by two robberies, then the store), binding blocks, and what a wand click means. |
+| `robberyedit.ts` | The robbery framework's editing session without a screen: each builder's selected robbery (kept on the player), the one `applyEdit` every change goes through (pure edit, whole-robbery validation, no block claimed by two robberies, then the store), binding blocks (and saving what an item frame shows), and what a wand click means. |
 | `robberyforms.ts` | Every screen the builder sees (menus, the add-element form, locks, requirements, effects, loot, settings, area), as presentation over `robberyedit.ts` and `logic/robberymeta.ts`. |
-| `robberyrun.ts` | Playing a robbery: starting it (and the director's slot), who may touch what, the locks, completing elements, effects, ending, and putting the site back through one idempotent janitor. One shared loop; nothing registered per robbery. |
+| `robberyrun.ts` | Playing a robbery: starting it (and the director's slot), who may touch what, the locks, completing elements (handing a frame's loot to the thief), effects, ending, undoing a punch on an item frame, and putting the site back through one idempotent janitor. One shared loop; nothing registered per robbery. |
 | `robberystore.ts` | Where robberies live: one world property each, written at once on every edit, refused up front when over the size cap, unreadable ones listed and never overwritten, one level of undo. Also the saved list of blocks a run changed and has not yet put back. |
-| `robberyworld.ts` | Everything a robbery does to blocks (swing a door, fill and empty a chest, chunk-loaded checks) in one place, because it is the one file that depends on engine behavior measured once. Never throws. |
+| `robberyworld.ts` | Everything a robbery does to blocks (swing a door, fill and empty a chest, empty an item frame and show it again from a saved one-block structure, chunk-loaded checks) in one place, because it is the one file that depends on engine behavior measured once. Never throws. |
 | `round.ts` | The one `IDLE -> SETUP -> ACTIVE -> ENDING -> ENDED` phase machine. Also a `Persistable`: the phase itself is never restored into an active state. |
 | `screens.ts` | Menu plumbing for a builder's screens: a title, some text and buttons, each button an action that may open another screen, and one menu of a kind open per player. The shop's screens use it; `robberyforms.ts` has its own copy of the same few lines. |
 | `shopedit.ts` | What a builder does to shops without a screen: which shop they are working on (kept on the player), making and copying one, the one `applyEdit` every change goes through, deals made from what they hold, services made from what they type (the game is asked whether it knows the effect, enchantment or animal), where a teleport goes (typed, or where they stand) and who may take a deal. |
@@ -87,7 +87,7 @@ problem — the label just describes most of the folder, not a strict rule every
 | `npcprobe.ts` | Measurement spike, not a feature: how the real game treats a vanilla NPC (`rae:npc_probe`). Does a click reach a script, does `cancel` stop the game's dialogue, can a script point an NPC at a dialogue scene, what does a scene's button report, does a spawned NPC keep its mark. See `docs/test-cards/NPC-PROBE.md`. |
 | `probe.ts` | Measurement spike, not a feature: measures whether stacked `applyDamage` calls add up (`rae:probe_damage`). |
 | `robberybuilder.ts` | Building a robbery in game: the wand (used on a block or on nothing), fifteen operator-only `rae:robbery_*` commands, and the builder view. Hands every click to `core/robberyedit.ts` and every screen to `core/robberyforms.ts`. |
-| `robberyrun.ts` | The game-event side of playing a robbery: a right-click on a bound block (cancelled at once, the work a tick later), pressure plates and tripwires, and protecting bound blocks from breaking and explosions. Hands everything to `core/robberyrun.ts`. |
+| `robberyrun.ts` | The game-event side of playing a robbery: a right-click on a bound block (cancelled at once, the work a tick later), pressure plates and tripwires, a punch on an item frame (seen after the fact, with the item entities that just appeared), and protecting bound blocks from breaking and explosions. Hands everything to `core/robberyrun.ts`. |
 | `robberyprobe.ts` | Measurement spike, not a feature: Phase 0 of the in-game robbery framework (`rae:robbery_probe`, `rae:robbery_probe_ctx`). Records how the real game reports a right-click on a chest, door, button or lever, whether `cancel` stops it, and what structures, loot tables and ticking areas allow, before the framework is built on any of it. See `docs/test-cards/ROBBERY-SPIKE.md`. |
 | `raids.ts` | Two raids in one file — fort plugs into `core/raid.ts`'s shared engine; ranch is hand-rolled because its countdown-that-stretches-on-reinforcement doesn't fit that shape. |
 | `roles.ts` | The template file every other system was ported to match, and where role assignment and `pickRandom` live. |
@@ -108,9 +108,9 @@ condition, in separate files. None of this needs fixing — it's just what's act
 | File | Owns |
 |---|---|
 | `bearing.ts` | Compass direction math and display. |
-| `blockclass.ts` | What kind of block a type id is (door, trapdoor, gate, container, button, lever, plate, tripwire, other), by suffix, for the robbery framework. |
+| `blockclass.ts` | What kind of block a type id is (door, trapdoor, gate, container, button, lever, plate, tripwire, item frame, other), by suffix, for the robbery framework. |
 | `lockpick.ts` | The pick lock's rules (a hidden target, hot/cold pings, hits to open, a jam after too many misses), with the random source and the tick passed in. |
-| `robbery.ts` | A robbery as data: elements (door, chest, switch), locks (pick, key, pay), requirements, effects, settings; immutable edits that validate the whole result; the saved short-key form; `parse` never throws. |
+| `robbery.ts` | A robbery as data: elements (door, chest, item frame, switch), locks (pick, key, pay), requirements, effects, settings; immutable edits that validate the whole result; the saved short-key form; `parse` never throws. |
 | `robberymeta.ts` | The builder's forms as data (a field list builds a form and reads its answers back into the validators) and the plain-language summaries of what was built. |
 | `route.ts` | The train's track math: smoothing, distance, heading, speed, steering. |
 | `schema.ts` | Config schema-version fingerprinting and migration for persisted data. |
@@ -147,11 +147,11 @@ system stays one thin file.
 logic/robbery.ts       the data, its validation and edits        logic/lockpick.ts   the pick lock's rules
 logic/robberymeta.ts   forms as data, plain-language summaries   logic/blockclass.ts what a block is
         |
-core/robberystore.ts   saved robberies + the "blocks to put back" list     core/robberyworld.ts   doors, chests, chunks
+core/robberystore.ts   saved robberies + the "blocks to put back" list     core/robberyworld.ts   doors, chests, frames, chunks
 core/robberyrun.ts     playing one: locks, effects, ending, the janitor    core/robberyedit.ts    editing without a screen
 core/robberyforms.ts   every builder screen
         |
-systems/robberyrun.ts      game events -> core/robberyrun.ts (right-click, plates, protection)
+systems/robberyrun.ts      game events -> core/robberyrun.ts (right-click, punches, plates, protection)
 systems/robberybuilder.ts  the wand, the commands, the builder view
 ```
 
@@ -162,6 +162,22 @@ handler decides and cancels at once and hands the rest to `system.run`; the fake
 saved, position-keyed list *before* it changes, and a normal end, a manual reset, a round reset, a deleted
 robbery, a crash and a reload all end with the janitor reading that list and restoring each block once its chunk is
 loaded. What is not kept across a reload is the run itself; a reload ends a robbery in progress.
+
+**Item frames are the one element a script cannot see into.** A frame is a block with a block entity, and the installed
+typings have no item-frame API, so nothing can read what it shows or change it. The framework uses the only tools
+there are: a frame's loot is set on the element and never read from the frame; a frame is emptied by replacing its
+block with air and then the same permutation; and it is shown again by placing a one-block structure saved when it was
+bound (`captureFrame`, `emptyFrame`, `restoreFrame` in `core/robberyworld.ts`). The structure's id is keyed by
+position, like the janitor's list, so putting a frame back still works after its element has been edited or deleted.
+A punch is reported only after it has happened (`playerStartBreakingBlock`, `entityHitBlock`) and the popped item
+arrives as an `entitySpawn`, so `frameHit` in `core/robberyrun.ts` undoes it a few ticks later: it removes just the item
+entities that appeared near the frame in that window (`systems/robberyrun.ts` tracks spawns, and only while some
+robbery has a frame) and restores the frame. A punch whose item was never reported as a spawn is not undone; the
+thief keeps that item. Because the script can never read a frame, it cannot know one was emptied behind its back, so a run
+notes EVERY frame of its robbery in the janitor's list the moment it starts (`noteFrames`), and so does a manual reset:
+whatever happened, the end of the run re-places each frame from its saved copy. For the same reason the edit layer
+refuses to save a frame that is waiting to be put back (it may be empty, and the empty copy would be what comes back).
+All of this is built on typings and tests, not on a measurement; `docs/test-cards/ROBBERY-FRAME.md` is what turns it into one.
 
 ### The NPC shops' shape
 

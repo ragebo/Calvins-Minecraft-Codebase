@@ -1,10 +1,10 @@
 import { system, world, type Block, type Entity, type ItemStack, type Player } from "@minecraft/server";
 import { ROBBERY as R } from "../config/balance.js";
-import { error, warn } from "../core/log.js";
+import { debug, error, warn } from "../core/log.js";
 import { isOperator } from "../core/players.js";
 import { registerSystem } from "../core/registry.js";
-import { interactionDecision, touch } from "../core/robberyrun.js";
-import { anyBoundBlocks, boundAt, getRobbery, type Bound } from "../core/robberystore.js";
+import { frameHit, interactionDecision, touch } from "../core/robberyrun.js";
+import { anyBoundBlocks, anyBoundFrames, boundAt, getRobbery, type Bound } from "../core/robberystore.js";
 import { format, tell } from "../core/ui.js";
 
 /**
@@ -62,7 +62,16 @@ listen("block interaction", () => world.beforeEvents.playerInteractWithBlock.sub
 
         if (holdsWand(event.player, event.itemStack)) return;
 
+        // A builder who sneaks at an item frame is changing what it shows (putting an item in, turning it): the game does that.
+        if (ref.kind === "frame" && isOperator(event.player) && event.player.isSneaking) {
+            debug(SOURCE, `right-click on frame ${ref.robbery}/${ref.element}: left to the game (a builder sneaking)`);
+            return;
+        }
+
         const decision = interactionDecision(ref);
+
+        // Off unless /scriptevent rae:log_debug on: what the game reported for a frame, which no one has measured yet.
+        if (ref.kind === "frame") debug(SOURCE, `right-click on frame ${ref.robbery}/${ref.element}: ${decision}${event.isFirstEvent ? "" : " (repeated)"}`);
 
         if (decision === "cancel") event.cancel = true;
 
@@ -73,6 +82,79 @@ listen("block interaction", () => world.beforeEvents.playerInteractWithBlock.sub
         const player = event.player;
         system.run(() => touch(player, ref));
     });
+}));
+
+// ---------------------------------------------------------------------------------------------------------
+// Punching an item frame. The game pops the item out and a script cannot stop that, only see it: a punch starts a block being
+// broken, and the item that pops out is a dropped item that appears. Both are seen here and handed to core/robberyrun.ts, which
+// undoes it.
+// ---------------------------------------------------------------------------------------------------------
+
+/** Dropped items that have appeared lately (entity id -> tick), kept only while a robbery has an item frame bound. */
+const recentItems = new Map<string, number>();
+
+listen("dropped items", () => world.afterEvents.entitySpawn.subscribe((event) => {
+
+    // Nearly every spawn in a world with no bound frame ends here.
+    if (!anyBoundFrames()) return;
+
+    guarded("a dropped item", () => {
+
+        if (event.entity.typeId !== "minecraft:item") return;
+
+        const now = system.currentTick;
+
+        for (const [id, tick] of recentItems) if (now - tick > R.frameRecentTicks * 4) recentItems.delete(id);
+
+        recentItems.set(event.entity.id, now);
+
+        debug(SOURCE, `a dropped item appeared (${event.entity.id}, ${event.cause})`);
+    });
+}));
+
+/** What a player holds, or nothing if it cannot be read. */
+function heldBy(player: Player): ItemStack | undefined {
+
+    try {
+        return player.getComponent("minecraft:inventory")?.container?.getItem(player.selectedSlotIndex) ?? undefined;
+    } catch {
+        return undefined;
+    }
+}
+
+function punched(who: Entity, block: Block, how: string): void {
+
+    if (!R.guardFramePunches || !anyBoundFrames() || who.typeId !== "minecraft:player") return;
+
+    const ref = refOf(block);
+    if (!ref || ref.kind !== "frame") return;
+
+    const player = who as Player;
+
+    // The wand is for editing, and a builder who sneaks is changing what the frame shows: neither is a theft.
+    if (holdsWand(player, heldBy(player))) {
+        debug(SOURCE, `punch on frame ${ref.robbery}/${ref.element} (${how}) ignored: the wand`);
+        return;
+    }
+
+    if (isOperator(player) && player.isSneaking) {
+        debug(SOURCE, `punch on frame ${ref.robbery}/${ref.element} (${how}) ignored: a builder sneaking`);
+        return;
+    }
+
+    debug(SOURCE, `punch on frame ${ref.robbery}/${ref.element} (${how})`);
+
+    frameHit(player, ref, recentItems);
+}
+
+// Either may be what the game reports for a punch on a frame (neither is measured yet). The second is the same punch seen again,
+// and core/robberyrun.ts counts punches that close together as one.
+listen("punches on blocks", () => world.afterEvents.playerStartBreakingBlock.subscribe((event) => {
+    guarded("a punch on a block", () => punched(event.player, event.block, "started breaking"));
+}));
+
+listen("hits on blocks", () => world.afterEvents.entityHitBlock.subscribe((event) => {
+    guarded("a hit on a block", () => punched(event.damagingEntity, event.hitBlock, "hit"));
 }));
 
 // A pressure plate or tripwire is "used" by walking on it: there is no interaction to cancel, the entity just pushes it.
@@ -144,5 +226,6 @@ registerSystem({
     name: "robberyglue",
     reset() {
         lastNotice.clear();
+        recentItems.clear();
     }
 });

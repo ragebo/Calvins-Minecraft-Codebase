@@ -1,5 +1,5 @@
 import type { Player, Vector3 } from "@minecraft/server";
-import { AIM, BOAT, COMPASS, ECONOMY, FORT, HARMING, HORSE, JAILBREAK, RAIDS, RANCH, SHOP, TRAIN, TUMBLEWEED } from "../config/balance.js";
+import { AIM, BOAT, COMPASS, ECONOMY, FORT, HARMING, HORSE, JAILBREAK, RAIDS, RANCH, ROBBERY, SHOP, TRAIN, TUMBLEWEED } from "../config/balance.js";
 import { GUNS } from "../config/guns.js";
 import {
     BOAT_NPC, BOAT_WIN_TELEPORT, BRIDGE_AREA, FORT_AREA, FORT_REWARD_CHEST, FORT_SPAWNS,
@@ -393,6 +393,10 @@ function registerBalanceFields(): void {
     // in the game, with no redeploy.
     boolean("shop.interceptClicks", "Shop: a click on a shop NPC opens the shop at once (off: the NPC's dialogue button does)", "Shops", () => SHOP.interceptClicks, (v) => { SHOP.interceptClicks = v; });
     boolean("shop.useDialogueScene", "Shop: point new shop NPCs at the dialogue scene", "Shops", () => SHOP.useDialogueScene, (v) => { SHOP.useDialogueScene = v; });
+
+    // A punch on a bound item frame cannot be stopped, only undone (core/robberyrun.ts frameHit). What the game does on a punch is
+    // what docs/test-cards/ROBBERY-FRAME.md measures; if undoing it ever misbehaves this turns it off with no redeploy.
+    boolean("robbery.guardFramePunches", "Robbery: undo a punch on a bound item frame (the popped item is taken back, the frame put back)", "Robbery", () => ROBBERY.guardFramePunches, (v) => { ROBBERY.guardFramePunches = v; });
 }
 
 registerGunFields();

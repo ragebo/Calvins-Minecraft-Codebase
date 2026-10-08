@@ -1,6 +1,6 @@
 import {
     CommandPermissionLevel, CustomCommandParamType, CustomCommandStatus, EquipmentSlot, system, world,
-    type CustomCommandOrigin, type CustomCommandResult, type ItemStack, type Player, type Vector3
+    type Block, type CustomCommandOrigin, type CustomCommandResult, type ItemStack, type Player, type Vector3
 } from "@minecraft/server";
 import { ROBBERY as R } from "../config/balance.js";
 import { debug, error, info, warn } from "../core/log.js";
@@ -12,6 +12,7 @@ import { activateElement, cooldownLeftSeconds, resetSiteNow, startRobbery, stopR
 import { boundAt, deleteRobbery, getRobbery, getStored, listStored, rawText, undoLast } from "../core/robberystore.js";
 import { onTick } from "../core/tick.js";
 import { ACTION_BAR_PRIORITY, format, setActionBar, tell } from "../core/ui.js";
+import { classOfBlockType } from "../logic/blockclass.js";
 import { describeElement, describeRobbery, parseSettingValue } from "../logic/robberymeta.js";
 import { SETTING_KEYS, edgePoints, itemLabel, sameDimension, setArea, setSettings, whyNotRunnable, type Pos, type SettingKey } from "../logic/robbery.js";
 
@@ -75,15 +76,29 @@ const lastWandClick = new Map<string, number>();
 
 const sameClick = (player: Player): boolean => system.currentTick - (lastWandClick.get(player.id) ?? -Infinity) <= R.wandClickGapTicks;
 
-/** The type of the block the wand points at within reach, or undefined when it points at nothing (or the game cannot say). */
-function blockInReach(player: Player): string | undefined {
+/**
+ * The block the wand points at within reach, or undefined when it points at nothing (or the game cannot say).
+ *
+ * The game's ray looks straight through "passable" blocks (flowers and vines are). Whether it looks through an item frame is not
+ * measured, and a frame it looked through would make a click on a frame a "click on nothing" and open the menu on top of the
+ * frame's own screen. So when the first ray finds nothing, a second one that stops at passable blocks as well is believed only
+ * when what it stops at is a frame: tall grass in front of the builder's nose must still count as air.
+ */
+function aimedBlock(player: Player): Block | undefined {
 
     try {
-        return player.getBlockFromViewDirection({ maxDistance: R.wandReach })?.block.typeId;
+        const hit = player.getBlockFromViewDirection({ maxDistance: R.wandReach });
+        if (hit) return hit.block;
+
+        const near = player.getBlockFromViewDirection({ maxDistance: R.wandReach, includePassableBlocks: true });
+        return near && classOfBlockType(near.block.typeId) === "frame" ? near.block : undefined;
     } catch {
         return undefined;
     }
 }
+
+/** The type of the block the wand points at within reach, or undefined when it points at nothing. */
+const blockInReach = (player: Player): string | undefined => aimedBlock(player)?.typeId;
 
 /** Does what a wand click means: says something, or opens a screen. */
 function perform(player: Player, action: WandAction): void {
@@ -250,10 +265,9 @@ function drawMarkers(player: Player, points: readonly Vector3[]): void {
 
 function aimLine(player: Player): string | undefined {
 
-    const hit = player.getBlockFromViewDirection({ maxDistance: R.wandReach });
-    if (!hit) return undefined;
+    const block = aimedBlock(player);
+    if (!block) return undefined;
 
-    const block = hit.block;
     const bound = boundAt(block.dimension.id, block.location.x, block.location.y, block.location.z);
 
     if (!bound) return `§7${itemLabel(block.typeId)} §8- right-click it with the wand to bind it`;

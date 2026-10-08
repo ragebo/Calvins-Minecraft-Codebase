@@ -1,4 +1,5 @@
-import { ItemStack, world, type Block, type Container, type Dimension, type Vector3 } from "@minecraft/server";
+import { ItemStack, StructureSaveMode, world, type Block, type Container, type Dimension, type Vector3 } from "@minecraft/server";
+import { ROBBERY as R } from "../config/balance.js";
 import { classOfBlockType, swingsOpen } from "../logic/blockclass.js";
 import { type Pos } from "../logic/robbery.js";
 import { warn } from "./log.js";
@@ -404,4 +405,192 @@ export function chestIsEmpty(dimension: string, cells: readonly Pos[]): boolean 
     }
 
     return true;
+}
+
+/** The stacks a chest or frame element hands out: what its loot table rolls, then its fixed items. `problems` says what could not be made. */
+export function lootStacks(table: string | undefined, items: readonly (readonly [string, number])[]): { readonly stacks: ItemStack[]; readonly problems: string[] } {
+
+    const problems: string[] = [];
+    const stacks = stacksFor(table, items, problems);
+
+    return { stacks, problems };
+}
+
+/** Drops stacks on the ground at a point. Answers how many were dropped; never throws. */
+export function dropItems(dimension: string, at: Vector3, stacks: readonly ItemStack[]): number {
+
+    const dim = dimensionOf(dimension);
+    if (!dim) return 0;
+
+    let dropped = 0;
+
+    for (const stack of stacks) {
+        try {
+            dim.spawnItem(stack, at);
+            dropped++;
+        } catch (err) {
+            once(`could not drop ${stack.typeId}: ${errorText(err)}`);
+        }
+    }
+
+    return dropped;
+}
+
+// ---------------------------------------------------------------------------------------------------------
+// Item frames
+// ---------------------------------------------------------------------------------------------------------
+
+/**
+ * An item frame is a BLOCK in Bedrock, with a block entity that holds the item it shows, and the scripting API has nothing for
+ * it: a script can neither read that item nor set it. The one thing that can put an item back in a frame is a structure, so a
+ * bound frame is saved as a one-block structure and put back from that.
+ *
+ * Measured in the real game: a World-mode structure with a `rae:` id survives leaving the world, and one made over an unloaded
+ * area saves air without complaint (so the chunk is checked first). NOT measured: that a saved frame brings its item back, and
+ * what a punch on a frame does; docs/test-cards/ROBBERY-FRAME.md measures both.
+ */
+
+const coordinate = (n: number): string => (n < 0 ? `m${-n}` : String(n));
+
+/**
+ * The name a frame's saved copy has: by robbery and position, never by element, so putting a site back needs nothing but the
+ * note the janitor already keeps (an element may be edited or deleted while its site is dirty). A minus sign becomes an m.
+ */
+export const frameStructureId = (robbery: string, pos: Pos): string =>
+    `${R.frameStructurePrefix}${robbery}_${coordinate(pos[0])}_${coordinate(pos[1])}_${coordinate(pos[2])}`;
+
+/** Whether the block at this position is an item frame (or a glow item frame). */
+export function isFrameAt(dimension: string, pos: Pos): boolean {
+
+    const type = typeAt(dimension, pos);
+
+    return type !== undefined && classOfBlockType(type) === "frame";
+}
+
+export interface CaptureResult {
+    readonly ok: boolean;
+    /** Why it could not be saved, in words for the builder. */
+    readonly problem?: string;
+}
+
+/** Saves the frame as it is now, with the item it shows, replacing any earlier copy. */
+export function captureFrame(dimension: string, robbery: string, pos: Pos): CaptureResult {
+
+    const dim = dimensionOf(dimension);
+    if (!dim) return { ok: false, problem: `there is no dimension ${dimension}` };
+
+    // A structure made over an unloaded area is air, and the game says nothing: check first. (These two are read by the builder, so the position is spelt out.)
+    if (!isLoaded(dimension, pos)) return { ok: false, problem: `${pos.join(", ")} is not loaded right now` };
+    if (!isFrameAt(dimension, pos)) return { ok: false, problem: `there is no item frame at ${pos.join(", ")}` };
+
+    const id = frameStructureId(robbery, pos);
+
+    try {
+        const manager = world.structureManager;
+
+        // An id must be new to be made, so a copy that is already there goes first.
+        if (manager.get(id) !== undefined) manager.delete(id);
+
+        manager.createFromWorld(id, dim, vector(pos), vector(pos), { saveMode: StructureSaveMode.World, includeEntities: false });
+
+        return { ok: true };
+    } catch (err) {
+        once(`could not save the frame at ${label(pos)}: ${errorText(err)}`);
+        return { ok: false, problem: errorText(err) };
+    }
+}
+
+/** Whether a saved copy of this frame exists. Undefined when the game cannot be asked. */
+export function frameIsCaptured(robbery: string, pos: Pos): boolean | undefined {
+
+    try {
+        return world.structureManager.get(frameStructureId(robbery, pos)) !== undefined;
+    } catch {
+        return undefined;
+    }
+}
+
+/**
+ * Empties a frame: the block is replaced by air and then by the same frame again, which has no item. True when that was done or
+ * there was no frame there to empty; false when it could not be reached (try again later).
+ */
+export function emptyFrame(dimension: string, pos: Pos): boolean {
+
+    const block = blockAt(dimension, pos);
+    if (!block) return false;
+
+    try {
+        if (classOfBlockType(block.typeId) !== "frame") return true;
+
+        const permutation = block.permutation;
+
+        block.setType("minecraft:air");
+        block.setPermutation(permutation);
+
+        return true;
+    } catch (err) {
+        once(`could not empty the frame at ${label(pos)}: ${errorText(err)}`);
+        return false;
+    }
+}
+
+/**
+ * The result of putting a frame back. "missing": there is no saved copy and never will be, so there is nothing to wait for.
+ * "unreachable": its chunk is not loaded or the game refused, so try again later.
+ */
+export type Restored = "restored" | "missing" | "unreachable";
+
+/** Puts the frame back from its saved copy, with the item it showed. */
+export function restoreFrame(dimension: string, robbery: string, pos: Pos): Restored {
+
+    const dim = dimensionOf(dimension);
+    if (!dim || !isLoaded(dimension, pos)) return "unreachable";
+
+    const id = frameStructureId(robbery, pos);
+
+    try {
+        const manager = world.structureManager;
+
+        if (manager.get(id) === undefined) return "missing";
+
+        manager.place(id, dim, vector(pos), { includeEntities: false });
+
+        return "restored";
+    } catch (err) {
+        once(`could not put the frame at ${label(pos)} back: ${errorText(err)}`);
+        return "unreachable";
+    }
+}
+
+/**
+ * Takes away the dropped items named in `only` that are lying within `reach` blocks of `at`: what a punch popped out of a frame.
+ * Only items named are touched, so nothing else lying on the floor near a frame is ever removed. Answers how many went.
+ */
+export function removeItemsNear(dimension: string, at: Vector3, reach: number, only: ReadonlySet<string>): number {
+
+    const dim = dimensionOf(dimension);
+    if (!dim || only.size === 0) return 0;
+
+    let removed = 0;
+
+    try {
+        for (const entity of dim.getEntities({ type: "minecraft:item", location: at, maxDistance: reach })) {
+
+            if (!only.has(entity.id)) continue;
+
+            const where = entity.location;
+            if (Math.hypot(where.x - at.x, where.y - at.y, where.z - at.z) > reach) continue;
+
+            try {
+                entity.remove();
+                removed++;
+            } catch (err) {
+                once(`could not remove a dropped item: ${errorText(err)}`);
+            }
+        }
+    } catch (err) {
+        once(`could not look for dropped items: ${errorText(err)}`);
+    }
+
+    return removed;
 }

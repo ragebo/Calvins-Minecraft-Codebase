@@ -1,11 +1,11 @@
-import { system, type Container, type Player, type Vector3 } from "@minecraft/server";
+import { system, type Container, type ItemStack, type Player, type Vector3 } from "@minecraft/server";
 import { ModalFormData } from "@minecraft/server-ui";
 import { ROBBERY as R } from "../config/balance.js";
 import { FRESH_PICK, pickStep, type PickCurve, type PickParams, type PickState } from "../logic/lockpick.js";
 import { briefly, sentence } from "../logic/robberymeta.js";
 import {
     boxContains, findElement, itemLabel, sameDimension, whyNotRunnable,
-    type Audience, type Effect, type Element, type Lock, type PickLock, type Pos, type RewardEffect, type Robbery, type SayEffect
+    type Audience, type Effect, type Element, type Lock, type LootElement, type PickLock, type Pos, type RewardEffect, type Robbery, type SayEffect
 } from "../logic/robbery.js";
 import { activeEvent, finishEvent, registerEvent, requestEvent } from "./director.js";
 import { addBounty, addCoins, getCoins, takeCoins } from "./economy.js";
@@ -14,7 +14,7 @@ import { debug, error, warn } from "./log.js";
 import { aliveOutlaws, alivePlayers, isOperator, lawPlayers, players } from "./players.js";
 import { registerSystem } from "./registry.js";
 import { clearDirty, dirtyCount, dirtyEntries, getRobbery, markDirty, robberyIsDirty, type Bound, type Dirty } from "./robberystore.js";
-import { dimensionOf, emptyChest, fillChest, isLoaded, setDoor } from "./robberyworld.js";
+import { dimensionOf, dropItems, emptyChest, emptyFrame, fillChest, isLoaded, lootStacks, removeItemsNear, restoreFrame, setDoor } from "./robberyworld.js";
 import { isPhase } from "./round.js";
 import { playAtPoint, playFor } from "./sound.js";
 import { recordOf } from "./state.js";
@@ -279,8 +279,63 @@ function firePending(run: Run, robbery: Robbery, now: number): void {
 // Completing an element
 // ---------------------------------------------------------------------------------------------------------
 
+/**
+ * Gives a frame's loot to the thief: into their bag, and what does not fit on the ground at their feet. With nobody (a command
+ * or an NPC button completed it) it falls from the frame. Says what they took.
+ */
+function handOverLoot(robbery: Robbery, element: LootElement, actor: Player | undefined): void {
+
+    const { stacks, problems } = lootStacks(element.table, element.items);
+
+    if (problems.length > 0) warn(SOURCE, `${robbery.id}: ${element.name}: ${problems.join("; ")}`);
+    if (stacks.length === 0) return;
+
+    const taker = actor !== undefined && actor.isValid ? actor : undefined;
+    const container = taker ? inventoryOf(taker) : undefined;
+    const first = element.cells[0];
+    const at: Vector3 = taker ? taker.location : first ? center(first) : { x: 0, y: 0, z: 0 };
+
+    const took: string[] = [];
+    const left: ItemStack[] = [];
+
+    for (const stack of stacks) {
+
+        // Worded before it is added: adding may change the stack.
+        took.push(`${stack.amount > 1 ? `${stack.amount} ` : ""}${itemLabel(stack.typeId)}`);
+
+        let rest: ItemStack | undefined = stack;
+
+        if (container) {
+            try {
+                rest = container.addItem(stack);
+            } catch (err) {
+                warn(SOURCE, `${robbery.id}: ${element.name}: could not give ${stack.typeId}: ${err}`);
+            }
+        }
+
+        if (rest) left.push(rest);
+    }
+
+    if (left.length > 0) dropItems(robbery.dimension, at, left);
+
+    if (taker) tell(taker, format("ok", `You took ${took.join(", ")}.`));
+}
+
+/**
+ * Notes every item frame of the robbery as one to show again, taken from or not. A script cannot read what a frame shows, so it
+ * cannot know that one was emptied behind its back (a punch the game never reported, a hopper, a mob). Putting the site back
+ * places every frame from its saved copy instead, which costs one small structure each and does not rest on a guess.
+ */
+function noteFrames(robbery: Robbery): void {
+
+    for (const element of robbery.elements) {
+        const cell = element.kind === "frame" ? element.cells[0] : undefined;
+        if (cell) markDirty({ robbery: robbery.id, dimension: robbery.dimension, pos: cell, action: "refill" });
+    }
+}
+
 /** Notes each block of the element as changed (saved now), then changes it. */
-function changeWorld(robbery: Robbery, element: Element): void {
+function changeWorld(robbery: Robbery, element: Element, actor: Player | undefined): void {
 
     const note = (cell: Pos, action: Dirty["action"]): void => {
         markDirty({ robbery: robbery.id, dimension: robbery.dimension, pos: cell, action });
@@ -296,6 +351,18 @@ function changeWorld(robbery: Robbery, element: Element): void {
         for (const cell of element.cells) note(cell, "empty");
         const result = fillChest(robbery.dimension, element.cells, element.table, element.items);
         if (!result.ok) warn(SOURCE, `${robbery.id}: ${element.name} could not be filled${result.problem ? ` (${result.problem})` : ""}`);
+        return;
+    }
+
+    if (element.kind === "frame") {
+        const cell = element.cells[0];
+        if (!cell) return;
+
+        // Noted first, so a crash between emptying it and the end of the run still gets it filled again.
+        note(cell, "refill");
+        handOverLoot(robbery, element, actor);
+
+        if (!emptyFrame(robbery.dimension, cell)) warn(SOURCE, `${robbery.id}: ${element.name} could not be emptied`);
     }
 }
 
@@ -306,7 +373,7 @@ function complete(run: Run, robbery: Robbery, element: Element, actor: Player | 
     run.done.add(element.id);
     if (actor) run.lastActorId = actor.id;
 
-    changeWorld(robbery, element);
+    changeWorld(robbery, element, actor);
 
     const dimension = dimensionOf(robbery.dimension);
     const first = element.cells[0];
@@ -317,10 +384,13 @@ function complete(run: Run, robbery: Robbery, element: Element, actor: Player | 
     cascade(run, robbery, actor);
 }
 
-/** An element with nothing to lock it but something to wait on opens by itself the moment what it waits on is done. */
+/**
+ * An element with nothing to lock it but something to wait on opens by itself the moment what it waits on is done. Not a frame:
+ * its whole point is that someone takes from it, so it waits to be touched, however open it is.
+ */
 function cascade(run: Run, robbery: Robbery, actor: Player | undefined): void {
 
-    const ready = robbery.elements.filter((element) => !run.done.has(element.id)
+    const ready = robbery.elements.filter((element) => !run.done.has(element.id) && element.kind !== "frame"
         && element.locks.length === 0 && element.req.length > 0 && element.req.every((id) => run.done.has(id)));
 
     for (const element of ready) complete(run, robbery, element, actor);
@@ -359,6 +429,8 @@ function begin(id: string, by: Player | undefined, test: boolean, holdsSlot: boo
     };
 
     runs.set(id, run);
+
+    noteFrames(robbery);
 
     debug(SOURCE, `${id} started${test ? " (test)" : ""}`);
 
@@ -506,6 +578,10 @@ export function resetSiteNow(id: string): { readonly cleaned: number; readonly l
 
     runs.delete(id);
     cooldownUntil.delete(id);
+
+    // Resetting by hand is how a builder fixes a site: every frame is shown again, including one nobody was seen taking from.
+    const robbery = getRobbery(id);
+    if (robbery) noteFrames(robbery);
 
     let cleaned = 0;
     let left = 0;
@@ -908,6 +984,68 @@ function handleTouch(player: Player, ref: Bound): void {
 }
 
 // ---------------------------------------------------------------------------------------------------------
+// Punching an item frame
+// ---------------------------------------------------------------------------------------------------------
+
+/** The tick each player's last punch on each frame was handled, so one swing reported twice, or a held button, is one punch. */
+const lastFrameHit = new Map<string, number>();
+
+/**
+ * A player punched an item frame bound to an element. The game pops the item out of a frame on a punch; a script can see that
+ * and cannot stop it. So it is undone a moment later: the item that appeared is taken away, the frame is put back as it was,
+ * and the punch counts as trying to take it, the same as a right-click (locks and requirements and all). A frame already taken
+ * from in this run is left empty, which is what it should be.
+ *
+ * `recent` maps the id of each dropped item that has appeared lately to the tick it did (the glue keeps it). Only an item on that
+ * list is ever removed, so nothing else lying near a frame is touched. If the game never told us about the popped item, nothing is
+ * removed and the frame is left alone, so the thief keeps the item the punch popped out as well as what the element gives them:
+ * a missed undo costs the shop one item, and never takes anything from someone else's pocket.
+ */
+export function frameHit(player: Player, ref: Bound, recent: ReadonlyMap<string, number>): void {
+
+    const key = `${player.id}|${ref.robbery}|${ref.element}`;
+    const now = system.currentTick;
+
+    if (now - (lastFrameHit.get(key) ?? -Infinity) < R.frameHitGapTicks) return;
+    lastFrameHit.set(key, now);
+
+    system.runTimeout(() => {
+        try {
+            afterPunch(player, ref, now, recent);
+        } catch (err) {
+            error(SOURCE, `undoing a punch on ${ref.robbery}/${ref.element} failed: ${err}`);
+        }
+    }, R.frameCleanupTicks);
+}
+
+function afterPunch(player: Player, ref: Bound, punchedAt: number, recent: ReadonlyMap<string, number>): void {
+
+    const robbery = getRobbery(ref.robbery);
+    const element = robbery ? findElement(robbery, ref.element) : undefined;
+    const cell = element?.cells[0];
+
+    if (!robbery || !element || element.kind !== "frame" || !cell) return;
+
+    const stolen = runs.get(robbery.id)?.done.has(element.id) === true;
+
+    const popped = new Set<string>();
+    for (const [id, tick] of recent) if (tick >= punchedAt - R.frameRecentTicks) popped.add(id);
+
+    const removed = removeItemsNear(robbery.dimension, center(cell), R.frameCleanupReach, popped);
+
+    if (removed > 0 && !stolen) {
+        const result = restoreFrame(robbery.dimension, robbery.id, cell);
+        if (result !== "restored") warn(SOURCE, `${robbery.id}: the frame ${element.name} could not be put back after a punch (${result})`);
+    }
+
+    // Off unless /scriptevent rae:log_debug on: what a punch really does is not measured, so this is how it will be.
+    debug(SOURCE, `punch on frame ${robbery.id}/${element.name}: ${popped.size} dropped item(s) appeared in the last ${R.frameRecentTicks} ticks, ${removed} removed near the frame, ${stolen ? "already taken from" : removed > 0 ? "put back" : "left as it was"}`);
+
+    // The punch was an attempt to take it. If the frame was taken from already, that does nothing, as a right-click would not.
+    if (player.isValid) touch(player, ref);
+}
+
+// ---------------------------------------------------------------------------------------------------------
 // The shared loop: limits, area, delayed effects, and putting sites back
 // ---------------------------------------------------------------------------------------------------------
 
@@ -916,9 +1054,22 @@ function putBack(entry: Dirty): boolean {
 
     if (!isLoaded(entry.dimension, entry.pos)) return false;
 
-    return entry.action === "close"
-        ? setDoor(entry.dimension, [entry.pos], false)
-        : emptyChest(entry.dimension, [entry.pos]);
+    if (entry.action === "close") return setDoor(entry.dimension, [entry.pos], false);
+
+    if (entry.action === "refill") {
+
+        const result = restoreFrame(entry.dimension, entry.robbery, entry.pos);
+
+        // No saved copy: nothing can ever put it back, and waiting would keep the whole robbery from starting again. Say so, and go on.
+        if (result === "missing") {
+            warn(SOURCE, `${entry.robbery}: the frame at ${entry.pos.join(", ")} has no saved copy, so it cannot be put back if it was emptied. Bind it again, or press "Save what the frame shows now", to save one.`);
+            return true;
+        }
+
+        return result === "restored";
+    }
+
+    return emptyChest(entry.dimension, [entry.pos]);
 }
 
 function watchArea(run: Run, robbery: Robbery, now: number): void {
@@ -1053,6 +1204,7 @@ registerSystem({
         cooldownUntil.clear();
         lastGuessTick.clear();
         lastDetail.clear();
+        lastFrameHit.clear();
         picking.clear();
         launching = undefined;
     }
