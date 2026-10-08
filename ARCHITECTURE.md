@@ -180,7 +180,7 @@ systems/shopbuilder.ts   the /rae:shop_* commands
 systems/npcprobe.ts      the measurement of how the game treats an NPC
 ```
 
-How a click reaches the shop was unmeasured when this was built, so both routes exist and two live switches (`shop.interceptClicks`, `shop.useDialogueScene`) choose between them. Either the "before" event for a click on an NPC is cancelled and the shop opens a tick later (one screen, if the game honours the cancel), or the NPC is pointed at one static dialogue scene (`your_pack_name_BP/dialogue/rae_npc.json`) whose one button runs `/scriptevent rae:npc shop`. An NPC's button runs as the NPC with the pressing player as the initiator, which `core/events.ts` hands a handler as its `origin`. `docs/test-cards/NPC-PROBE.md` measures which works.
+How a click reaches the shop was unmeasured when this was built, so both routes were built and two live switches (`shop.interceptClicks`, `shop.useDialogueScene`) choose between them. Either the "before" event for a click on an NPC is cancelled and the shop opens a tick later (one screen, if the game honours the cancel), or the NPC is pointed at one static dialogue scene (`your_pack_name_BP/dialogue/rae_npc.json`) whose one button runs `/scriptevent rae:npc shop`. An NPC's button runs as the NPC with the pressing player as the initiator, which `core/events.ts` hands a handler as its `origin`. `docs/test-cards/NPC-PROBE.md` measured which works (2026-10-07): the first. The cancel stops the game's NPC screen, so `interceptClicks` stays on and the scene is the fallback, and what an operator's sneak-click lands on.
 
 ## `main.ts`: what it wires
 

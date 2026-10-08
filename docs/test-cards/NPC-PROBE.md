@@ -42,6 +42,25 @@ Tidy up afterwards: `/kill @e[tag=rae_npc_probe]`.
 | Step 6: the name does not show | The shop's own screen carries the name; nothing else changes. |
 | Step 2: `NPC component = THREW` or undefined | Expected: the NPC component is a Beta API. It means a script cannot set a skin; set it in the game's own NPC screen (operator, sneak and click). |
 
+## Result of the first run (2026-10-07, BP 0.2.0, RAE2, as an operator)
+
+Read from the content log's `[npc-probe]` lines plus what the owner saw. Steps 9 (needs a second, non-operator account) and the
+"which box after a reload" half of step 10 were not run; they only matter for the dialogue-button fallback.
+
+| Step | What happened | What it means |
+|---|---|---|
+| 2 | Spawn, tag, dynamic property, name tag (set and read back), facing the builder, and `dialogue change` right after spawning and 10 ticks later all ran without error. `getComponent("minecraft:npc")` answered `undefined` with no error. | A script cannot set an NPC's skin: shop NPCs have the default look. The scene needs no delayed second try. |
+| 3 | An uncancelled click gave one `click BEFORE` and one `click AFTER`. The owner saw an edit-style screen first and, after clicking in it, the scene's box. | That is the game's own flow, and it only appears when the click is not cancelled. |
+| 4 | Both buttons logged `fromNpc=true entity=minecraft:npc initiator=<the player> operator=true`, and button B's second command (the tag) ran. | The dialogue button can name the customer: the fallback route works. |
+| 5 | With `cancel on`, 5 clicks gave 5 `click BEFORE ... cancel=true` and no `click AFTER`. The owner: "the cancel does work". | **Interception works: `shop.interceptClicks` stays on and a shop opens in one screen.** |
+| 6 | The name tag was set and read back ("Old Pete"). Whether the name changed above its head was not reported. | Nothing depends on it. |
+| 7 | `dialogue change` ran; `dialogue open` opened the box with no click ("does force open"). | A script can open a scene by itself. |
+| 8 | `clicks on NPCs seen: before / after / cancelled = 11 / 6 / 5`, buttons A and B, one probe NPC with its property and name. | Consistent with the above. |
+| 10 | After leaving the world and entering it again, the NPC, its property and its name were all still there. Which box a click then showed was not reported. | NPC data survives; whether the scene assignment does is open (the fallback route only). |
+
+The part of the content log written so far held no error from the new code, only the usual RAE2 line about the missing
+`mystructure:train` structure.
+
 ## Known limits
 
 - Nothing here is a shop yet: it only measures. The shop card is `NPC-SHOP.md`, and it assumes this one has been run.

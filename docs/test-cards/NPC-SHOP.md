@@ -3,9 +3,9 @@
 Phases N1 and N2a of the NPC work (steps 1 to 21 are the shop, 22 to 28 the services and who may take a deal). A shop is data
 plus a screen: the NPC only carries a shop id, and a click opens a form where each deal is a button. You stock it by holding an
 item and saying what it costs; no commands to type into the NPC editor, and a purchase is all or nothing (the coins and the goods
-move together, or nothing does). Run `NPC-PROBE.md` first: it tells you which of the two
-ways a click reaches the shop works in the real game, and step 1 here applies the answer. Most of this card is "does the real game
-agree with what the tests assumed".
+move together, or nothing does). `NPC-PROBE.md` has been run (2026-10-07): of
+the two ways a click can reach the shop, the first works in the real game (the shop cancels the click and opens at once), so
+step 1 here needs nothing. Most of this card is "does the real game agree with what the tests assumed".
 
 - Behavior pack **0.2.0**, resource pack unchanged (1.0.27). BP only; a fresh launch is the safest way to be sure the new scripts
   are what you are running.
@@ -24,7 +24,7 @@ enchanted bow, a full bag or a form: that is this card.
 
 | # | Do | Expect |
 |---|---|---|
-| 1 | Set the click route from the probe: if the game's own NPC box still opened in probe step 5, run `/rae:config_set_bool shop.interceptClicks false`; otherwise leave it. | The command says it changed the setting. |
+| 1 | Nothing to set: the probe showed the cancel works, so `shop.interceptClicks` stays on (its default). | If a click on a shop NPC ever shows the game's own NPC box, run `/rae:config_set_bool shop.interceptClicks false` and tell me. |
 | 2 | `/rae:shop_new Habiti` | An NPC appears in front of you, facing you, named Habiti above its head. Chat says it is in front of you and how to stock it. `/rae:shop_list` shows `habiti: Habiti, no deals yet, 1 NPC`. |
 | 3 | Hold an iron sword: `/rae:shop_sell 60`. Hold 6 arrows: `/rae:shop_sell 15`. Hold 3 feathers: `/rae:shop_buy 8`. | Each answers "Added to Habiti: ..." with the deal in words: "Iron Sword for 60 coins", "Arrow x6 for 15 coins", "Sell Feather x3 for 8 coins". |
 | 4 | Put 9 gold ingots in your bag, hold a diamond, run `/rae:shop_trade`, choose Gold Ingot, how many 3, extra coins 10. | "Added: Diamond for Gold Ingot x3 + 10 coins." `/rae:shop_info` lists all four deals. |
@@ -40,7 +40,7 @@ enchanted bow, a full bag or a form: that is this card.
 | 14 | In it: **Greeting** (type "Howdy, stranger."), **Rename** (to "Habiti the Horseman"), **Deals**, pick the sword, **Change the price** to 75, **Move down**, **Remove** one with the confirmation. | Each says what it did. The NPC's name above its head follows the rename. A customer sees the greeting above the purse. |
 | 15 | Walk away, then **Bring its NPC here**. Then **Copy this shop to a new NPC here** ("Second Stall"). | The NPC walks to you; a second NPC appears with the same deals, named Second Stall. |
 | 16 | **Undo the last change** (it appears once something changed). Then **Delete this shop** (confirm). | The change goes back. The shop and its NPC disappear; `/rae:shop_undo habiti` brings the shop back, and `/rae:shop_place habiti` puts its NPC out again. |
-| 17 | Sneak and right-click an NPC as an operator. | The game's own NPC screen opens (with its editor), not the shop. |
+| 17 | Sneak and right-click an NPC as an operator. | The game's own screens open, not the shop: in the probe an edit-style screen came first and, after clicking in it, the NPC's own box. **Tell me what that first screen is** (fields for name, skin, commands?). |
 | 18 | With a second account that is not an operator: open the shop and buy something; try `/rae:shop_list`; click the NPC holding the robbery wand. | The shop works for them. The command is refused ("operator"). The wand does nothing special: they get the shop. |
 | 19 | Quit to the main menu and open the world again. | The shops and their NPCs are still there and still work. (If the NPC shows the game's ordinary box after the reload, the dialogue scene assignment did not survive: tell me.) |
 | 20 | Make a plain NPC (`/summon npc`) and click it with the wand. | It offers to make it a shop. **Yes**, name it: it becomes one, and its editor opens. |
