@@ -9,6 +9,7 @@ const { GUNS, AMMO, GATLING_AIM_PITCH_PROPERTY, GATLING_BARREL_SPIN_PROPERTY } =
 const { AIM } = await load("config/balance.js");
 await load("systems/guns.js");
 const { listSystems } = await load("core/registry.js");
+const { aimingWith } = await load("core/aim.js");
 
 const guns = Object.values(GUNS);
 // The Gatling gun is never held to fire (it's placed, then ridden) — every "for every gun" test in this
@@ -514,6 +515,44 @@ test("two players aim independently", () => {
     check("and stays zoomed while A's aim is over", b.camera.fovCalls.length === 1, JSON.stringify(b.camera.fovCalls));
     rightClick(b);
     check("B is back to normal too", b.camera.fovCalls.at(-1) === undefined);
+    done();
+});
+
+test("who is aiming is on record for anything else that needs to know (the robbery hold-ups): which gun, until the aim ends however it ends", () => {
+    const { check, done } = checks();
+
+    for (const gun of heldGuns) {
+        const p = armed(gun, `record-${gun.id}`);
+        check(`${gun.id}: not aiming before the click`, aimingWith(p.id) === undefined);
+        rightClick(p);
+        check(`${gun.id}: aiming with it after`, aimingWith(p.id) === gun.itemId, String(aimingWith(p.id)));
+        rightClick(p);
+        check(`${gun.id}: not aiming after the second click`, aimingWith(p.id) === undefined);
+    }
+
+    const a = armed(GUNS.revolver, "A");
+    const b = fake.makePlayer("B", { location: { x: 5, y: 64, z: 5 }, holding: GUNS.pump_shotgun.itemId });
+    rightClick(a); rightClick(b);
+    check("two players, two guns", aimingWith(a.id) === GUNS.revolver.itemId && aimingWith(b.id) === GUNS.pump_shotgun.itemId);
+    rightClick(a);
+    check("one stopping does not stop the other", aimingWith(a.id) === undefined && aimingWith(b.id) === GUNS.pump_shotgun.itemId);
+
+    const mover = armed(GUNS.revolver, "mover");
+    rightClick(mover);
+    mover.holding = "minecraft:stick";
+    fake.advance(8);
+    check("switching away ends it on record too", aimingWith(mover.id) === undefined);
+
+    const leaver = armed(GUNS.revolver, "leaver2");
+    rightClick(leaver);
+    leaver.isValid = false;
+    fake.advance(8);
+    check("and so does leaving", aimingWith(leaver.id) === undefined);
+
+    const resetter = armed(GUNS.revolver, "resetter2");
+    rightClick(resetter);
+    resetGuns();
+    check("and a system reset", aimingWith(resetter.id) === undefined);
     done();
 });
 

@@ -6,7 +6,7 @@ import {
 } from "@minecraft/server";
 import { AMMO, GUNS, BULLET_ENTITY_ID, BULLET_LIFETIME_TICKS, GATLING_AIM_PITCH_PROPERTY, GATLING_BARREL_SPIN_PROPERTY, HIT_MARKER_SOUND, HIT_WINDOW_TICKS, KILL_MARKER_SOUND, type AutomaticConfig, type GunConfig, type GunId, type MuzzleEffects, type MuzzleLight, type SoundCue } from "../config/guns.js";
 import { AIM, TUMBLEWEED_ENTITY_ID } from "../config/balance.js";
-import { flashHitMarker, hideScope, showScope, zoomReset, zoomTo } from "../core/aim.js";
+import { flashHitMarker, hideScope, noteAiming, showScope, zoomReset, zoomTo } from "../core/aim.js";
 import { error, warn } from "../core/log.js";
 import { registerSystem } from "../core/registry.js";
 import { playFor, playSequence } from "../core/sound.js";
@@ -731,6 +731,7 @@ function startAim(player: Player, gun: GunConfig): void {
     if (aiming.has(player.id)) return;
 
     aiming.set(player.id, { player, gun });
+    noteAiming(player.id, gun.itemId);
     zoomTo(player, gun.aim.fov);
     if (gun.aim.scope) showScope(player);
     slowWhileAimed(player, gun);
@@ -753,6 +754,7 @@ function stopAim(playerId: string): void {
     if (!state) return;
 
     aiming.delete(playerId);
+    noteAiming(playerId, undefined);
 
     if (state.player.isValid) {
         zoomReset(state.player);

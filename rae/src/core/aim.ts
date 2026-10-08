@@ -96,3 +96,25 @@ export function flashHitMarker(player: Player, options: { readonly restoreScope:
         else clearTitleSafely(player);
     }, AIM.hitMarkerFlashTicks);
 }
+
+// ---------------------------------------------------------------------------------------------------------
+// Who is aiming
+// ---------------------------------------------------------------------------------------------------------
+
+/**
+ * Who is aiming a gun right now (player id -> the gun's item id). systems/guns.ts keeps it up to date as it starts and stops each
+ * aim, and anything else that cares whether a gun is POINTED (the robbery framework's hold-ups) reads it here: a system may not
+ * import another system, so what two of them share lives in core.
+ */
+const aimers = new Map<string, string>();
+
+/** Records that this player started aiming the gun with this item id, or stopped (no item id). */
+export function noteAiming(playerId: string, gunItemId: string | undefined): void {
+    if (gunItemId === undefined) aimers.delete(playerId);
+    else aimers.set(playerId, gunItemId);
+}
+
+/** The item id of the gun this player is aiming, or undefined when they are not aiming one. */
+export function aimingWith(playerId: string): string | undefined {
+    return aimers.get(playerId);
+}

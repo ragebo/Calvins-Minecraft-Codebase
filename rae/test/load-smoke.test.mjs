@@ -38,7 +38,7 @@ test("main.js loads under the fake game API and registers every system", () => {
     check("system names are unique", new Set(names).size === names.length, names.join(","));
     check("every system can reset", systems.every((s) => typeof s.reset === "function"));
     check("core systems are registered", ["roles", "jail", "jailbreak", "raids", "train", "transit", "aimprobe", "menu", "tumbleweed", "boat", "guns", "compass", "endgame"].every((n) => names.includes(n)), names.join(","));
-    check("the robbery framework's parts are registered", ["robbery", "robberyedit", "robberyglue", "robberybuilder", "robberyprobe"].every((n) => names.includes(n)), names.join(","));
+    check("the robbery framework's parts are registered", ["robbery", "robberyedit", "robberyglue", "robberybuilder", "robberyprobe", "robberyteller", "robbery-holdup"].every((n) => names.includes(n)), names.join(","));
     check("the NPC shops' parts are registered", ["npcprobe", "shoptalk", "shopbuilder"].every((n) => names.includes(n)), names.join(","));
     done();
 });
@@ -55,7 +55,7 @@ test("the public script-event ids are all still registered", () => {
 const PUBLIC_COMMANDS = [
     "rae:config_get", "rae:config_list", "rae:config_reset", "rae:config_set_bool", "rae:config_set_coordinate", "rae:config_set_number",
     "rae:robbery_probe_ctx",
-    ...["list", "info", "new", "select", "delete", "start", "stop", "reset", "activate", "wand", "edit", "view", "undo", "area", "set"].map((n) => `rae:robbery_${n}`),
+    ...["list", "info", "new", "select", "delete", "start", "stop", "reset", "activate", "wand", "edit", "view", "undo", "area", "set", "teller"].map((n) => `rae:robbery_${n}`),
     ...["list", "info", "new", "sell", "buy", "trade", "service", "edit", "open", "select", "copy", "place", "move", "delete", "undo"].map((n) => `rae:shop_${n}`)
 ];
 

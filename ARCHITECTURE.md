@@ -43,8 +43,10 @@ own header comment where it has one.
 | `registry.ts` | Where a system registers itself and its reset, so a round reset can never again forget one. |
 | `robberyedit.ts` | The robbery framework's editing session without a screen: each builder's selected robbery (kept on the player), the one `applyEdit` every change goes through (pure edit, whole-robbery validation, no block claimed by two robberies, then the store), binding blocks (and saving what an item frame shows), and what a wand click means. |
 | `robberyforms.ts` | Every screen the builder sees (menus, the add-element form, locks, requirements, effects, loot, settings, area), as presentation over `robberyedit.ts` and `logic/robberymeta.ts`. |
+| `robberyholdup.ts` | Holding up a teller: a player who keeps a gun aimed at one for its hold-up time counts as touching its element, through the ordinary `touch`. One tick handler, free when no teller exists or nobody aims. |
 | `robberyrun.ts` | Playing a robbery: starting it (and the director's slot), who may touch what, the locks, completing elements (handing a frame's loot to the thief), effects (including spawning guards), ending, undoing a punch on an item frame, and putting the site back through one idempotent janitor. One shared loop; nothing registered per robbery. |
 | `robberystore.ts` | Where robberies live: one world property each, written at once on every edit, refused up front when over the size cap, unreadable ones listed and never overwritten, one level of undo. Also the saved list of blocks a run changed and has not yet put back. |
+| `robberyteller.ts` | Which entities are tellers (a tag on the NPC or villager: `rbt` and `rbt:<robbery>:<element>`), and what a player is looking at. |
 | `robberyworld.ts` | Everything a robbery does to the world (swing a door, fill and empty a chest, empty an item frame and show it again from a saved one-block structure, make and remove guard mobs, chunk-loaded checks) in one place, because it is the one file that depends on engine behavior measured once. Never throws. |
 | `round.ts` | The one `IDLE -> SETUP -> ACTIVE -> ENDING -> ENDED` phase machine. Also a `Persistable`: the phase itself is never restored into an active state. |
 | `screens.ts` | Menu plumbing for a builder's screens: a title, some text and buttons, each button an action that may open another screen, and one menu of a kind open per player. The shop's screens use it; `robberyforms.ts` has its own copy of the same few lines. |
@@ -86,7 +88,8 @@ problem — the label just describes most of the folder, not a strict rule every
 | `menu.ts` | The in-game menu item: start or reset the game, teleport to the key places. |
 | `npcprobe.ts` | Measurement spike, not a feature: how the real game treats a vanilla NPC (`rae:npc_probe`). Does a click reach a script, does `cancel` stop the game's dialogue, can a script point an NPC at a dialogue scene, what does a scene's button report, does a spawned NPC keep its mark. See `docs/test-cards/NPC-PROBE.md`. |
 | `probe.ts` | Measurement spike, not a feature: measures whether stacked `applyDamage` calls add up (`rae:probe_damage`). |
-| `robberybuilder.ts` | Building a robbery in game: the wand (used on a block or on nothing), fifteen operator-only `rae:robbery_*` commands, and the builder view. Hands every click to `core/robberyedit.ts` and every screen to `core/robberyforms.ts`. |
+| `robberybuilder.ts` | Building a robbery in game: the wand (used on a block or on nothing), sixteen operator-only `rae:robbery_*` commands (one of them, `rae:robbery_teller`, binds the NPC or villager you look at), and the builder view. Hands every click to `core/robberyedit.ts` and every screen to `core/robberyforms.ts`. |
+| `robberyteller.ts` | The game-event side of a teller: a click on one is cancelled (nobody trades with it), the wand opens its element's screen, a sneaking operator gets the game's own screen. The hold-up itself is a tick handler in `core/robberyholdup.ts`. |
 | `robberyrun.ts` | The game-event side of playing a robbery: a right-click on a bound block (cancelled at once, the work a tick later), pressure plates and tripwires, a punch on an item frame (seen after the fact, with the item entities that just appeared), and protecting bound blocks from breaking and explosions. Hands everything to `core/robberyrun.ts`. |
 | `robberyprobe.ts` | Measurement spike, not a feature: Phase 0 of the in-game robbery framework (`rae:robbery_probe`, `rae:robbery_probe_ctx`). Records how the real game reports a right-click on a chest, door, button or lever, whether `cancel` stops it, and what structures, loot tables and ticking areas allow, before the framework is built on any of it. See `docs/test-cards/ROBBERY-SPIKE.md`. |
 | `raids.ts` | Two raids in one file — fort plugs into `core/raid.ts`'s shared engine; ranch is hand-rolled because its countdown-that-stretches-on-reinforcement doesn't fit that shape. |
@@ -187,6 +190,14 @@ that is stopped spawns no more. `core/robberyworld.ts` makes each one and tags i
 and `rbg:<robbery>` (whose it is). They are removed by the same moments that put a site back (the reset time, a stop, a
 hand reset, a deleted robbery, a round reset), and the stray sweep takes any guard whose robbery has no run: on `entityLoad`,
 and once after start-up, because a reload ends a robbery in progress but not its mobs.
+
+**A teller is an element shaped like an entity.** `logic/robbery.ts` gives it one "home" cell (the block its feet are in) so every
+generic part keeps working, and `core/robberystore.ts`'s position index skips it, so the floor under a teller is never a bound
+block that a click or the protection could see. The entity carries `rbt` and `rbt:<robbery>:<element>` (`core/robberyteller.ts`);
+nothing searches for tellers: `core/robberyholdup.ts` casts a player's own view ray, reads the tag, and calls the ordinary
+`touch`, so autostart, outlaws-only, requirements, locks and every effect (including spawning guards) apply with no new
+machinery. Who is aiming is a core contract (`core/aim.ts`, written by `systems/guns.ts`) because a system may not import a system.
+`systems/robberyteller.ts` is only the click.
 
 ### The NPC shops' shape
 

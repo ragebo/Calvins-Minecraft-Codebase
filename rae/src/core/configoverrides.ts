@@ -397,6 +397,9 @@ function registerBalanceFields(): void {
     // A punch on a bound item frame cannot be stopped, only undone (core/robberyrun.ts frameHit). What the game does on a punch is
     // what docs/test-cards/ROBBERY-FRAME.md measures; if undoing it ever misbehaves this turns it off with no redeploy.
     boolean("robbery.guardFramePunches", "Robbery: undo a punch on a bound item frame (the popped item is taken back, the frame put back)", "Robbery", () => ROBBERY.guardFramePunches, (v) => { ROBBERY.guardFramePunches = v; });
+
+    // A hold-up is a gun AIMED at a teller (the right-click aim). If the aim toggle is awkward for it, off means holding any gun is enough.
+    boolean("robbery.holdUpNeedsAim", "Robbery: a hold-up needs the gun aimed (right-click); off, holding a gun and looking at the teller is enough", "Robbery", () => ROBBERY.holdUpNeedsAim, (v) => { ROBBERY.holdUpNeedsAim = v; });
 }
 
 registerGunFields();

@@ -5,6 +5,7 @@ import { debug, error, warn } from "../core/log.js";
 import { isOperator } from "../core/players.js";
 import { registerSystem } from "../core/registry.js";
 import { openAdoptNpc, openShop, openShopEditor } from "../core/shopforms.js";
+import { tellerOf } from "../core/robberyteller.js";
 import { isNpc, rememberSpot, shopOf } from "../core/shopnpc.js";
 import { format, tell } from "../core/ui.js";
 
@@ -69,6 +70,9 @@ try {
             const wand = holdsWand(player, event.itemStack);
 
             if (shopId === undefined) {
+                // A teller (systems/robberyteller.ts) is an NPC that is not a shop either, and is not for making into one.
+                if (tellerOf(target) !== undefined) return;
+
                 // A vanilla NPC that is not a shop. Only the wand does anything with it: offer to make it one.
                 if (wand) {
                     event.cancel = true;

@@ -6,10 +6,11 @@ import { ROBBERY as R } from "../config/balance.js";
 import { debug, error, info, warn } from "../core/log.js";
 import { isOperator } from "../core/players.js";
 import { registerSystem } from "../core/registry.js";
-import { applyEdit, createRobbery, giveWand, select, selectedId, selectedRobbery, wandOnAir, wandOnBlock, type WandAction } from "../core/robberyedit.js";
+import { applyEdit, bindTeller, createRobbery, giveWand, select, selectedId, selectedRobbery, wandOnAir, wandOnBlock, type WandAction } from "../core/robberyedit.js";
 import { hasMenuOpen, openAddElement, openElementMenu, openMainMenu, openNewRobbery, openPickRobbery } from "../core/robberyforms.js";
 import { activateElement, cooldownLeftSeconds, resetSiteNow, startRobbery, stopRobbery, viewOf, whyCannotActivate, whyCannotStart, whyCannotStop, clock } from "../core/robberyrun.js";
 import { boundAt, deleteRobbery, getRobbery, getStored, listStored, rawText, undoLast } from "../core/robberystore.js";
+import { aimedEntity } from "../core/robberyteller.js";
 import { onTick } from "../core/tick.js";
 import { ACTION_BAR_PRIORITY, format, setActionBar, tell } from "../core/ui.js";
 import { classOfBlockType } from "../logic/blockclass.js";
@@ -543,6 +544,38 @@ const COMMANDS: readonly CommandSpec[] = [
             });
 
             return ok(`Activating ${element} in ${key}.`);
+        }
+    },
+    {
+        name: "rae:robbery_teller",
+        description: "Makes the NPC or villager you are looking at a teller of the robbery you are building: keeping a gun aimed at it holds it up. With the name of a teller you already made, moves that teller to it.",
+        optional: [{ name: "name", type: STRING }],
+        run: (origin, name?: string) => {
+            const player = playerOf(origin);
+            if (!player) return failure("look at the teller yourself: run this as a player");
+
+            const wanted = target(origin);
+            if ("problem" in wanted) return failure(wanted.problem);
+
+            const entity = aimedEntity(player, R.holdUpReach);
+            if (!entity) return failure(`look at the NPC or villager that should be the teller, within ${R.holdUpReach} blocks`);
+
+            system.run(() => {
+                const result = bindTeller(wanted.id, entity, name ?? "");
+
+                if (!result.ok) {
+                    later(origin, format("warn", `Not changed: ${result.reason.replace(/\.$/, "")}.`));
+                    return;
+                }
+
+                later(origin, format("ok", result.moved
+                    ? `${result.element.name} is now this one.`
+                    : `${result.element.name} is a teller. Aim a gun at it to hold it up; set what happens with the wand.`));
+
+                if (!result.moved) void openElementMenu(player, wanted.id, result.element.id);
+            });
+
+            return ok("Making it a teller. Close the chat to see its screen.");
         }
     },
     {

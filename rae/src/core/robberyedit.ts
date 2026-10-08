@@ -1,4 +1,4 @@
-import { ItemStack, system, type Player } from "@minecraft/server";
+import { ItemStack, system, type Entity, type Player } from "@minecraft/server";
 import { ROBBERY as R } from "../config/balance.js";
 import { classOfBlockType } from "../logic/blockclass.js";
 import {
@@ -9,6 +9,7 @@ import { slugify, suggestKind, whyBlockCannotBe } from "../logic/robberymeta.js"
 import { warn } from "./log.js";
 import { registerSystem } from "./registry.js";
 import { allRobberies, boundAt, getRobbery, getStored, isDirtyAt, listStored, saveRobbery } from "./robberystore.js";
+import { dimensionNameOf, homeOf, markTeller, tellerOf, unmarkElement, whyNotATeller } from "./robberyteller.js";
 import { captureFrame, cellsToBind, neighbourChest, typeAt } from "./robberyworld.js";
 
 /**
@@ -219,11 +220,67 @@ export function recaptureFrame(robberyId: string, elementId: string): { readonly
     return saved.ok ? { ok: true } : fail(`the frame could not be saved: ${saved.problem ?? "the game refused"}`);
 }
 
+export type TellerOutcome = { readonly ok: true; readonly robbery: Robbery; readonly element: Element; readonly moved: boolean } | { readonly ok: false; readonly reason: string };
+
+/**
+ * Makes `entity` a teller of a robbery. A name that is already one of the robbery's tellers moves THAT teller to this entity (the
+ * old one stops being a teller, so the builder does not have to delete and rebuild what it was set up with); any other name, or
+ * none, makes a new teller element standing where the entity does. Changes the world (a tag): not for a before-event.
+ */
+export function bindTeller(robberyId: string, entity: Entity, name: string): TellerOutcome {
+
+    const robbery = getRobbery(robberyId);
+    if (!robbery) return fail(`there is no robbery ${robberyId}`);
+
+    const why = whyNotATeller(entity);
+    if (why) return fail(why);
+
+    const dimension = dimensionNameOf(entity);
+    if (dimension !== robbery.dimension) return fail(`it is in the ${dimension} and ${robbery.name} is in the ${robbery.dimension}`);
+
+    const wanted = cleanName(name);
+    const existing = wanted.length > 0 ? robbery.elements.find((element) => element.kind === "teller" && element.name.toLowerCase() === wanted.toLowerCase()) : undefined;
+    const home = homeOf(entity);
+
+    // Already somebody's teller: only the very same element may take it again.
+    const current = tellerOf(entity);
+    if (current && !(existing && current.robbery === robbery.id && current.element === existing.id)) {
+        const holder = getRobbery(current.robbery)?.elements.find((element) => element.id === current.element);
+        if (holder) return fail(`it is already the teller ${holder.name} of ${getRobbery(current.robbery)?.name ?? current.robbery}`);
+    }
+
+    if (existing) {
+        const outcome = applyEdit(robberyId, (latest) => updateElement(latest, existing.id, { cells: [home] }));
+        if (!outcome.ok) return outcome;
+
+        unmarkElement({ robbery: robbery.id, element: existing.id });
+        markTeller(entity, { robbery: robbery.id, element: existing.id });
+
+        return { ok: true, robbery: outcome.robbery, element: outcome.robbery.elements.find((element) => element.id === existing.id) ?? existing, moved: true };
+    }
+
+    let added: Element | undefined;
+
+    const outcome = applyEdit(robberyId, (latest) => {
+        const result = addElement(latest, { kind: "teller", name: wanted, cells: [home] });
+        if (result.ok) added = result.element;
+        return result.ok ? { ok: true, robbery: result.robbery } : result;
+    });
+
+    if (!outcome.ok) return outcome;
+    if (!added) return fail("it could not be added");
+
+    markTeller(entity, { robbery: robbery.id, element: added.id });
+
+    return { ok: true, robbery: outcome.robbery, element: added, moved: false };
+}
+
 export type RemoveOutcome = { readonly ok: true; readonly robbery: Robbery; readonly removedReferences: number } | { readonly ok: false; readonly reason: string };
 
 /** Removes an element; says how many requirements that took with it. */
 export function removeElementFrom(robberyId: string, elementId: string): RemoveOutcome {
 
+    const wasTeller = getRobbery(robberyId)?.elements.find((element) => element.id === elementId)?.kind === "teller";
     let removed = 0;
 
     const outcome = applyEdit(robberyId, (current) => {
@@ -231,6 +288,9 @@ export function removeElementFrom(robberyId: string, elementId: string): RemoveO
         if (result.ok) removed = result.removedReferences;
         return result.ok ? { ok: true, robbery: result.robbery } : result;
     });
+
+    // The entity that was its teller is just an NPC or a villager again (if it is loaded; a mark left on one that is not does nothing).
+    if (outcome.ok && wasTeller) unmarkElement({ robbery: robberyId, element: elementId });
 
     return outcome.ok ? { ok: true, robbery: outcome.robbery, removedReferences: removed } : outcome;
 }

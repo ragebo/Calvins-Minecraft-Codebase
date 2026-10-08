@@ -32,6 +32,7 @@ import "./systems/liveconfig.js";
 import "./systems/robberyprobe.js";
 import "./systems/robberyrun.js";
 import "./systems/robberybuilder.js";
+import "./systems/robberyteller.js";
 import "./systems/npcprobe.js";
 import "./systems/shoptalk.js";
 import "./systems/shopbuilder.js";

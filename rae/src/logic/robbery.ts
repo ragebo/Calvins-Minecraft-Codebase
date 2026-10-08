@@ -45,8 +45,8 @@ export type Channel = "chat" | "bar" | "title";
 export const AUDIENCES: readonly Audience[] = ["actor", "area", "outlaws", "law", "all"];
 export const CHANNELS: readonly Channel[] = ["chat", "bar", "title"];
 
-export type ElementKind = "door" | "chest" | "switch" | "frame";
-export const ELEMENT_KINDS: readonly ElementKind[] = ["door", "chest", "switch", "frame"];
+export type ElementKind = "door" | "chest" | "switch" | "frame" | "teller";
+export const ELEMENT_KINDS: readonly ElementKind[] = ["door", "chest", "switch", "frame", "teller"];
 
 export interface PickLock {
     readonly kind: "pick";
@@ -167,7 +167,21 @@ export interface FrameElement extends ElementBase {
     readonly items: readonly (readonly [string, number])[];
 }
 
-export type Element = DoorElement | ChestElement | SwitchElement | FrameElement;
+/**
+ * A teller: an NPC or villager the builder looked at, who can be held up. Done means a player kept a gun aimed at it long enough.
+ * It is not a block, so nothing is bound to the world's blocks except the one its feet are in (its "home", which keeps every
+ * generic part working and which no click or protection ever sees); the entity itself carries a tag naming this element, and the
+ * game finds it through a player's own view.
+ */
+export interface TellerElement extends ElementBase {
+    readonly kind: "teller";
+    /** The block its feet are in: exactly one. */
+    readonly cells: readonly Pos[];
+    /** How long a gun has to stay aimed at it. */
+    readonly holdSeconds: number;
+}
+
+export type Element = DoorElement | ChestElement | SwitchElement | FrameElement | TellerElement;
 
 /** The elements that hold loot: a chest has it put in, a frame has it taken. */
 export type LootElement = ChestElement | FrameElement;
@@ -588,6 +602,14 @@ function validateElement(raw: unknown, dimension: string): Result<Element> {
         return good(isFrame ? { ...common, kind: "frame", ...loot } : { ...common, kind: "chest", ...loot });
     }
 
+    if (raw["kind"] === "teller") {
+        const cells = validateCells(raw["cells"], dimension, 1);
+        if (!cells.ok) return bad(`${name}: ${cells.reason}`);
+        const hold = intInRange(raw["holdSeconds"], 1, R.maxHoldSeconds, "the hold-up time");
+        if (!hold.ok) return bad(`${name}: ${hold.reason}`);
+        return good({ ...common, kind: "teller", cells: cells.value, holdSeconds: hold.value });
+    }
+
     return bad(`${name}: unknown kind ${String(raw["kind"])}`);
 }
 
@@ -740,8 +762,8 @@ export function validateRobbery(raw: unknown): Result<Robbery> {
 // The saved form: short keys. Only this section knows them.
 // ---------------------------------------------------------------------------------------------------------
 
-const KIND_CODES: Record<ElementKind, string> = { door: "dr", chest: "ch", switch: "sw", frame: "fr" };
-const KIND_FROM_CODE: Record<string, ElementKind> = { dr: "door", ch: "chest", sw: "switch", fr: "frame" };
+const KIND_CODES: Record<ElementKind, string> = { door: "dr", chest: "ch", switch: "sw", frame: "fr", teller: "tl" };
+const KIND_FROM_CODE: Record<string, ElementKind> = { dr: "door", ch: "chest", sw: "switch", fr: "frame", tl: "teller" };
 const RESULT_CODES = { win: "w", fail: "f" } as const;
 
 function storeLock(lock: Lock): Record<string, unknown> {
@@ -792,7 +814,8 @@ function storeElement(element: Element): Record<string, unknown> {
         ...(element.onDone.length > 0 ? { x: storeEffects(element.onDone) } : {}),
         ...(element.onFail.length > 0 ? { y: storeEffects(element.onFail) } : {}),
         ...(holdsLoot(element) && element.table !== undefined ? { lt: element.table } : {}),
-        ...(holdsLoot(element) && element.items.length > 0 ? { it: element.items.map((i) => [i[0], i[1]]) } : {})
+        ...(holdsLoot(element) && element.items.length > 0 ? { it: element.items.map((i) => [i[0], i[1]]) } : {}),
+        ...(element.kind === "teller" ? { hs: element.holdSeconds } : {})
     };
 }
 
@@ -809,7 +832,8 @@ function readElement(raw: unknown): unknown {
         onDone: readEffects(raw["x"] ?? []),
         onFail: readEffects(raw["y"] ?? []),
         table: raw["lt"],
-        items: raw["it"] ?? []
+        items: raw["it"] ?? [],
+        holdSeconds: raw["hs"]
     };
 }
 
@@ -887,7 +911,7 @@ export const rootElements = (robbery: Robbery): readonly Element[] => robbery.el
 /** Elements that wait on this one. */
 export const dependentsOf = (robbery: Robbery, id: string): readonly Element[] => robbery.elements.filter((e) => e.req.includes(id));
 
-const KIND_LABELS: Record<ElementKind, string> = { door: "Door", chest: "Chest", switch: "Switch", frame: "Frame" };
+const KIND_LABELS: Record<ElementKind, string> = { door: "Door", chest: "Chest", switch: "Switch", frame: "Frame", teller: "Teller" };
 export const kindLabel = (kind: ElementKind): string => KIND_LABELS[kind];
 
 /** An item id as a player would say it: "minecraft:iron_pickaxe" becomes "iron pickaxe". */
@@ -960,6 +984,8 @@ export interface NewElement {
     readonly req?: readonly string[];
     readonly onDone?: readonly Effect[];
     readonly onFail?: readonly Effect[];
+    /** A teller's hold-up time in seconds; the default is R.defaultHoldSeconds. */
+    readonly holdSeconds?: number;
 }
 
 export function addElement(robbery: Robbery, spec: NewElement): AddResult {
@@ -978,7 +1004,8 @@ export function addElement(robbery: Robbery, spec: NewElement): AddResult {
 
     const element = validateElement({
         id, kind: spec.kind, name, cells: spec.cells, locks: spec.locks ?? [], req: spec.req ?? [],
-        onDone: spec.onDone ?? [], onFail: spec.onFail ?? [], table: spec.table, items: spec.items ?? []
+        onDone: spec.onDone ?? [], onFail: spec.onFail ?? [], table: spec.table, items: spec.items ?? [],
+        holdSeconds: spec.holdSeconds ?? R.defaultHoldSeconds
     }, robbery.dimension);
 
     if (!element.ok) return element;
@@ -998,6 +1025,7 @@ export interface ElementPatch {
     readonly req?: readonly string[];
     readonly onDone?: readonly Effect[];
     readonly onFail?: readonly Effect[];
+    readonly holdSeconds?: number;
 }
 
 export function updateElement(robbery: Robbery, id: string, patch: ElementPatch): Edit {
@@ -1006,6 +1034,7 @@ export function updateElement(robbery: Robbery, id: string, patch: ElementPatch)
     if (!current) return bad(`there is no element ${id}`);
 
     if (!holdsLoot(current) && (patch.table !== undefined || patch.items !== undefined)) return bad("only a chest or an item frame has loot");
+    if (current.kind !== "teller" && patch.holdSeconds !== undefined) return bad("only a teller has a hold-up time");
 
     const others = robbery.elements.filter((e) => e.id !== id);
     const wantedName = patch.name === undefined ? current.name : cleanName(patch.name);
@@ -1020,7 +1049,8 @@ export function updateElement(robbery: Robbery, id: string, patch: ElementPatch)
         ...(patch.locks !== undefined ? { locks: patch.locks } : {}),
         ...(patch.req !== undefined ? { req: patch.req } : {}),
         ...(patch.onDone !== undefined ? { onDone: patch.onDone } : {}),
-        ...(patch.onFail !== undefined ? { onFail: patch.onFail } : {})
+        ...(patch.onFail !== undefined ? { onFail: patch.onFail } : {}),
+        ...(patch.holdSeconds !== undefined ? { holdSeconds: patch.holdSeconds } : {})
     };
 
     if (patch.table === null) delete merged["table"];
@@ -1082,6 +1112,11 @@ export function whyNotRunnable(robbery: Robbery): string[] {
     for (const element of robbery.elements) {
         if (element.kind === "chest" && element.table === undefined && element.items.length === 0 && element.locks.length === 0 && element.req.length === 0) {
             problems.push(`"${element.name}": a chest with no loot, lock or requirement does nothing`);
+        }
+
+        // A teller that nothing waits on and that does nothing when it is held up is a villager standing in a bank.
+        if (element.kind === "teller" && element.onDone.length === 0 && !robbery.elements.some((other) => other.req.includes(element.id))) {
+            problems.push(`"${element.name}": a teller with nothing set to happen when it is held up, and nothing waiting for it, does nothing`);
         }
 
         // A frame hands out its loot when it is taken from: with none, and nothing set to happen when it is done, taking from it does nothing.

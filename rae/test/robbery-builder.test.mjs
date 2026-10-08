@@ -12,6 +12,7 @@ import { buttonsOf, close, fill, press, problems, script, titleOf, ui } from "./
 const S = await load("core/robberystore.js");
 const E = await load("core/robberyedit.js");
 const Run = await load("core/robberyrun.js");
+const T = await load("core/robberyteller.js");
 const state = await load("core/state.js");
 const { resetAllSystems } = await load("core/registry.js");
 await load("systems/robberybuilder.js");
@@ -66,8 +67,8 @@ test("every command registers under the real registry's rules, operator-only, wi
     const { commands: registered, enums } = commands();
 
     const names = [...registered.keys()].filter((n) => n.startsWith("rae:robbery_") && n !== "rae:robbery_probe_ctx").sort();
-    check("exactly these fifteen", names.join(",") === [
-        "list", "info", "new", "select", "delete", "start", "stop", "reset", "activate", "wand", "edit", "view", "undo", "area", "set"
+    check("exactly these sixteen", names.join(",") === [
+        "list", "info", "new", "select", "delete", "start", "stop", "reset", "activate", "wand", "edit", "view", "undo", "area", "set", "teller"
     ].map((n) => `rae:robbery_${n}`).sort().join(","), names.join(","));
 
     check("all operator-only", names.every((n) => registered.get(n).def.permissionLevel === CommandPermissionLevel.GameDirectors));
@@ -923,6 +924,118 @@ test("the builder view names a frame the game's ray looks through, and invites b
     op.actionBar.length = 0;
     fake.advance(R.viewEvery);
     check("tall grass says nothing at all", bar(op).length === 0, bar(op).join("|"));
+    done();
+});
+
+// ---------------------------------------------------------------------------------------------------------
+// Tellers: /rae:robbery_teller
+// ---------------------------------------------------------------------------------------------------------
+
+const npcAt = (where = { x: 112.5, y: 65, z: 170.5 }, typeId = "minecraft:npc") => fake.makeEntity({ typeId, location: where, dimension: fake.dimension("overworld") });
+const flushScreens = async () => { for (let i = 0; i < 6; i++) await new Promise((resolve) => setImmediate(resolve)); };
+
+test("/rae:robbery_teller makes the NPC you look at a teller, a tick later, and opens its screen", async () => {
+    setup();
+    const { check, done } = checks();
+    const { as } = commands();
+    const op = operator();
+    save(ok(L.newRobbery("bank", "Bank", "overworld")));
+    E.select(op, "bank");
+    const npc = npcAt();
+    op.aimEntities = [npc];
+    script(close);
+
+    const result = as(fromPlayer(op), "rae:robbery_teller", "Cashier");
+    check("it answers success at once", result.status === CustomCommandStatus.Success && /Making it a teller/.test(result.message), JSON.stringify(result));
+    check("but nothing has changed yet: a callback may not tag an entity", T.isTeller(npc) === false && S.getRobbery("bank").elements.length === 0);
+
+    fake.advance(1);
+    await flushScreens();
+
+    const element = S.getRobbery("bank").elements[0];
+    check("a tick later there is a teller called Cashier, standing where the NPC does", element?.kind === "teller" && element.name === "Cashier" && element.cells[0].join() === "112,65,170", JSON.stringify(element));
+    check("the NPC knows which", T.tellerOf(npc)?.element === element?.id);
+    check("she was told, and the engine's restricted mode was never tripped", said(op).some((m) => /Cashier is a teller\. Aim a gun at it/.test(m)) && !said(op).some((m) => /restricted execution/.test(m)), said(op).join(" | "));
+    check("and its screen opened", ui.shown.length >= 1 && strip(titleOf(ui.shown[0])) === "Cashier", ui.shown.map((f) => strip(titleOf(f))).join(" > "));
+    done();
+});
+
+test("/rae:robbery_teller with a teller's name moves that teller to the entity you look at", async () => {
+    setup();
+    const { check, done } = checks();
+    const { as } = commands();
+    const op = operator();
+    save(ok(L.newRobbery("bank", "Bank", "overworld")));
+    E.select(op, "bank");
+    const first = npcAt({ x: 112.5, y: 65, z: 170.5 });
+    const second = npcAt({ x: 120.5, y: 65, z: 175.5 }, "minecraft:villager_v2");
+
+    op.aimEntities = [first];
+    script(close);
+    as(fromPlayer(op), "rae:robbery_teller", "Cashier");
+    fake.advance(1);
+    await flushScreens();
+
+    ui.shown.length = 0;
+    op.messages.length = 0;
+    op.aimEntities = [second];
+    as(fromPlayer(op), "rae:robbery_teller", "cashier");
+    fake.advance(1);
+    await flushScreens();
+
+    check("still one teller, now where the villager stands", S.getRobbery("bank").elements.length === 1 && S.getRobbery("bank").elements[0].cells[0].join() === "120,65,175");
+    check("the villager is it, the NPC is not", T.isTeller(second) && !T.isTeller(first));
+    check("she was told it moved, and no second screen opened over her work", said(op).some((m) => /Cashier is now this one\./.test(m)) && ui.shown.length === 0, said(op).join(" | "));
+    done();
+});
+
+test("/rae:robbery_teller says what is wrong: nobody in view, no robbery, no player, or an entity that is already a teller", async () => {
+    setup();
+    const { check, done } = checks();
+    const { as } = commands();
+    const op = operator();
+    const npc = npcAt();
+
+    op.aimEntities = [npc];
+    check("no robbery chosen", /select a robbery first/.test(as(fromPlayer(op), "rae:robbery_teller").message));
+
+    save(ok(L.newRobbery("bank", "Bank", "overworld")));
+    E.select(op, "bank");
+    op.aimEntities = [];
+    const nothing = as(fromPlayer(op), "rae:robbery_teller");
+    check("nothing in view", nothing.status === CustomCommandStatus.Failure && /look at the NPC or villager that should be the teller, within \d+ blocks/.test(nothing.message), JSON.stringify(nothing));
+
+    check("from a command block, with nobody to look", /run this as a player/.test(as(fromCommandBlock(), "rae:robbery_teller").message));
+
+    op.aimEntities = [npc];
+    script(close);
+    as(fromPlayer(op), "rae:robbery_teller", "Cashier");
+    fake.advance(1);
+    await flushScreens();
+
+    op.messages.length = 0;
+    as(fromPlayer(op), "rae:robbery_teller", "Manager");
+    fake.advance(1);
+    await flushScreens();
+    check("an entity that already is a teller is refused in the deferred part, with the sentence whole", said(op).some((m) => /^Not changed: it is already the teller Cashier of Bank\.$/.test(m)), said(op).join(" | "));
+    check("and nothing was added", S.getRobbery("bank").elements.length === 1);
+    done();
+});
+
+test("a reason for a refusal keeps its last letter", async () => {
+    setup();
+    const { check, done } = checks();
+    const { as } = commands();
+    const op = operator();
+    save(ok(L.newRobbery("bank", "Bank", "overworld")));
+    E.select(op, "bank");
+    op.aimEntities = [fake.makeEntity({ typeId: "minecraft:npc", location: { x: 1.5, y: 70, z: 1.5 }, dimension: fake.dimension("nether") })];
+
+    as(fromPlayer(op), "rae:robbery_teller", "Guard");
+    fake.advance(1);
+    await flushScreens();
+
+    check("the whole sentence, ending in overworld.", said(op).some((m) => m === "Not changed: it is in the nether and Bank is in the overworld."), said(op).join(" | "));
     done();
 });
 

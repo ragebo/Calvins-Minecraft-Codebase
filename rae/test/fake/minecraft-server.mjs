@@ -522,7 +522,7 @@ function makeEntity(options = {}) {
         teleport(location, options = {}) {
             guard(entity); restrictedCheck("Entity.teleport");
             entity.teleports.push({ ...location });
-            entity.teleportLog.push({ location: { ...location }, dimension: options.dimension });
+            entity.teleportLog.push({ location: { ...location }, dimension: options.dimension, ...(options.facingLocation ? { facing: { ...options.facingLocation } } : {}) });
             entity._location = { ...location };
             if (options.dimension) entity._dimension = options.dimension;
             if (options.rotation) entity.rotation = { ...options.rotation };

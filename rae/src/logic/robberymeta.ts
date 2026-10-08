@@ -453,6 +453,9 @@ export function whyBlockCannotBe(kind: ElementKind, typeId: string): string | un
         return `${name} cannot hold loot: a ${kindLabel("chest")} element needs a chest, trapped chest, barrel or shulker box`;
     }
 
+    // A teller is an NPC or a villager: nothing is bound to a block for it, and the add-element form never offers it. This is for the callers that ask anyway.
+    if (kind === "teller") return `a ${kindLabel("teller")} is an NPC or a villager, not ${name}: look at it and use /rae:robbery_teller`;
+
     if (kind === "frame" && classOfBlockType(typeId) !== "frame") {
         return `${name} is not an item frame: a ${kindLabel("frame")} element needs an item frame or a glow item frame`;
     }
@@ -464,7 +467,7 @@ export function whyBlockCannotBe(kind: ElementKind, typeId: string): string | un
 // Reading a robbery
 // ---------------------------------------------------------------------------------------------------------
 
-const KIND_NOUNS: Record<ElementKind, string> = { door: "door", chest: "chest", switch: "switch", frame: "item frame" };
+const KIND_NOUNS: Record<ElementKind, string> = { door: "door", chest: "chest", switch: "switch", frame: "item frame", teller: "teller" };
 
 export const nounOf = (kind: ElementKind): string => KIND_NOUNS[kind];
 
@@ -485,6 +488,8 @@ export function describeElement(robbery: Robbery, element: Element): string[] {
         const loot = [element.table !== undefined ? `table ${element.table}` : "", element.items.length > 0 ? formatItemList(element.items) : ""].filter((p) => p.length > 0);
         lines.push(`§7Loot: §f${loot.length > 0 ? loot.join(" + ") : "none"}`);
     }
+
+    if (element.kind === "teller") lines.push(`§7Held up by: §fkeeping a gun aimed at it for ${element.holdSeconds} second${element.holdSeconds === 1 ? "" : "s"}`);
 
     lines.push(`§7When done: §f${element.onDone.length} effect${element.onDone.length === 1 ? "" : "s"}`);
 

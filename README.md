@@ -335,7 +335,7 @@ chest, item frame or switch from the block); right-click a bound block for its s
 for, what happens when it is done or its lock jams, loot, change its blocks, delete). `/rae:robbery_view` marks the robbery's
 blocks and area in the world and shows what the wand points at. Everything also has a command (`/rae:robbery_list`,
 `info`, `new`, `select`, `delete`, `start [test]`, `stop`, `reset`, `activate`, `edit`, `view`, `undo`, `area`,
-`set`), all operator-only; `start`, `stop`, `reset` and `activate` take a robbery id and also work from a command block
+`set`, `teller`), all operator-only; `start`, `stop`, `reset` and `activate` take a robbery id and also work from a command block
 or an NPC button. A test run (`/rae:robbery_start <id> true`) lets anyone take part and sets no cooldown.
 
 **Item frames.** A jewelry store's cases can be item frames. The game's scripts cannot read what a frame holds (the
@@ -366,6 +366,20 @@ always does (pillagers go for any player). At most 10 in one effect and 30 in a 
 a reset, the reset time after a win or fail, a deleted robbery, a round reset) every one of them is removed; a guard left by a
 crash or a reload is removed when its chunk loads, because a reload ends a robbery in progress and nothing may stand guard over a
 site that is not being robbed. Killing a guard gives nothing yet. `docs/test-cards/ROBBERY-GUARDS.md` is the run sheet.
+
+**Tellers.** To stick up a bank, a robbery can have a **teller**: an NPC or villager that a gun can hold up. Look at it (an NPC
+is best: it stands still and cannot be hurt; a villager wanders and can be shot) and run `/rae:robbery_teller Cashier`. That makes
+a teller element where it stands, tags the entity, and opens its screen. From then on it is an element like any other: what it
+waits for, its locks, and what happens when it is done (a line of text, a payout, mobs that appear), and other elements can wait
+for it ("the vault door waits for the teller" opens the vault by itself once the teller is held up). A player holds it up by
+**aiming** a gun at it (the right-click aim that zooms) and keeping it in the crosshair for its hold-up time, 2 seconds unless the
+builder changes it: a bar fills on the action bar and the teller turns to face them. That counts as touching the element, so with
+nothing to wait for it **starts the robbery**, and an outlaws-only robbery turns a law player away. `/rae:config_set_bool
+robbery.holdUpNeedsAim false` lets holding any gun do instead of aiming it. `/rae:robbery_teller <name of a teller>`, run while
+looking at another entity, moves that teller to it. Nobody can trade with or talk to a teller (the click is cancelled); the wand
+opens its screen; an operator who sneaks gets the game's own screen (where an NPC's skin is changed). The hold-up checks nothing
+in the way, so it works through a window, and a short reach keeps it from working across the map.
+`docs/test-cards/ROBBERY-TELLER.md` is the run sheet.
 
 **Putting the site back.** Before a door is opened or a chest filled, and for every item frame the moment a run starts,
 the block is noted in a saved list. A normal ending, a manual reset, a round reset, a deleted robbery, a crash and a

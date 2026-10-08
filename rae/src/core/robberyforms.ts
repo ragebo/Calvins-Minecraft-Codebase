@@ -434,7 +434,13 @@ async function elementScreen(player: Player, robberyId: string, elementId: strin
             ...(hasPick ? [{ label: `When its lock jams (${element.onFail.length})`, run: () => effectsScreen(player, robberyId, { kind: "fail", element: elementId }) }] : []),
             ...(holdsLoot(element) ? [{ label: "Loot", run: () => lootForm(player, robberyId, elementId) }] : []),
             ...(element.kind === "frame" ? [{ label: "Save what the frame shows now", run: () => saveFrameNow(player, robberyId, elementId) }] : []),
-            { label: "Change its blocks", run: () => blocksScreen(player, robberyId, elementId) },
+            // A teller is not bound to a block: its time, and how to give it to another entity, take the place of "Change its blocks".
+            ...(element.kind === "teller"
+                ? [
+                    { label: `Hold-up time (${element.holdSeconds} s)`, run: () => holdTimeForm(player, robberyId, elementId) },
+                    { label: "Use another NPC or villager", run: () => { tell(player, ok(`Look at the NPC or villager that should be ${element.name}, then run /rae:robbery_teller ${element.name}`)); closeAllMenus(player); } }
+                ]
+                : [{ label: "Change its blocks", run: () => blocksScreen(player, robberyId, elementId) }]),
             { label: "Delete it", run: async () => { if (await deleteElementConfirmed(player, robberyId, elementId)) return "back"; } },
             BACK
         ];
@@ -448,6 +454,17 @@ async function elementScreen(player: Player, robberyId: string, elementId: strin
 
         return { title: element.name, body: `${describeElement(robbery, element).join("\n")}${frame}${state}`, actions };
     });
+}
+
+async function holdTimeForm(player: Player, robberyId: string, elementId: string): Promise<Step> {
+
+    const element = findElementOf(robberyId, elementId);
+    if (!element || element.kind !== "teller") return;
+
+    const answers = await ask(player, "Hold-up time", [{ kind: "number", key: "seconds", label: "Seconds a gun must stay aimed at it", what: "the hold-up time", min: 1, max: R.maxHoldSeconds, value: element.holdSeconds }]);
+    if (!answers) return;
+
+    report(player, applyEdit(robberyId, (current) => updateElement(current, elementId, { holdSeconds: Number(answers["seconds"]) })), "Saved.");
 }
 
 async function renameElementForm(player: Player, robberyId: string, elementId: string): Promise<Step> {

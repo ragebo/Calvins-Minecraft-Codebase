@@ -273,7 +273,7 @@ export interface Bound {
     readonly kind?: ElementKind;
 }
 
-let index: { readonly forVersion: number; readonly byPosition: ReadonlyMap<string, Bound>; readonly frames: boolean } | undefined;
+let index: { readonly forVersion: number; readonly byPosition: ReadonlyMap<string, Bound>; readonly frames: boolean; readonly tellers: boolean } | undefined;
 
 function build(): NonNullable<typeof index> {
 
@@ -283,16 +283,24 @@ function build(): NonNullable<typeof index> {
 
     const byPosition = new Map<string, Bound>();
     let frames = false;
+    let tellers = false;
 
     for (const stored of entries.values()) {
         if (!stored.ok) continue;
         for (const element of stored.robbery.elements) {
             if (element.kind === "frame") frames = true;
+
+            // A teller stands on a block but is not that block: no click and no protection may see the floor under it.
+            if (element.kind === "teller") {
+                tellers = true;
+                continue;
+            }
+
             for (const cell of element.cells) byPosition.set(posKey(stored.robbery.dimension, cell), { robbery: stored.id, element: element.id, kind: element.kind });
         }
     }
 
-    index = { forVersion: version, byPosition, frames };
+    index = { forVersion: version, byPosition, frames, tellers };
 
     return index;
 }
@@ -302,6 +310,11 @@ const positions = (): ReadonlyMap<string, Bound> => build().byPosition;
 /** Whether any robbery has an item frame bound. Most worlds have none, and the handlers for punches and dropped items stop here. */
 export function anyBoundFrames(): boolean {
     return build().frames;
+}
+
+/** Whether any robbery has a teller. Most worlds have none, and the hold-up check stops here. */
+export function anyBoundTellers(): boolean {
+    return build().tellers;
 }
 
 /**

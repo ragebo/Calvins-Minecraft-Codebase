@@ -507,6 +507,27 @@ export const ROBBERY = {
     /** After the scripts start, guards left behind by a crash or a reload are swept up this many ticks later (the world has to be there first). */
     guardSweepDelayTicks: 40,
 
+    // ---- Tellers: an NPC or villager that can be held up. A player aims a gun at it (the right-click aim of systems/guns.ts) and keeps it
+    // in the crosshair for a few seconds; that counts as touching the teller's element, so it can start the robbery, open a vault door
+    // that waits for it, pay out and spawn guards like any other element.
+    /** Every teller carries this tag, so one query finds them all. */
+    tellerTag: "rbt",
+    /** And this followed by its robbery's id, a colon and its element's id, which says what it is the teller of. */
+    tellerTagPrefix: "rbt:",
+    /** How far away a gun can hold a teller up (blocks). */
+    holdUpReach: 12,
+    /** How often the hold-ups are checked (ticks). */
+    holdUpEvery: 4,
+    /** How long a new teller takes to hold up (seconds of aiming), and the longest a builder may make it. */
+    defaultHoldSeconds: 2,
+    maxHoldSeconds: 30,
+    /** Looking away from the teller for longer than this (ticks) starts the hold-up over. */
+    holdUpGapTicks: 12,
+    /** After a hold-up counts (or is refused), the same player's aim at the same teller is ignored this long (ticks), so a refusal is one line, not a stream. */
+    holdUpRetryTicks: 60,
+    /** On: the gun must be AIMED (the right-click toggle). Off: holding any gun and looking at the teller is enough. Switchable in game: robbery.holdUpNeedsAim. */
+    holdUpNeedsAim: true,
+
     /** What each moment sounds like. The ping's pitch comes from the guess (see the pick settings above). */
     cues: {
         denied: { id: "note.bass", volume: 0.8, pitch: 0.7 },
@@ -514,7 +535,8 @@ export const ROBBERY = {
         hit: { id: "random.levelup", volume: 1, pitch: 1 },
         done: { id: "random.anvil_use", volume: 0.8, pitch: 1.2 },
         jam: { id: "random.break", volume: 1, pitch: 0.8 },
-        start: { id: "block.bell.hit", volume: 1.4, pitch: 0.8 }
+        start: { id: "block.bell.hit", volume: 1.4, pitch: 0.8 },
+        holdUp: { id: "random.orb", volume: 1, pitch: 0.6 }
     },
 
     /** Probe: `cancel on` switches itself off after this long (ticks), so a forgotten flag can never leave chests unopenable. */
