@@ -275,7 +275,7 @@ test("/rae:shop_service opens the service screen for the shop being built", asyn
     fake.advance(1);
     await settle();
     check("then the screen is", ui.shown.length === 1 && strip(titleOf(ui.shown[0])) === "Habiti: add a service", ui.shown.map(titleOf).join());
-    check("with the four services and Back", buttonsOf(ui.shown[0]).map(strip).join("|") === "A potion EFFECT|An ENCHANTMENT on the item they hold|A tame ANIMAL (horse, mule, donkey)|A TELEPORT to where I stand now|Back", buttonsOf(ui.shown[0]).join("|"));
+    check("with the four services and Back", buttonsOf(ui.shown[0]).map(strip).join("|") === "A potion EFFECT|An ENCHANTMENT on the item they hold|A tame ANIMAL (horse, mule, donkey)|A TELEPORT (to where I stand, or typed coordinates)|Back", buttonsOf(ui.shown[0]).join("|"));
 
     edit.select(ada, undefined);
     store.deleteShop("habiti");

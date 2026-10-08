@@ -3,11 +3,11 @@ import { failure, later, ok, playerOf, registerOperatorCommands, type CommandSpe
 import { info } from "../core/log.js";
 import { registerSystem } from "../core/registry.js";
 import { addHeldDeal, copyShopAs, createShop, select, selectedId, selectedShop, type HeldKind } from "../core/shopedit.js";
-import { openServiceScreen, openShop, openShopEditor, openShopPicker, openSwapDeal } from "../core/shopforms.js";
-import { aimedShopNpc, npcsOf, placeNpcFor, retireNpcs, spawnShopNpc } from "../core/shopnpc.js";
-import { deleteShop, getShop, getStored, listStored, rawText, undoLast } from "../core/shopstore.js";
-import { format } from "../core/ui.js";
-import { describeShop, describeTrade } from "../logic/shop.js";
+import { moveNpcHere, openMovePicker, openServiceScreen, openShop, openShopEditor, openShopPicker, openSwapDeal } from "../core/shopforms.js";
+import { aimedShopNpc, npcsByShop, rememberSpot, retireNpcs, spawnShopNpc, whereIsNpc } from "../core/shopnpc.js";
+import { allShops, deleteShop, getShop, getStored, listStored, rawText, undoLast } from "../core/shopstore.js";
+import { format, tell } from "../core/ui.js";
+import { describeShop, describeTrade, findShop } from "../logic/shop.js";
 
 /**
  * Building a shop in the game: the commands. Operators only, all of it. The screens are in core/shopforms.ts and the wand opens
@@ -20,7 +20,10 @@ import { describeShop, describeTrade } from "../logic/shop.js";
  *   hold a diamond                /rae:shop_trade         players hand over an item (maybe coins too) for it
  *   stand where players should go /rae:shop_service       a small form: an effect, an enchantment, a tame animal or a teleport
  *
- * Which shop a command means: the one named, else the NPC you are looking at, else the one you last worked on.
+ * Which shop a command means: the one named (by its id or by the name you gave it, in any case: "Mule Dealer" and mule_dealer are
+ * one shop), else the NPC you are looking at, else the one you last worked on.
+ *
+ *   stand where it should be      /rae:shop_move Habiti   its NPC comes to you from wherever it is, and no second one is made
  *
  * A command's callback is restricted (it may read, send chat and save a world property, but not spawn, move or remove anything),
  * so each command saves what it can at once, answers, and does the part that changes the world a tick later, telling the player
@@ -37,8 +40,8 @@ const INTEGER = CustomCommandParamType.Integer;
 function target(origin: CustomCommandOrigin, named?: string): { readonly id: string } | { readonly problem: string } {
 
     if (named !== undefined && named.length > 0) {
-        const id = named.toLowerCase();
-        return getShop(id) ? { id } : { problem: `there is no shop ${named}` };
+        const found = findShop(allShops(), named, true);
+        return found.ok ? { id: found.value.id } : { problem: found.reason };
     }
 
     const player = playerOf(origin);
@@ -60,11 +63,31 @@ function describeList(): string {
 
     if (stored.length === 0) return "There are no shops yet. /rae:shop_new <name> makes one.";
 
+    const loaded = npcsByShop();
+
     return stored.map((entry) => {
         if (!entry.ok) return `${entry.id}: cannot be read (${entry.problem})`;
-        const npcs = npcsOf(entry.id).length;
-        return `${entry.id}: ${entry.value.name}, ${entry.value.trades.length} deal${entry.value.trades.length === 1 ? "" : "s"}, ${npcs === 0 ? "no NPC found loaded" : `${npcs} NPC${npcs === 1 ? "" : "s"}`}`;
+
+        const npcs = loaded.get(entry.id) ?? [];
+        const [first] = npcs;
+
+        // Looking at the list is a chance to learn where an NPC stands, so a later "bring it here" knows where to look.
+        if (first) rememberSpot(entry.id, first);
+
+        return `${entry.id}: ${entry.value.name}, ${entry.value.trades.length} deal${entry.value.trades.length === 1 ? "" : "s"}, NPC: ${whereIsNpc(entry.id, npcs)}`;
     }).join("\n");
+}
+
+/** A shop by its id (even one too damaged to read) or by its exact name; never a guess between two. For commands that delete. */
+function strictTarget(named: string): { readonly id: string } | { readonly problem: string } {
+
+    const asId = named.trim().toLowerCase();
+
+    if (getStored(asId)) return { id: asId };
+
+    const found = findShop(allShops(), named, false);
+
+    return found.ok ? { id: found.value.id } : { problem: found.reason };
 }
 
 /** Stocking a shop from the hand: the same for `sell` and `buy`. */
@@ -86,7 +109,7 @@ function stock(origin: CustomCommandOrigin, kind: HeldKind, coins: number) {
 const COMMANDS: readonly CommandSpec[] = [
     {
         name: "rae:shop_list",
-        description: "Lists every shop, how many deals it has and whether its NPC is around.",
+        description: "Lists every shop, how many deals it has and where its NPC is (or was last seen).",
         run: () => ok(describeList())
     },
     {
@@ -216,12 +239,12 @@ const COMMANDS: readonly CommandSpec[] = [
             const player = playerOf(origin);
             if (!player) return failure("this is for a player building a shop");
 
-            const shop = getShop(named.toLowerCase());
-            if (!shop) return failure(`there is no shop ${named}`);
+            const found = findShop(allShops(), named, true);
+            if (!found.ok) return failure(found.reason);
 
-            select(player, shop.id);
+            select(player, found.value.id);
 
-            return ok(`Now building ${shop.name}.`);
+            return ok(`Now building ${found.value.name}.`);
         }
     },
     {
@@ -232,14 +255,17 @@ const COMMANDS: readonly CommandSpec[] = [
             const player = playerOf(origin);
             if (!player) return failure("the copy's NPC appears in front of a player: run this as a player");
 
-            const copy = copyShopAs(player, from.toLowerCase(), name);
+            const source = findShop(allShops(), from, true);
+            if (!source.ok) return failure(source.reason);
+
+            const copy = copyShopAs(player, source.value.id, name);
             if (!copy.ok) return failure(copy.reason);
 
             system.run(() => {
                 if (!player.isValid) return;
                 try {
                     spawnShopNpc(player, copy.shop);
-                    later(origin, SOURCE, format("ok", `${copy.shop.name} (${copy.shop.id}) is in front of you with the same deals.`));
+                    later(origin, SOURCE, format("ok", `${copy.shop.name} (${copy.shop.id}) is in front of you with the same deals. To stand it somewhere else, go there and run /rae:shop_move ${copy.shop.id}.`));
                 } catch (err) {
                     later(origin, SOURCE, format("warn", `The copy ${copy.shop.id} is saved but its NPC could not be placed (${err instanceof Error ? err.message : String(err)}). /rae:shop_place tries again.`));
                 }
@@ -250,9 +276,9 @@ const COMMANDS: readonly CommandSpec[] = [
     },
     {
         name: "rae:shop_place",
-        description: "Brings a shop's NPC to stand in front of you, or makes a new one if none is around.",
-        optional: [{ name: "shop", type: STRING }],
-        run: (origin, named?: string) => {
+        description: "Puts a shop's NPC in front of you: brings it from wherever it is, or makes a new one when it is gone. Add true to make a new one regardless.",
+        optional: [{ name: "shop", type: STRING }, { name: "makeNew", type: BOOLEAN }],
+        run: (origin, named?: string, makeNew?: boolean) => {
             const player = playerOf(origin);
             if (!player) return failure("the NPC comes to a player: run this as a player");
 
@@ -264,15 +290,47 @@ const COMMANDS: readonly CommandSpec[] = [
 
             system.run(() => {
                 if (!player.isValid) return;
+
+                if (makeNew !== true) {
+                    void moveNpcHere(player, shop, true);
+                    return;
+                }
+
                 try {
-                    const result = placeNpcFor(player, shop);
-                    later(origin, SOURCE, format("ok", result === "moved" ? `${shop.name}'s NPC is in front of you.` : `Made a new NPC for ${shop.name} in front of you.`));
+                    spawnShopNpc(player, shop);
+                    tell(player, format("ok", `Made a new NPC for ${shop.name} in front of you.`));
                 } catch (err) {
-                    later(origin, SOURCE, format("warn", `${shop.name}'s NPC could not be placed: ${err instanceof Error ? err.message : String(err)}`));
+                    tell(player, format("warn", `${shop.name}'s NPC could not be placed: ${err instanceof Error ? err.message : String(err)}`));
                 }
             });
 
             return ok(`Placing ${shop.name}'s NPC.`);
+        }
+    },
+    {
+        name: "rae:shop_move",
+        description: "Moves a shop's NPC to stand in front of you, from wherever it is, even far away. Never makes a second one. With no shop, lists them to pick from.",
+        optional: [{ name: "shop", type: STRING }],
+        run: (origin, named?: string) => {
+            const player = playerOf(origin);
+            if (!player) return failure("the NPC comes to a player: run this as a player");
+
+            if (named === undefined || named.length === 0) {
+                system.run(() => { void openMovePicker(player); });
+                return ok("Opening the list. Close the chat to see it.");
+            }
+
+            const wanted = target(origin, named);
+            if ("problem" in wanted) return failure(wanted.problem);
+
+            const shop = getShop(wanted.id);
+            if (!shop) return failure(`there is no shop ${wanted.id}`);
+
+            system.run(() => {
+                if (player.isValid) void moveNpcHere(player, shop, false);
+            });
+
+            return ok(`Bringing ${shop.name}'s NPC.`);
         }
     },
     {
@@ -282,8 +340,10 @@ const COMMANDS: readonly CommandSpec[] = [
         run: (origin, named: string, confirm: boolean) => {
             if (confirm !== true) return failure("add true at the end to really delete it");
 
-            const id = named.toLowerCase();
-            if (!getStored(id)) return failure(`there is no shop ${named}`);
+            const doomed = strictTarget(named);
+            if ("problem" in doomed) return failure(doomed.problem);
+
+            const id = doomed.id;
 
             const gone = deleteShop(id);
             if (!gone.ok) return failure(gone.reason);
@@ -305,9 +365,10 @@ const COMMANDS: readonly CommandSpec[] = [
         description: "Undoes the last change to a shop (or the deletion of one). Doing it again redoes.",
         optional: [{ name: "shop", type: STRING }],
         run: (origin, named?: string) => {
-            // A deleted shop is not there to be found by aim or selection, so an id that is not a shop is taken as typed.
-            const typed = named !== undefined && named.length > 0 ? named.toLowerCase() : undefined;
-            const wanted = typed !== undefined ? { id: typed } : target(origin);
+            // A deleted shop is not there to be found by name, aim or selection, so what is not a shop is taken as an id as typed.
+            const typed = named !== undefined && named.length > 0 ? named.trim().toLowerCase() : undefined;
+            const known = typed !== undefined ? strictTarget(typed) : undefined;
+            const wanted = typed === undefined ? target(origin) : known && "id" in known ? known : { id: typed };
             if ("problem" in wanted) return failure(wanted.problem);
 
             const result = undoLast(wanted.id);

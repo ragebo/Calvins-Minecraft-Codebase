@@ -181,6 +181,43 @@ export function uniqueId(base: string, taken: ReadonlySet<string>): string {
     }
 }
 
+/** A name as it is compared: lowercase, and runs of spaces, underscores and hyphens read as one space, so "Mule_Dealer" is "mule dealer". */
+export const nameKey = (text: string): string => text.trim().toLowerCase().replace(/[\s_-]+/g, " ");
+
+const fits = (shops: readonly Shop[]): string => shops.map((shop) => `${shop.name} (${shop.id})`).join(", ");
+
+/**
+ * The shop a builder means by the text they typed: its id first, then its name, either one the way nameKey reads it. With
+ * `loose`, when neither fits, the one shop whose name (or id) starts with the text. It never picks between two: text that fits
+ * more than one shop is refused and names them, so a slip cannot move or delete the wrong shop.
+ */
+export function findShop(shops: readonly Shop[], text: string, loose: boolean): Result<Shop> {
+
+    const key = nameKey(text);
+
+    if (key.length === 0) return bad("name a shop");
+
+    const asId = shops.find((shop) => shop.id === text.trim().toLowerCase());
+
+    if (asId) return good(asId);
+
+    const same = shops.filter((shop) => nameKey(shop.name) === key || nameKey(shop.id) === key);
+    const [first] = same;
+
+    if (first && same.length === 1) return good(first);
+    if (same.length > 1) return bad(`"${text.trim()}" fits more than one shop: ${fits(same)}. Use the id.`);
+
+    if (loose) {
+        const starts = shops.filter((shop) => nameKey(shop.name).startsWith(key) || nameKey(shop.id).startsWith(key));
+        const [only] = starts;
+
+        if (only && starts.length === 1) return good(only);
+        if (starts.length > 1) return bad(`"${text.trim()}" fits more than one shop: ${fits(starts)}. Type more of the name, or the id.`);
+    }
+
+    return bad(`there is no shop "${text.trim()}" (/rae:shop_list shows them)`);
+}
+
 // ---------------------------------------------------------------------------------------------------------
 // Validation
 // ---------------------------------------------------------------------------------------------------------
@@ -318,6 +355,7 @@ function validateReward(raw: unknown): Result<Reward> {
         case "teleport": {
             const { x, y, z, dimension, name } = raw;
             if (!isCoordinate(x) || !isCoordinate(y) || !isCoordinate(z)) return bad(`a teleport needs x, y and z within ${S.maxCoordinate} of the origin`);
+            if (y < S.minTeleportY || y > S.maxTeleportY) return bad(`a teleport's height is ${S.minTeleportY} to ${S.maxTeleportY}`);
             if (typeof dimension !== "string" || !DIMENSIONS.includes(dimension)) return bad("a teleport goes to the overworld, the nether or the end");
             if (name !== undefined && (typeof name !== "string" || name.length === 0 || name.length > S.maxNameLength)) return bad(`a place name is 1 to ${S.maxNameLength} characters`);
             return good({ kind: "teleport", x, y, z, dimension, ...(name !== undefined ? { name } : {}) });
@@ -831,6 +869,74 @@ export const mountDeal = (entity: string, coins: number): NewTrade =>
 /** A trip to `to` for `coins`. */
 export const teleportDeal = (to: Omit<TeleportReward, "kind">, coins: number): NewTrade =>
     ({ cost: { coins, items: [] }, rewards: [{ kind: "teleport", ...to }] });
+
+// ---------------------------------------------------------------------------------------------------------
+// Where a teleport goes
+// ---------------------------------------------------------------------------------------------------------
+
+/** A place in the world: where a teleport sends a customer, and where a shop's NPC was last seen. */
+export interface Destination {
+    readonly x: number;
+    readonly y: number;
+    readonly z: number;
+    /** "overworld", "nether" or "the_end". */
+    readonly dimension: string;
+}
+
+/** A coordinate as it is kept: to a hundredth of a block, which is finer than anyone can stand. */
+export const toHundredth = (n: number): number => Math.round(n * 100) / 100;
+
+const DIMENSION_WORDS: Readonly<Record<string, string>> = { overworld: "the overworld", nether: "the nether", the_end: "the end" };
+
+/** "-251.5, 63, 186.5 in the overworld". */
+export const describeDestination = (to: Destination): string => `${to.x}, ${to.y}, ${to.z} in ${DIMENSION_WORDS[to.dimension] ?? to.dimension}`;
+
+/** What one of a form's number boxes may hold: a plain number, with a minus sign and decimals when it needs them. */
+const PLAIN_NUMBER = /^-?(?:\d+\.?\d*|\.\d+)$/;
+
+/**
+ * A destination from what a builder typed into a form's three boxes. Decimals are fine (kept to a hundredth of a block). A blank,
+ * a word, a height the world does not have, or a place beyond the world border is refused with a sentence that says which box
+ * and what it may hold.
+ */
+export function readDestination(typed: { readonly x: string; readonly y: string; readonly z: string }, dimension: string): Result<Destination> {
+
+    const numbers: number[] = [];
+
+    for (const [axis, raw] of [["X", typed.x], ["Y", typed.y], ["Z", typed.z]] as const) {
+        const text = raw.trim();
+        if (!PLAIN_NUMBER.test(text)) return bad(`${axis} is a number like -251.5 (${text.length > 0 ? `you typed "${text}"` : "it is blank"})`);
+        numbers.push(toHundredth(Number(text)));
+    }
+
+    const [x, y, z] = numbers as [number, number, number];
+
+    if (Math.abs(x) > S.maxCoordinate || Math.abs(z) > S.maxCoordinate) return bad(`X and Z stay within ${S.maxCoordinate} blocks of the origin`);
+    if (y < S.minTeleportY || y > S.maxTeleportY) return bad(`Y is a height from ${S.minTeleportY} to ${S.maxTeleportY} (you typed ${y})`);
+    if (!DIMENSIONS.includes(dimension)) return bad("a teleport goes to the overworld, the nether or the end");
+
+    return good({ x, y, z, dimension });
+}
+
+/** The teleport a deal carries, if it carries one. */
+export const teleportOf = (trade: Trade): TeleportReward | undefined =>
+    trade.rewards.find((reward): reward is TeleportReward => reward.kind === "teleport");
+
+/**
+ * A deal's rewards with its teleport sent to `to` instead. `name` is what the place is called from now on; an empty one takes
+ * the name off, so the button reads the coordinates.
+ */
+export function retarget(trade: Trade, to: Destination, name: string): Result<readonly Reward[]> {
+
+    if (!teleportOf(trade)) return bad("that deal does not teleport anyone");
+
+    const place = cleanName(name);
+
+    return good(trade.rewards.map((reward): Reward =>
+        reward.kind === "teleport"
+            ? { kind: "teleport", x: to.x, y: to.y, z: to.z, dimension: to.dimension, ...(place.length > 0 ? { name: place } : {}) }
+            : reward));
+}
 
 /** Why a shop is not worth showing yet, or undefined when it is. */
 export const whyNotOpen = (shop: Shop): string | undefined => (shop.trades.length === 0 ? "it has nothing to sell, buy or trade yet" : undefined);

@@ -1,22 +1,24 @@
 # NPC-SHOP test card: make a shop in game with a command, and buy from it
 
-Phases N1 and N2a of the NPC work (steps 1 to 21 are the shop, 22 to 28 the services and who may take a deal). A shop is data
+Phases N1, N2a and N2c of the NPC work (steps 1 to 21 are the shop, 22 to 28 the services and who may take a deal, 29 to 36 typed
+teleports, shops by name and moving NPCs; the first 28 were run by the owner and worked). A shop is data
 plus a screen: the NPC only carries a shop id, and a click opens a form where each deal is a button. You stock it by holding an
 item and saying what it costs; no commands to type into the NPC editor, and a purchase is all or nothing (the coins and the goods
 move together, or nothing does). `NPC-PROBE.md` has been run (2026-10-07): of
 the two ways a click can reach the shop, the first works in the real game (the shop cancels the click and opens at once), so
 step 1 here needs nothing. Most of this card is "does the real game agree with what the tests assumed".
 
-- Behavior pack **0.2.0**, resource pack unchanged (1.0.27). BP only; a fresh launch is the safest way to be sure the new scripts
+- Behavior pack **0.2.1**, resource pack unchanged (1.0.27). BP only; a fresh launch is the safest way to be sure the new scripts
   are what you are running.
 - Run it as an operator in your test world (RAE2), on flat ground. `/scoreboard objectives add coins dummy` first if the world
   has no `coins` objective: a deal that uses coins says so and refuses until it exists. Step 27 also needs `/scoreboard objectives add bounty dummy` if the world has none.
 - The commands are all `/rae:shop_*`; type `/rae:shop_` and the game completes them: `list`, `info`, `new`, `sell`, `buy`, `trade`,
-  `service`, `edit`, `open`, `select`, `copy`, `place`, `delete`, `undo`. Operators only.
+  `service`, `edit`, `open`, `select`, `copy`, `place`, `move`, `delete`, `undo`. Operators only. A shop is named by its id or by the
+  name you gave it (any case, spaces or underscores).
 - Problems go to the content log as `[shop]` lines and, if they are real failures, to every operator in chat.
 
 `npm test` covers (the model, the store, every deal against a fake bag, every screen driven by a stand-in player, the commands under
-a registry that enforces the real one's rules, the click routes in restricted execution, and 79 deliberate breaks of the rules that
+a registry that enforces the real one's rules, the click routes in restricted execution, and 136 deliberate breaks of the rules that
 move money, protect work or keep a customer from what they may not take, each caught by a test). None of that can say how the REAL game treats a click on an NPC, a potion, an
 enchanted bow, a full bag or a form: that is this card.
 
@@ -52,6 +54,14 @@ enchanted bow, a full bag or a form: that is this card.
 | 26 | **A teleport:** walk to a spot, `/rae:shop_service`, **A TELEPORT**, name it "Angeles", 25 coins. Walk away and buy it. Then do the same standing in the Nether. | You land where you stood when you made it; the button reads "Teleport to Angeles for 25 coins". The nether one takes you to the nether. |
 | 27 | **Who can take a deal:** open Deals, pick a deal, **Who can take it**: Side **Law only**. Open the shop once after `/tag @s add law` and once after `/tag @s add outlaw` (wait a second after each: your side follows the tag). Then try **Outlaws only**, and a least bounty of 20: `/scoreboard players set @s bounty 5`, open the shop, then `... bounty 30`, open it again. | The deal reads "(law only)". The outlaw sees it greyed, and pressing it says "Not yet: only law players can do this." with nothing taken; a law player buys it normally. A bounty requirement says "you need a bounty of 20 (you have N)" until you have it. Set it to Anyone and 0: it is open to all again. |
 | 28 | Quit to the main menu and open the world again. Look at the services and the law-only deal. | They are all still there with the same prices and conditions, and still work. |
+| 29 | **A teleport you type:** stand well away from the shop's NPC. `/rae:shop_service`, **A TELEPORT**. Look at the boxes, then type X `5000`, Y `80`, Z `5000`, the name "Far Camp", coins 10. | The boxes started as your own position. "Added: Teleport to Far Camp for 10 coins." You did not need to be near the NPC at all. |
+| 30 | Buy it from the shop. | You arrive at 5000, 80, 5000 (the game loads the place around you; if it is open sky you fall, which is correct). |
+| 31 | **Change where it goes:** click the NPC with the wand, **Deals**, the teleport deal. | The deal's screen says "Goes to 5000, 80, 5000 in the overworld" and has **Change where it goes**; a deal that is not a teleport has neither. |
+| 32 | Press **Change where it goes**: the boxes start as the current place. Set X to `100` and the Dimension to **The nether**, save, and buy it. Then stand somewhere new, press it again, turn on **Use where I am standing now instead**, save. Then try a word in X, and Y `6300`. | "It now goes to 100, 80, 5000 in the nether" and you land there. After the switch it goes where you stood. A word or Y 6300 says which box and why, and changes nothing. |
+| 33 | **Shops by name:** `/rae:shop_info "mule dealer"` (any case), `/rae:shop_select Habiti`, `/rae:shop_copy Habiti "Second Stall"`. Try a start of a name: `/rae:shop_info Mul`. Make two shops whose names start the same and try the start. | Each finds the shop by its name. A start that fits one shop works; a start that fits two names both and asks for the id. `/rae:shop_delete Mul true` is refused (delete wants the whole name or the id). |
+| 34 | **Move a nearby NPC:** stand in a different spot in the same town and run `/rae:shop_move Habiti`. | "Habiti's NPC is in front of you." The same NPC (its name above its head), no second one. |
+| 35 | **Move one from far away:** make sure the NPC's place is known (stand near it and run `/rae:shop_list`, which says "NPC: at x, y, z"). Then go several hundred blocks away (`/tp @s ~600 ~ ~`), wait ten seconds, and run `/rae:shop_list` (it should say "not loaded, last at ..."), then `/rae:shop_move <name>`. | "Loading the area where X's NPC was last seen..." then "X's NPC came from x, y, z in the overworld and is in front of you." It is the same NPC and nothing is left behind at the old spot. **Tell me how long it took and whether it came.** |
+| 36 | **Nothing gets duplicated:** `/rae:shop_move` with no name and pick a shop from the list. Then `/kill` a shop's NPC while you are near it, go away, and `/rae:shop_move` that shop; then `/rae:shop_place` it. | The list shows each shop with where its NPC is. Moving the killed one says "is not at ... any more" and makes nothing; `/rae:shop_place` then makes a new one. |
 
 ## What only the real game can answer (tell me what you SEE)
 
@@ -69,7 +79,11 @@ enchanted bow, a full bag or a form: that is this card.
    Is the horse tame, and not inside you? Does a teleport land where the builder stood, in the right dimension? Do the effect,
    enchantment and animal names work typed bare (`flame`, `horse`) or does the game want `minecraft:`? (The code tries both; tell me
    if either lookup ever failed.)
-8. Anything in the content log marked `[shop]`, `[forms]`, `[npc-probe]` or `[Scripting][error]`.
+8. **The fetch (steps 35 and 36):** after "Loading the area...", does the NPC come, and how long does it take? Is anything left
+   behind (a second NPC at the old spot, an NPC that cannot be clicked)? When it fails, what does it say? This is the first time a
+   script-made ticking area is used to reach an entity, so the content log's `[shop]` lines matter here.
+9. **Names above NPCs:** when does a name not show correctly (right after making one, after a rename, after a move, far away)?
+10. Anything in the content log marked `[shop]`, `[forms]`, `[npc-probe]` or `[Scripting][error]`.
 
 ## Known limits (by design, for this phase)
 
@@ -78,7 +92,11 @@ enchanted bow, a full bag or a form: that is this card.
 - The builder's screens add one service per deal. The model and the engine already let one deal carry several (all or nothing), but
   there is no screen to combine them yet.
 - A builder can add any animal the game knows; one that cannot be tamed (a cow) is refused when a customer tries it, with nothing
-  charged. A teleport goes to the spot the builder stood on, not to typed coordinates.
+  charged.
+- Deleting a shop removes only its NPCs that are loaded. One far away stays and says "That shop has closed." when clicked; bring it
+  to you first (`/rae:shop_move`) and delete the shop after, or kill it by hand.
+- An NPC placed before the game remembered places has no remembered place until someone clicks it, uses the wand on it, or runs
+  `/rae:shop_list` near it; until then `/rae:shop_move` can only move it while it is loaded.
 - A shop has no pages of dialogue yet (your 59-NPC guidebook is the model for them).
 - A shop's NPC is a vanilla NPC with the default look; its skin is chosen in the game's own NPC screen (operator, sneak and click).
 - The trade form asks for one kind of item (plus coins); the model allows up to three kinds.

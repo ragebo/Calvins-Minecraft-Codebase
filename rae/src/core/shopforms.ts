@@ -2,19 +2,21 @@ import type { Entity, Player } from "@minecraft/server";
 import { ActionFormData, ModalFormData } from "@minecraft/server-ui";
 import { SHOP as S } from "../config/balance.js";
 import {
-    describeItem, describeRequirement, describeShop, describeTrade, faceOf, findTrade, moveTrade, priceOf, removeTrade, renameShop,
-    setGreeting, signature, updateTrade, whyNotOpen, withPrice, type Requirement, type Shop, type Trade
+    DIMENSIONS, describeDestination, describeItem, describeRequirement, describeShop, describeTrade, faceOf, findTrade, moveTrade, priceOf,
+    readDestination, removeTrade, renameShop, setGreeting, signature, teleportOf, updateTrade, whyNotOpen, withPrice,
+    type Destination, type Requirement, type Shop, type Trade
 } from "../logic/shop.js";
 import { getCoins } from "./economy.js";
 import { confirmForm, showForm } from "./forms.js";
 import { error } from "./log.js";
 import { BACK, createScreens, type Action, type Screen } from "./screens.js";
 import {
-    addHeldDeal, addServiceDeal, addSwapDeal, applyEdit, bagChoices, copyShopAs, createShop, select, selectedId, setRequirement,
+    addHeldDeal, addServiceDeal, addSwapDeal, applyEdit, bagChoices, copyShopAs, createShop, select, selectedId, setRequirement, setTeleport,
+    whereIStand,
     type HeldKind, type Outcome, type ServiceKind
 } from "./shopedit.js";
-import { bindNpc, npcsOf, placeNpcFor, retireNpcs, spawnShopNpc } from "./shopnpc.js";
-import { deleteShop, getShop, listStored, undoAvailable, undoLast } from "./shopstore.js";
+import { bindNpc, bringShopNpc, broughtText, needsFetch, npcsByShop, npcsOf, recallSpot, retireNpcs, spawnShopNpc, whereIsNpc } from "./shopnpc.js";
+import { allShops, deleteShop, getShop, listStored, undoAvailable, undoLast } from "./shopstore.js";
 import { carryOutTrade, whyCannotTrade } from "./shoptrade.js";
 import { playFor } from "./sound.js";
 import { format, tell } from "./ui.js";
@@ -183,10 +185,7 @@ async function askCoins(player: Player, title: string, label: string, value: num
 }
 
 function npcLine(shopId: string): string {
-
-    const count = npcsOf(shopId).length;
-
-    return `§7NPC: §f${count === 0 ? "none found loaded (place one)" : count === 1 ? "placed" : `${count} placed`}`;
+    return `§7NPC: §f${whereIsNpc(shopId, npcsOf(shopId))}`;
 }
 
 /** The screen for one shop. `last` is its final button: Close at the top of a stack, Back inside the picker. */
@@ -201,7 +200,7 @@ function editorScreen(player: Player, shopId: string, last: Action): Screen | un
         { label: "Greeting", run: () => greetingForm(player, shopId) },
         { label: "Rename", run: () => renameForm(player, shopId) },
         { label: "Copy this shop to a new NPC here", run: () => copyForm(player, shopId) },
-        { label: npcsOf(shopId).length > 0 ? "Bring its NPC here" : "Place its NPC here", run: () => placeHere(player, shopId) },
+        { label: npcsOf(shopId).length > 0 || recallSpot(shopId) !== undefined ? "Bring its NPC here" : "Place its NPC here", run: () => placeHere(player, shopId) },
         ...(undoAvailable(shopId) ? [{ label: "Undo the last change", run: () => undoChange(player, shopId) }] : []),
         { label: "Delete this shop", run: async () => ((await deleteConfirmed(player, shopId)) ? "back" as const : undefined) },
         last
@@ -248,8 +247,11 @@ async function dealScreen(player: Player, shopId: string, tradeId: string): Prom
 
         if (!shop || !trade) return undefined;
 
+        const teleport = teleportOf(trade);
+
         const actions: Action[] = [
             { label: "Change the price", run: () => priceForm(player, shopId, tradeId) },
+            ...(teleport ? [{ label: "Change where it goes", run: () => teleportForm(player, shopId, tradeId) }] : []),
             { label: "Who can take it", run: () => requirementForm(player, shopId, tradeId) },
             { label: "Move up", run: () => { report(player, applyEdit(shopId, (s) => moveTrade(s, tradeId, -1)), "Moved up."); } },
             { label: "Move down", run: () => { report(player, applyEdit(shopId, (s) => moveTrade(s, tradeId, 1)), "Moved down."); } },
@@ -263,7 +265,7 @@ async function dealScreen(player: Player, shopId: string, tradeId: string): Prom
             BACK
         ];
 
-        return { title: heading(shop.name, trade.id), body: describeTrade(trade), actions };
+        return { title: heading(shop.name, trade.id), body: teleport ? `${describeTrade(trade)}\n§7Goes to §f${describeDestination(teleport)}` : describeTrade(trade), actions };
     });
 }
 
@@ -364,11 +366,11 @@ async function serviceScreen(player: Player, shopId: string): Promise<void> {
             { label: "A potion EFFECT", run: () => serviceForm(player, shopId, "effect") },
             { label: "An ENCHANTMENT on the item they hold", run: () => serviceForm(player, shopId, "enchant") },
             { label: "A tame ANIMAL (horse, mule, donkey)", run: () => serviceForm(player, shopId, "mount") },
-            { label: "A TELEPORT to where I stand now", run: () => serviceForm(player, shopId, "teleport") },
+            { label: "A TELEPORT (to where I stand, or typed coordinates)", run: () => teleportForm(player, shopId) },
             BACK
         ];
 
-        const body = "What the customer pays coins for. The game is asked whether it knows what you type, so a typo is caught here.\n§7A teleport goes to the spot you are standing on, in your dimension: walk there first.";
+        const body = "What the customer pays coins for. The game is asked whether it knows what you type, so a typo is caught here.\n§7A teleport's boxes start as the spot you are standing on: leave them, or type any coordinates to send customers anywhere.";
 
         return { title: heading(shop.name, "add a service"), body, actions };
     });
@@ -380,7 +382,7 @@ const wholeNumber = (value: unknown): number | undefined => {
     return /^-?\d+$/.test(text) ? Number(text) : undefined;
 };
 
-async function serviceForm(player: Player, shopId: string, kind: ServiceKind): Promise<void> {
+async function serviceForm(player: Player, shopId: string, kind: Exclude<ServiceKind, "teleport">): Promise<void> {
 
     const form = new ModalFormData();
 
@@ -395,14 +397,10 @@ async function serviceForm(player: Player, shopId: string, kind: ServiceKind): P
             .textField("Enchantment", "flame", { defaultValue: "" })
             .textField("Level", "1", { defaultValue: "1" })
             .textField("Coins players pay", "100", { defaultValue: "100" });
-    } else if (kind === "mount") {
+    } else {
         form.title("A tame animal")
             .textField("Animal", "horse", { defaultValue: "horse" })
             .textField("Coins players pay", "35", { defaultValue: "35" });
-    } else {
-        form.title("A teleport to where you stand")
-            .textField("Name of this place (optional)", "Saint Diego", { defaultValue: "" })
-            .textField("Coins players pay", "25", { defaultValue: "25" });
     }
 
     const response = await showForm(player, form);
@@ -412,8 +410,7 @@ async function serviceForm(player: Player, shopId: string, kind: ServiceKind): P
     const values = response.formValues ?? [];
     const text = (index: number): string => String(values[index] ?? "").trim();
 
-    // The fields line up with the form above: effect (what, level, seconds, coins), enchant (what, level, coins),
-    // mount (what, coins), teleport (name, coins).
+    // The fields line up with the form above: effect (what, level, seconds, coins), enchant (what, level, coins), mount (what, coins).
     const coinsAt = kind === "effect" ? 3 : kind === "enchant" ? 2 : 1;
     const coins = wholeNumber(values[coinsAt]);
     const level = kind === "effect" || kind === "enchant" ? wholeNumber(values[1]) : 1;
@@ -424,7 +421,74 @@ async function serviceForm(player: Player, shopId: string, kind: ServiceKind): P
         return;
     }
 
-    const outcome = addServiceDeal(player, shopId, kind, { what: kind === "teleport" ? "" : text(0), level, seconds, coins, name: kind === "teleport" ? text(0) : "" });
+    const outcome = addServiceDeal(player, shopId, kind, { what: text(0), level, seconds, coins, name: "" });
+
+    report(player, outcome, outcome.ok && outcome.trade ? `Added: ${describeTrade(outcome.trade)}.` : "Added.");
+}
+
+/**
+ * Where a teleport goes, as boxes to type in. A new teleport's boxes start as the spot the builder stands on (leave them and
+ * that is where it goes; type others to send customers anywhere, however far from the NPC). An existing deal's start as its
+ * destination, and a switch sends it to where the builder stands instead, for when they have walked there.
+ */
+async function teleportForm(player: Player, shopId: string, tradeId?: string): Promise<void> {
+
+    const shop = getShop(shopId);
+    if (!shop) return;
+
+    const trade = tradeId !== undefined ? findTrade(shop, tradeId) : undefined;
+    const old = trade ? teleportOf(trade) : undefined;
+
+    if (tradeId !== undefined && !old) return;          // the deal changed under the screen
+
+    const start: Destination = old ?? whereIStand(player);
+
+    const form = new ModalFormData().title(old ? "Where it goes" : "A teleport");
+
+    if (old) form.toggle("Use where I am standing now instead (the boxes below are ignored)", { defaultValue: false });
+
+    form.textField("X (east-west)", "0", { defaultValue: String(start.x) })
+        .textField("Y (height)", "64", { defaultValue: String(start.y) })
+        .textField("Z (north-south)", "0", { defaultValue: String(start.z) })
+        .dropdown("Dimension", ["The overworld", "The nether", "The end"], { defaultValueIndex: Math.max(0, DIMENSIONS.indexOf(start.dimension)) })
+        .textField("Name of this place (optional)", "Saint Diego", { defaultValue: old?.name ?? "" });
+
+    if (!old) form.textField("Coins players pay", "25", { defaultValue: "25" });
+
+    const response = await showForm(player, form);
+
+    if (!response || response.canceled) return;
+
+    const values = response.formValues ?? [];
+    const first = old ? 1 : 0;                           // the form for an existing deal starts with the switch
+
+    const where = old && values[0] === true
+        ? { ok: true as const, value: whereIStand(player) }
+        : readDestination(
+            { x: String(values[first] ?? ""), y: String(values[first + 1] ?? ""), z: String(values[first + 2] ?? "") },
+            DIMENSIONS[Number(values[first + 3])] ?? start.dimension
+        );
+
+    if (!where.ok) {
+        tell(player, warn(`Not changed: ${where.reason}.`));
+        return;
+    }
+
+    const name = String(values[first + 4] ?? "");
+
+    if (old && tradeId !== undefined) {
+        report(player, setTeleport(shopId, tradeId, where.value, name), `It now goes to ${describeDestination(where.value)}.`);
+        return;
+    }
+
+    const coins = wholeNumber(values[first + 5]);
+
+    if (coins === undefined) {
+        tell(player, warn("Not changed: the coins are a whole number."));
+        return;
+    }
+
+    const outcome = addServiceDeal(player, shopId, "teleport", { what: "", level: 1, seconds: 0, coins, name, where: where.value });
 
     report(player, outcome, outcome.ok && outcome.trade ? `Added: ${describeTrade(outcome.trade)}.` : "Added.");
 }
@@ -506,15 +570,59 @@ async function copyForm(player: Player, shopId: string): Promise<void> {
     }
 
     spawnShopNpc(player, copy.shop);
-    tell(player, ok(`Made ${copy.shop.name} (${copy.shop.id}) with the same deals, and put its NPC in front of you. /rae:shop_edit opens it.`));
+    tell(player, ok(`Made ${copy.shop.name} (${copy.shop.id}) with the same deals, and put its NPC in front of you. To stand it somewhere else, go there and run /rae:shop_move ${copy.shop.id}. /rae:shop_edit opens it.`));
 }
 
-function placeHere(player: Player, shopId: string): void {
+/**
+ * Brings a shop's NPC to stand in front of the builder and says how it went. From wherever it is: an NPC whose area is not
+ * loaded is fetched by loading the area for a moment. `mayMake`: when it is truly gone, make a new one (else say so, and make none).
+ */
+export async function moveNpcHere(player: Player, shop: Shop, mayMake: boolean): Promise<void> {
+
+    if (needsFetch(shop.id)) tell(player, format("info", `Loading the area where ${shop.name}'s NPC was last seen...`));
+
+    try {
+        const brought = await bringShopNpc(player, shop, mayMake);
+        const text = broughtText(shop, brought);
+
+        tell(player, brought.how === "none" || brought.how === "stuck" ? warn(text) : ok(text));
+    } catch (err) {
+        tell(player, warn(`${shop.name}'s NPC could not be placed: ${err instanceof Error ? err.message : String(err)}`));
+    }
+}
+
+async function placeHere(player: Player, shopId: string): Promise<void> {
 
     const shop = getShop(shopId);
     if (!shop) return;
 
-    tell(player, ok(placeNpcFor(player, shop) === "moved" ? "The NPC is here." : `Made a new NPC for ${shop.name} in front of you.`));
+    await moveNpcHere(player, shop, true);
+}
+
+/** "Whose NPC should come here?": every shop by name, with where its NPC is. Pressing one brings it, and never makes a second. */
+export function openMovePicker(player: Player): Promise<void> {
+
+    return screens.menuFor(player, async () => {
+
+        await screens.run(player, () => {
+
+            const shops = allShops();
+            const loaded = npcsByShop();
+
+            const actions: Action[] = [
+                ...shops.map((shop): Action => ({
+                    label: `${shop.name} (${whereIsNpc(shop.id, loaded.get(shop.id) ?? [])})`,
+                    run: async () => {
+                        await moveNpcHere(player, shop, false);
+                        screens.closeAll(player);
+                    }
+                })),
+                { label: "Close", run: () => { screens.closeAll(player); } }
+            ];
+
+            return { title: "Bring an NPC here", body: shops.length === 0 ? "No shops yet." : "Whose NPC should come and stand in front of you? It is brought from wherever it is; none is made.", actions };
+        });
+    });
 }
 
 function undoChange(player: Player, shopId: string): void {

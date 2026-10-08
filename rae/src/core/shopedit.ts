@@ -1,9 +1,9 @@
 import type { Player } from "@minecraft/server";
 import { SHOP as S } from "../config/balance.js";
 import {
-    addTrade, buyDeal, cleanName, copyShop, effectDeal, enchantDeal, mountDeal, sellDeal, slugify, swapDeal, teleportDeal, uniqueId,
-    newShop, updateTrade,
-    type Edit, type ItemSpec, type NewTrade, type Requirement, type Shop, type Trade
+    addTrade, buyDeal, cleanName, copyShop, effectDeal, enchantDeal, findTrade, mountDeal, retarget, sellDeal, slugify, swapDeal, teleportDeal,
+    toHundredth, uniqueId, newShop, updateTrade,
+    type Destination, type Edit, type ItemSpec, type NewTrade, type Requirement, type Shop, type Trade
 } from "../logic/shop.js";
 import { warn } from "./log.js";
 import { bagOf, heldStack, specOf } from "./shopitems.js";
@@ -161,6 +161,16 @@ export interface ServiceFields {
     readonly coins: number;
     /** What a teleport's place is called. May be empty. */
     readonly name: string;
+    /** Where a teleport goes, as typed. Absent: where the builder is standing. */
+    readonly where?: Destination;
+}
+
+/** Where the builder is standing, in the form a teleport keeps: to a hundredth of a block, in their dimension. */
+export function whereIStand(player: Player): Destination {
+
+    const here = player.location;
+
+    return { x: toHundredth(here.x), y: toHundredth(here.y), z: toHundredth(here.z), dimension: player.dimension.id.replace(/^minecraft:/, "") };
 }
 
 /** "Jump Boost " -> "jump_boost": how a builder's typing becomes a game id. */
@@ -201,15 +211,10 @@ export function addServiceDeal(player: Player, shopId: string, kind: ServiceKind
         }
 
         case "teleport": {
-            const here = player.location;
-            const hundredth = (n: number): number => Math.round(n * 100) / 100;
+            const where = fields.where ?? whereIStand(player);
             const name = cleanName(fields.name);
 
-            return addDeal(shopId, teleportDeal({
-                x: hundredth(here.x), y: hundredth(here.y), z: hundredth(here.z),
-                dimension: player.dimension.id.replace(/^minecraft:/, ""),
-                ...(name.length > 0 ? { name } : {})
-            }, fields.coins));
+            return addDeal(shopId, teleportDeal({ ...where, ...(name.length > 0 ? { name } : {}) }, fields.coins));
         }
     }
 }
@@ -217,6 +222,23 @@ export function addServiceDeal(player: Player, shopId: string, kind: ServiceKind
 /** Who may take a deal: a side, a bounty, both, or (undefined) anyone. */
 export function setRequirement(shopId: string, tradeId: string, requires: Requirement | undefined): Outcome {
     return applyEdit(shopId, (shop) => updateTrade(shop, tradeId, { requires }));
+}
+
+/**
+ * Sends a deal's teleport somewhere else, and renames the place (an empty name takes the name off). Nothing else about the deal
+ * changes: its price, who may take it and any other reward stay as they were.
+ */
+export function setTeleport(shopId: string, tradeId: string, to: Destination, name: string): Outcome {
+
+    return applyEdit(shopId, (shop) => {
+
+        const trade = findTrade(shop, tradeId);
+        if (!trade) return { ok: false, reason: `there is no deal ${tradeId}` };
+
+        const rewards = retarget(trade, to, name);
+
+        return rewards.ok ? updateTrade(shop, tradeId, { rewards: rewards.value }) : rewards;
+    });
 }
 
 /** One stack in a builder's bag, to choose from. */

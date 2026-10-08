@@ -545,6 +545,9 @@ export const SHOP = {
     maxBounty: 1000000,
     /** The farthest a teleport can send a customer from the origin, either way on any axis (blocks): the world border. */
     maxCoordinate: 30000000,
+    /** The lowest and the highest a teleport can put a customer (blocks): the build height of the tallest dimension, so a typo like 6300 is refused. */
+    minTeleportY: -64,
+    maxTeleportY: 320,
     /** How far in front of the customer a bought mount appears (blocks). */
     mountSpawnDistance: 2,
     /** Named in a message when a builder mistypes an effect or an animal, so the answer says what to type. */
@@ -575,6 +578,18 @@ export const SHOP = {
     sceneRetryTicks: 10,
     /** How far a builder can be from a shop NPC and still aim at it (blocks). */
     aimReach: 8,
+    /** Where a shop's NPC was last put or seen is kept in a world property named this plus the shop id, so it can be found when its area is not loaded. */
+    spotPrefix: "rae:shop:at:",
+    /** Bringing an NPC from an area that is not loaded: a temporary ticking area with this name loads it, the NPC is moved, and the area is removed. */
+    fetchAreaId: "rae_shop_fetch",
+    /** How long the area may take to load before the fetch gives up (ticks). */
+    fetchTimeoutTicks: 100,
+    /**
+     * Once the area has loaded, the NPC is looked for this long (ticks), every fetchSearchGapTicks, before it counts as gone: a newly
+     * loaded chunk's entities can take a moment to appear, and "gone" is what makes a new NPC, so it must not be said too soon.
+     */
+    fetchSearchTicks: 20,
+    fetchSearchGapTicks: 2,
     /** A click on a shop NPC closer than this to the last one (ticks) is the same click: the game can report one twice. */
     clickGapTicks: 5,
 

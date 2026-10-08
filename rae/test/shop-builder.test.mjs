@@ -15,7 +15,7 @@ const L = await load("logic/shop.js");
 await load("systems/shopbuilder.js");
 const { SHOP } = await load("config/balance.js");
 
-const NAMES = ["list", "info", "new", "sell", "buy", "trade", "service", "edit", "open", "select", "copy", "place", "delete", "undo"].map((n) => `rae:shop_${n}`);
+const NAMES = ["list", "info", "new", "sell", "buy", "trade", "service", "edit", "open", "select", "copy", "place", "move", "delete", "undo"].map((n) => `rae:shop_${n}`);
 
 function setup() {
     fake.reset();
@@ -34,6 +34,8 @@ const fromPlayer = (player) => ({ sourceEntity: player });
 const fromCommandBlock = () => ({ sourceEntity: undefined, sourceBlock: { typeId: "minecraft:command_block" } });
 const fromNpc = (player) => ({ sourceEntity: fake.makeEntity({ typeId: "minecraft:npc" }), initiator: player });
 const settle = async () => { for (let i = 0; i < 5; i++) await Promise.resolve(); };
+/** Lets game time pass while the promises it starts get to run: bringing an NPC looks for it for up to a second before it counts as gone. */
+const pass = async (ticks) => { for (let i = 0; i < ticks; i++) { fake.advance(1); await settle(); } };
 const succeeded = (result) => result?.status === CustomCommandStatus.Success;
 const failed = (result) => result?.status === CustomCommandStatus.Failure;
 
@@ -54,7 +56,7 @@ test("every command registers under the real registry's rules, operator-only, wi
     const { commands: registered } = commands();
 
     const names = [...registered.keys()].filter((n) => n.startsWith("rae:shop_")).sort();
-    check("exactly these fourteen", names.join(",") === [...NAMES].sort().join(","), names.join(","));
+    check("exactly these fifteen", names.join(",") === [...NAMES].sort().join(","), names.join(","));
     check("all operator-only", names.every((n) => registered.get(n).def.permissionLevel === CommandPermissionLevel.GameDirectors));
     check("sell and buy take whole coins", ["rae:shop_sell", "rae:shop_buy"].every((n) => registered.get(n).def.mandatoryParameters[0].type === CustomCommandParamType.Integer));
     check("new takes a name", registered.get("rae:shop_new").def.mandatoryParameters[0].type === CustomCommandParamType.String);
@@ -320,7 +322,7 @@ test("list and info describe shops, and info with true writes the saved text to 
     as(fromPlayer(op), "rae:shop_sell", 60);
 
     const list = as(fromPlayer(op), "rae:shop_list").message;
-    check("the list has the id, name, deal count and NPC", /habiti: Habiti, 1 deal, 1 NPC/.test(list), list);
+    check("the list has the id, name, deal count and where the NPC stands", /habiti: Habiti, 1 deal, NPC: at -?\d+, -?\d+, -?\d+ in the overworld/.test(list), list);
 
     world.setDynamicProperty("rae:shop:def:broken", "{ no");
     store.forgetLoaded();
@@ -364,7 +366,7 @@ test("copy makes a second shop with the same deals and its own NPC; an unknown s
     done();
 });
 
-test("place brings the NPC to the builder, or makes one when none is around", () => {
+test("place brings the NPC to the builder, or makes one when it is gone", async () => {
     setup();
     const { check, done } = checks();
     const { as } = commands();
@@ -376,13 +378,13 @@ test("place brings the NPC to the builder, or makes one when none is around", ()
     const [npc] = npcs.npcsOf("habiti");
     npc._location = { x: 900, y: 70, z: 900 };
     as(fromPlayer(op), "rae:shop_place");
-    fake.advance(1);
+    await pass(3);
     check("the same NPC came over", npcs.npcsOf("habiti").length === 1 && Math.abs(npc.location.x - op.location.x) < 5);
 
     npc.remove();
     as(fromPlayer(op), "rae:shop_place", "habiti");
-    fake.advance(1);
-    check("with none around, a new one is made", npcs.npcsOf("habiti").length === 1 && npcs.npcsOf("habiti")[0] !== npc);
+    await pass(30);
+    check("with none left where it was last seen, a new one is made", npcs.npcsOf("habiti").length === 1 && npcs.npcsOf("habiti")[0] !== npc);
     check("an unknown shop is refused", failed(as(fromPlayer(op), "rae:shop_place", "nobody")));
     done();
 });

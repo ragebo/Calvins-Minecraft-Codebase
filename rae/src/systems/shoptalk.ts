@@ -5,16 +5,17 @@ import { debug, error, warn } from "../core/log.js";
 import { isOperator } from "../core/players.js";
 import { registerSystem } from "../core/registry.js";
 import { openAdoptNpc, openShop, openShopEditor } from "../core/shopforms.js";
-import { isNpc, shopOf } from "../core/shopnpc.js";
+import { isNpc, rememberSpot, shopOf } from "../core/shopnpc.js";
 import { format, tell } from "../core/ui.js";
 
 /**
- * The player's side of a shop: a click on a shop NPC becomes the shop screen. Two ways in, because how the real game treats a
- * click on a vanilla NPC was unmeasured when this was written (systems/npcprobe.ts and docs/test-cards/NPC-PROBE.md measure it):
+ * The player's side of a shop: a click on a shop NPC becomes the shop screen. Two ways in. The first is the one in use: the probe
+ * (systems/npcprobe.ts, docs/test-cards/NPC-PROBE.md) measured on 2026-10-07 that cancelling the click really does stop the game's
+ * own NPC screen. The second stays as the fallback, and is where an operator's sneak-click ends up.
  *
  *   1. Interception. The "before" event for a click on an entity fires before the game opens the NPC's own dialogue. Cancelling
- *      it should stop that dialogue, and the shop opens in its place: one screen. If the game ignores the cancel the player gets
- *      both screens, so SHOP.interceptClicks can be turned off live (`/rae:config_set_bool shop.interceptClicks false`).
+ *      it stops that dialogue, and the shop opens in its place: one screen. (Were the game ever to ignore the cancel the player
+ *      would get both screens: SHOP.interceptClicks can be turned off live, `/rae:config_set_bool shop.interceptClicks false`.)
  *   2. The dialogue scene. A shop NPC is pointed at one static scene (dialogue/rae_npc.json) whose button runs
  *      `/scriptevent rae:npc shop`. An NPC's button runs a command as the NPC with the player who pressed it as the initiator,
  *      so this finds the shop from the NPC and the customer from the initiator. Two screens, but a documented mechanism.
@@ -81,7 +82,7 @@ try {
 
             if (wand) {
                 event.cancel = true;
-                open(player, () => openShopEditor(player, shopId));
+                open(player, () => { rememberSpot(shopId, target); return openShopEditor(player, shopId); });
                 return;
             }
 
@@ -92,7 +93,8 @@ try {
             if (!S.interceptClicks) return;
 
             event.cancel = true;
-            open(player, () => openShop(player, shopId));
+            // A click is a free chance to learn where this NPC stands, so "bring it here" can find it when its area is not loaded.
+            open(player, () => { rememberSpot(shopId, target); return openShop(player, shopId); });
         });
     });
 } catch (err) {
@@ -132,6 +134,7 @@ onScriptEvent("rae:npc", (player, message, origin) => {
         return;
     }
 
+    rememberSpot(shopId, npc);
     void openShop(customer, shopId);
 });
 

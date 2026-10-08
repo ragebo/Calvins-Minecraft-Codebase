@@ -15,7 +15,10 @@
 //     the engine refuses every call its typings tag `@privilege no-restricted-execution` (measured in the real game
 //     on 2026-10-06: they throw "cannot be used in restricted execution"),
 //   - `fake.startUp()`: a custom-command registry that enforces the rules the real one does (namespaced names,
-//     enum registered before the command that uses it, startup-only, typed arguments, permission level).
+//     enum registered before the command that uses it, startup-only, typed arguments, permission level),
+//   - `fake.hideUnloadedEntities`: a query cannot see an entity standing in a stretch `fake.setUnloaded` marked, until a ticking
+//     area that has finished loading covers it; with `fake.tickingAreaDelay` (ticks a new area takes to load),
+//     `fake.tickingAreaFails` (a message every new area is refused with) and `fake.tickingAreaCapacity` (chunks that fit).
 
 export const EquipmentSlot = { Mainhand: "Mainhand", Offhand: "Offhand", Head: "Head", Chest: "Chest", Legs: "Legs", Feet: "Feet" };
 export const EntitySwingSource = { Attack: "Attack", Build: "Build", DropItem: "DropItem", Event: "Event", Interact: "Interact", Mine: "Mine", None: "None", Place: "Place", Throw: "Throw", Use: "Use" };
@@ -273,6 +276,21 @@ function matchesQuery(entity, options = {}) {
 
 function queryPlayers(options) { return fake.players.filter((p) => matchesQuery(p, options)); }
 
+// An entity in a stretch the world has not loaded cannot be found by a query. Opt-in (`fake.hideUnloadedEntities`): the stretches
+// are the ones `fake.setUnloaded` marks, and a ticking area that has FINISHED loading brings the chunks it covers back.
+const chunkOf = (n) => Math.floor(n / 16);
+const chunkSpan = (a, b) => chunkOf(Math.max(a, b)) - chunkOf(Math.min(a, b)) + 1;
+const chunksIn = (area) => chunkSpan(area.from.x, area.to.x) * chunkSpan(area.from.z, area.to.z);
+function areaCovers(area, p) {
+    const within = (v, a, b) => chunkOf(v) >= chunkOf(Math.min(a, b)) && chunkOf(v) <= chunkOf(Math.max(a, b));
+    return within(p.x, area.from.x, area.to.x) && within(p.z, area.from.z, area.to.z);
+}
+function entityReachable(dim, entity) {
+    if (!fake.hideUnloadedEntities) return true;
+    if (dim.isChunkLoaded(entity._location)) return true;
+    return [...fake.tickingAreas].some(([id, area]) => fake.tickingAreaReady.has(id) && area.dimension === dim && areaCovers(area, entity._location));
+}
+
 // ---------------------------------------------------------------------------
 // Blocks: a type per position (dim.blocks, which predates this), its states, and a container for the types that have one.
 // ---------------------------------------------------------------------------
@@ -374,7 +392,7 @@ function makeDimension(id) {
             dim.played.push({ tick: fake.tick, id: soundId, location: { ...location }, volume: options.volume, pitch: options.pitch });
         },
         getPlayers(options) { fake.calls.dimensionGetPlayers++; return queryPlayers(options).filter((p) => p._dimension === dim); },
-        getEntities(options) { return fake.entities.filter((e) => e._dimension === dim && matchesQuery(e, options)); },
+        getEntities(options) { return fake.entities.filter((e) => e._dimension === dim && matchesQuery(e, options) && entityReachable(dim, e)); },
         spawnEntity(typeId, location) { restrictedCheck("Dimension.spawnEntity"); const e = fake.makeEntity({ typeId, location, dimension: dim }); dim.spawned.push(e); return e; },
         // Every item dropped into the world is kept in `spawnedItems` (the stack and where it landed).
         spawnedItems: [],
@@ -664,11 +682,27 @@ export const world = {
         };
     },
     tickingAreaManager: {
-        chunkCount: 0, maxChunkCount: 255,
-        hasCapacity() { return true; },
-        createTickingArea(id, options) { fake.tickingAreas.set(id, options); return Promise.resolve(); },
+        get chunkCount() { return [...fake.tickingAreas.values()].reduce((sum, area) => sum + chunksIn(area), 0); },
+        maxChunkCount: 255,
+        // Room for the chunks an area covers (Infinity unless a test sets fake.tickingAreaCapacity).
+        hasCapacity(options) { return fake.tickingAreaCapacity - this.chunkCount >= chunksIn(options); },
+        hasTickingArea(id) { return fake.tickingAreas.has(typeof id === "string" ? id : id.identifier); },
+        // The promise settles when the area is loaded and ticking (after fake.tickingAreaDelay ticks), or is refused.
+        createTickingArea(id, options) {
+            if (fake.tickingAreas.has(id)) return Promise.reject(new Error(`TickingAreaError: ${id} already exists`));
+            if (fake.tickingAreaFails) return Promise.reject(new Error(fake.tickingAreaFails));
+            fake.tickingAreas.set(id, options);
+            if (fake.tickingAreaDelay <= 0) { fake.tickingAreaReady.add(id); return Promise.resolve(); }
+            return new Promise((resolve) => {
+                system.runTimeout(() => { if (fake.tickingAreas.has(id)) fake.tickingAreaReady.add(id); resolve(); }, fake.tickingAreaDelay);
+            });
+        },
         getAllTickingAreas() { return [...fake.tickingAreas.keys()].map((identifier) => ({ identifier })); },
-        removeTickingArea(id) { fake.tickingAreas.delete(typeof id === "string" ? id : id.identifier); }
+        removeTickingArea(id) {
+            const key = typeof id === "string" ? id : id.identifier;
+            fake.tickingAreas.delete(key);
+            fake.tickingAreaReady.delete(key);
+        }
     },
     primitiveShapesManager: {
         maxShapes: 500,
@@ -801,6 +835,11 @@ export const fake = {
     structureLog: [],                   // every createFromWorld/place the code made
     lootTables: new Map(),              // path -> [[itemId, amount], ...]
     tickingAreas: new Map(),
+    tickingAreaReady: new Set(),        // the ids of areas that have finished loading
+    tickingAreaDelay: 0,                // ticks a new area takes to load
+    tickingAreaFails: null,             // a message: every new area is refused with it
+    tickingAreaCapacity: Infinity,      // chunks that fit in all areas together
+    hideUnloadedEntities: false,        // queries cannot see entities in a stretch fake.setUnloaded marked, unless a loaded ticking area covers them
     shapes: [],                         // world.primitiveShapesManager.addText calls
     itemTypes: new Set(["minecraft:stick", "minecraft:gold_ingot"]),
     // What the engine knows about items: a per-id override of how many one slot holds, the enchantments (bare id -> highest
@@ -911,6 +950,7 @@ export const fake = {
         fake.players.length = 0; fake.entities.length = 0; fake.chat.length = 0;
         fake.dynamic.clear(); fake.structures.clear(); fake.dynamicStringLimit = null;
         fake.structureMax = Infinity; fake.structureLog.length = 0; fake.lootTables.clear(); fake.tickingAreas.clear(); fake.shapes.length = 0;
+        fake.tickingAreaReady.clear(); fake.tickingAreaDelay = 0; fake.tickingAreaFails = null; fake.tickingAreaCapacity = Infinity; fake.hideUnloadedEntities = false;
         objectives.clear(); fake.calls = freshCalls();
         fake.physics.drag = 1; fake.physics.delivered = 1; fake.maxImpulse = Infinity; fake.cameraError = null;
         fake.restricted = 0; fake.strictBefore = false;
