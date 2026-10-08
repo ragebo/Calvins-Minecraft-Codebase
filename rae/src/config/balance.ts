@@ -492,6 +492,21 @@ export const ROBBERY = {
     /** Punches on one frame by one player closer together than this (ticks) are one punch. */
     frameHitGapTicks: 10,
 
+    // ---- Guards: the mobs a `spawn` effect puts into a robbery (pillagers on the way through a bank). Each carries a tag with its
+    // robbery's id so that putting the site back takes them away again, whatever happened to the run.
+    /** The most mobs one spawn effect may make. */
+    maxSpawnCount: 10,
+    /** The most mobs all of a robbery's spawn effects may make together. Each effect fires at most once a run, so this bounds how many can stand at once. */
+    maxGuards: 30,
+    /** The gap between one mob of an effect and the next (ticks): they arrive one at a time instead of on top of each other. */
+    spawnGapTicks: 6,
+    /** Every guard carries this tag, so one query finds them all. */
+    guardTag: "rbg",
+    /** And this followed by its robbery's id, which says whose it is. */
+    guardTagPrefix: "rbg:",
+    /** After the scripts start, guards left behind by a crash or a reload are swept up this many ticks later (the world has to be there first). */
+    guardSweepDelayTicks: 40,
+
     /** What each moment sounds like. The ping's pitch comes from the guess (see the pick settings above). */
     cues: {
         denied: { id: "note.bass", volume: 0.8, pitch: 0.7 },

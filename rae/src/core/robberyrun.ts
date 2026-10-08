@@ -1,11 +1,11 @@
-import { system, type Container, type ItemStack, type Player, type Vector3 } from "@minecraft/server";
+import { system, world, type Container, type ItemStack, type Player, type Vector3 } from "@minecraft/server";
 import { ModalFormData } from "@minecraft/server-ui";
 import { ROBBERY as R } from "../config/balance.js";
 import { FRESH_PICK, pickStep, type PickCurve, type PickParams, type PickState } from "../logic/lockpick.js";
 import { briefly, sentence } from "../logic/robberymeta.js";
 import {
     boxContains, findElement, itemLabel, sameDimension, whyNotRunnable,
-    type Audience, type Effect, type Element, type Lock, type LootElement, type PickLock, type Pos, type RewardEffect, type Robbery, type SayEffect
+    type Audience, type Effect, type Element, type Lock, type LootElement, type PickLock, type Pos, type RewardEffect, type Robbery, type SayEffect, type SpawnEffect
 } from "../logic/robbery.js";
 import { activeEvent, finishEvent, registerEvent, requestEvent } from "./director.js";
 import { addBounty, addCoins, getCoins, takeCoins } from "./economy.js";
@@ -14,7 +14,10 @@ import { debug, error, warn } from "./log.js";
 import { aliveOutlaws, alivePlayers, isOperator, lawPlayers, players } from "./players.js";
 import { registerSystem } from "./registry.js";
 import { clearDirty, dirtyCount, dirtyEntries, getRobbery, markDirty, robberyIsDirty, type Bound, type Dirty } from "./robberystore.js";
-import { dimensionOf, dropItems, emptyChest, emptyFrame, fillChest, isLoaded, lootStacks, removeItemsNear, restoreFrame, setDoor } from "./robberyworld.js";
+import {
+    dimensionOf, dropItems, emptyChest, emptyFrame, fillChest, isLoaded, lootStacks, removeGuards, removeIfStray, removeItemsNear, removeStrayGuards,
+    restoreFrame, setDoor, spawnGuard
+} from "./robberyworld.js";
 import { isPhase } from "./round.js";
 import { playAtPoint, playFor } from "./sound.js";
 import { recordOf } from "./state.js";
@@ -93,9 +96,14 @@ interface Run {
     lastInside: number;
     /** Who last completed something: the actor of the end-of-run effects. */
     lastActorId: string | undefined;
+    /** The guards it spawned have been taken away (done once, when the site is put back). */
+    guardsCleared: boolean;
 }
 
 const runs = new Map<string, Run>();
+
+/** Whether a robbery has a run (under way, or ended and waiting for its site to be put back): a guard of any other is a stray. */
+const hasRun = (robbery: string): boolean => runs.has(robbery);
 /** The tick each robbery may be started again, after it ended. */
 const cooldownUntil = new Map<string, number>();
 /** Each player's last scored pick guess, for the mash-protection. */
@@ -232,10 +240,33 @@ function deliverReward(effect: RewardEffect, recipients: readonly Player[]): voi
     }
 }
 
+/**
+ * Mobs appear one after another, the first now and the rest `R.spawnGapTicks` apart, through the run's own queue: a run that is
+ * stopped or reset before they have all come spawns no more (its queue goes with it), and nothing is spawned after one that was
+ * cut short, because that site has already been put back.
+ */
+function spawnWave(run: Run, robbery: Robbery, effect: SpawnEffect): void {
+
+    if (run.result === "stopped" || run.result === "round") return;
+
+    const now = system.currentTick;
+    const one: SpawnEffect = { ...effect, count: 1 };
+
+    for (let i = 0; i < effect.count; i++) {
+        if (i === 0) spawnGuard(robbery.dimension, robbery.id, effect.entity, effect.at);
+        else run.pending.push({ at: now + i * R.spawnGapTicks, effect: one, actorId: undefined });
+    }
+}
+
 function applyEffect(run: Run, robbery: Robbery, effect: Effect, actorId: string | undefined): void {
 
     if (effect.kind === "end") {
         endRun(run, effect.result);
+        return;
+    }
+
+    if (effect.kind === "spawn") {
+        spawnWave(run, robbery, effect);
         return;
     }
 
@@ -425,7 +456,7 @@ function begin(id: string, by: Player | undefined, test: boolean, holdsSlot: boo
 
     const run: Run = {
         id, startedTick: now, test, holdsSlot, done: new Set(), picks: new Map(), pending: [],
-        ended: false, result: undefined, resetAt: Infinity, lastAreaCheck: now, lastInside: now, lastActorId: by?.id
+        ended: false, result: undefined, resetAt: Infinity, lastAreaCheck: now, lastInside: now, lastActorId: by?.id, guardsCleared: false
     };
 
     runs.set(id, run);
@@ -578,6 +609,9 @@ export function resetSiteNow(id: string): { readonly cleaned: number; readonly l
 
     runs.delete(id);
     cooldownUntil.delete(id);
+
+    // Whatever was spawned goes with the run.
+    removeGuards(id);
 
     // Resetting by hand is how a builder fixes a site: every frame is shown again, including one nobody was seen taking from.
     const robbery = getRobbery(id);
@@ -1099,6 +1133,14 @@ function janitor(now: number): void {
         if (putBack(entry)) clearDirty(entry);
     }
 
+    // Its time is up: the guards go, once, along with the site being put back.
+    for (const run of runs.values()) {
+        if (run.ended && now >= run.resetAt && !run.guardsCleared) {
+            run.guardsCleared = true;
+            removeGuards(run.id);
+        }
+    }
+
     // A run that has ended and been put back is finished with, and its robbery can be started again.
     for (const run of [...runs.values()]) {
         if (run.ended && now >= run.resetAt && !robberyIsDirty(run.id)) runs.delete(run.id);
@@ -1117,7 +1159,8 @@ function loop(context: TickContext): void {
         const robbery = getRobbery(run.id);
 
         if (!robbery) {
-            // Deleted while running. Whatever it changed is still noted, so the janitor puts that back.
+            // Deleted while running. Whatever it changed is still noted, so the janitor puts that back; its guards go now.
+            removeGuards(run.id);
             runs.delete(run.id);
             if (run.holdsSlot && !run.ended) finishEvent(eventId(run.id));
             continue;
@@ -1195,12 +1238,36 @@ export function runningIds(): string[] {
     return [...runs.values()].filter((run) => !run.ended).map((run) => run.id);
 }
 
+// A guard that loads with its chunk belongs to a robbery that is not running (a crash or a reload ended it), so it goes.
+try {
+    world.afterEvents.entityLoad.subscribe((event) => {
+        try {
+            removeIfStray(event.entity, hasRun);
+        } catch (err) {
+            error(SOURCE, `a guard that loaded could not be checked: ${err instanceof Error ? err.message : String(err)}`);
+        }
+    });
+} catch (err) {
+    warn(SOURCE, `could not listen for entities loading: ${err instanceof Error ? err.message : String(err)}`);
+}
+
+// Guards already in loaded chunks when the scripts start do not fire entityLoad (a /reload), and the world has to be there first.
+system.runTimeout(() => {
+    try {
+        removeStrayGuards(hasRun);
+    } catch (err) {
+        error(SOURCE, `the start-up sweep for stray guards failed: ${err instanceof Error ? err.message : String(err)}`);
+    }
+}, R.guardSweepDelayTicks);
+
 registerSystem({
     name: "robbery",
     reset() {
         // A round reset drops every run on the spot. Nothing about the site is lost: the blocks they changed are still
         // noted in the saved list, so the janitor puts them back on its next pass.
         runs.clear();
+        // With no run left, every guard is a stray: they go with the runs.
+        removeStrayGuards(hasRun);
         cooldownUntil.clear();
         lastGuessTick.clear();
         lastDetail.clear();

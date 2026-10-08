@@ -358,6 +358,15 @@ frame is waiting to be put back (it might be empty): save it once the site has b
 missing is reported in the log and does not hold the robbery up. Breaking the block a frame hangs on drops the frame; that
 is not protected.
 
+**Guards.** An effect can **spawn mobs**: "Add: spawn mobs" is on every effects screen (an element done, a lock jammed, the
+start, win or fail of the whole robbery). Choose the mob (`pillager`, or any id the game has: a bare name gets `minecraft:`),
+how many, and where (the boxes start as the block the builder stands on, and a coordinate may be negative), with the usual wait.
+They arrive one after another, a third of a second apart, each tagged `rbg` and `rbg:<robbery>`, and they behave as the mob
+always does (pillagers go for any player). At most 10 in one effect and 30 in a whole robbery. When the site is put back (a stop,
+a reset, the reset time after a win or fail, a deleted robbery, a round reset) every one of them is removed; a guard left by a
+crash or a reload is removed when its chunk loads, because a reload ends a robbery in progress and nothing may stand guard over a
+site that is not being robbed. Killing a guard gives nothing yet. `docs/test-cards/ROBBERY-GUARDS.md` is the run sheet.
+
 **Putting the site back.** Before a door is opened or a chest filled, and for every item frame the moment a run starts,
 the block is noted in a saved list. A normal ending, a manual reset, a round reset, a deleted robbery, a crash and a
 reload all end the same way: a janitor reads that list and puts each block back (doors shut, chests emptied, frames

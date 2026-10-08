@@ -100,10 +100,23 @@ export interface EndEffect extends EffectBase {
     readonly result: "win" | "fail";
 }
 
-/** Something that happens: a line of text, a payout, the end of the robbery. */
-export type Effect = SayEffect | RewardEffect | EndEffect;
+/**
+ * Mobs appear: `count` of them, one after another, at a block of the robbery's dimension. Guards: pillagers on the way through a
+ * bank. They are tagged with the robbery's id and taken away again when the site is put back.
+ */
+export interface SpawnEffect extends EffectBase {
+    readonly kind: "spawn";
+    /** The mob's entity type, e.g. "minecraft:pillager". */
+    readonly entity: string;
+    readonly count: number;
+    /** The block they appear at. */
+    readonly at: Pos;
+}
+
+/** Something that happens: a line of text, a payout, mobs appearing, the end of the robbery. */
+export type Effect = SayEffect | RewardEffect | SpawnEffect | EndEffect;
 export type EffectKind = Effect["kind"];
-export const EFFECT_KINDS: readonly EffectKind[] = ["say", "reward", "end"];
+export const EFFECT_KINDS: readonly EffectKind[] = ["say", "reward", "spawn", "end"];
 
 interface ElementBase {
     /** "e1", "e2"...: stable for the life of the robbery and never reused, so links never break on a rename. */
@@ -214,6 +227,7 @@ const bad = (reason: string): Fail => ({ ok: false, reason });
 const SLUG = /^[a-z][a-z0-9_]*$/;
 const ELEMENT_ID = /^e[1-9][0-9]*$/;
 const ITEM_ID = /^[a-z0-9_]+:[a-z0-9_./]+$/;
+const ENTITY_ID = /^[a-z0-9_]+:[a-z0-9_.]+$/;
 const TABLE_PATH = /^[a-z0-9_/]+$/;
 const SOUND_ID = /^[a-zA-Z0-9_.:]+$/;
 const FORMAT_CODE = /§./g;
@@ -396,7 +410,8 @@ export function validateLock(raw: unknown): Result<Lock> {
     return bad(`unknown lock method ${String(raw["kind"])}`);
 }
 
-export function validateEffect(raw: unknown): Result<Effect> {
+/** `dimension` decides how high a spawn point may be; the whole-robbery check passes the robbery's own. */
+export function validateEffect(raw: unknown, dimension = "overworld"): Result<Effect> {
 
     if (!isRecord(raw)) return bad("an effect is missing its settings");
 
@@ -428,6 +443,17 @@ export function validateEffect(raw: unknown): Result<Effect> {
         return good({ kind: "reward", coins: coins.value, bounty: bounty.value, to: raw["to"] as Audience, ...delay });
     }
 
+    if (raw["kind"] === "spawn") {
+        const entity = raw["entity"];
+        if (typeof entity !== "string" || !ENTITY_ID.test(entity) || entity.length > 64) return bad("a mob type looks like minecraft:pillager");
+        const count = intInRange(raw["count"], 1, R.maxSpawnCount, "how many mobs");
+        if (!count.ok) return count;
+        const problem = whyBadPos(raw["at"], dimension);
+        if (problem) return bad(`where the mobs appear: ${problem}`);
+        const at = raw["at"] as readonly number[];
+        return good({ kind: "spawn", entity, count: count.value, at: [at[0]!, at[1]!, at[2]!], ...delay });
+    }
+
     if (raw["kind"] === "end") {
         if (raw["result"] !== "win" && raw["result"] !== "fail") return bad("the robbery ends in a win or a fail");
         return good({ kind: "end", result: raw["result"], ...delay });
@@ -452,7 +478,8 @@ function validateList<T>(raw: unknown, check: (item: unknown) => Result<T>, max:
     return good(out);
 }
 
-export const validateEffects = (raw: unknown, what = "effects"): Result<Effect[]> => validateList(raw, validateEffect, R.maxEffectsPerList, what);
+export const validateEffects = (raw: unknown, what = "effects", dimension = "overworld"): Result<Effect[]> =>
+    validateList(raw, (effect) => validateEffect(effect, dimension), R.maxEffectsPerList, what);
 
 function validateLocks(raw: unknown): Result<Lock[]> {
 
@@ -530,9 +557,9 @@ function validateElement(raw: unknown, dimension: string): Result<Element> {
     if (new Set(req.value).size !== req.value.length) return bad(`${name}: the same requirement is listed twice`);
     if (req.value.includes(id)) return bad(`${name}: an element cannot require itself`);
 
-    const onDone = validateEffects(raw["onDone"], "the done effects");
+    const onDone = validateEffects(raw["onDone"], "the done effects", dimension);
     if (!onDone.ok) return bad(`${name}: ${onDone.reason}`);
-    const onFail = validateEffects(raw["onFail"], "the jam effects");
+    const onFail = validateEffects(raw["onFail"], "the jam effects", dimension);
     if (!onFail.ok) return bad(`${name}: ${onFail.reason}`);
 
     const common = { id, name, locks: locks.value, req: req.value, onDone: onDone.value, onFail: onFail.value };
@@ -649,11 +676,11 @@ export function validateRobbery(raw: unknown): Result<Robbery> {
 
     const hooks = raw["hooks"];
     if (!isRecord(hooks)) return bad("its start, win and fail effects are missing");
-    const start = validateEffects(hooks["start"], "the start effects");
+    const start = validateEffects(hooks["start"], "the start effects", dimension);
     if (!start.ok) return start;
-    const win = validateEffects(hooks["win"], "the win effects");
+    const win = validateEffects(hooks["win"], "the win effects", dimension);
     if (!win.ok) return win;
-    const fail = validateEffects(hooks["fail"], "the fail effects");
+    const fail = validateEffects(hooks["fail"], "the fail effects", dimension);
     if (!fail.ok) return fail;
 
     const rawElements = raw["elements"];
@@ -695,6 +722,11 @@ export function validateRobbery(raw: unknown): Result<Robbery> {
     const loop = findLoop(elements);
     if (loop) return bad(`the requirements go in a loop: ${loop}`);
 
+    // Each effect fires at most once a run, so the sum over every list is the most mobs that can be standing at once.
+    const guards = [start.value, win.value, fail.value, ...elements.flatMap((e) => [e.onDone, e.onFail])]
+        .reduce((sum, list) => sum + list.reduce((inner, effect) => inner + (effect.kind === "spawn" ? effect.count : 0), 0), 0);
+    if (guards > R.maxGuards) return bad(`a robbery can spawn at most ${R.maxGuards} mobs in all (this one would spawn ${guards})`);
+
     return good({
         version: ROBBERY_VERSION, id, name, dimension, nextElement,
         ...(area.value ? { area: area.value } : {}),
@@ -732,6 +764,7 @@ function storeEffect(effect: Effect): Record<string, unknown> {
 
     if (effect.kind === "say") return { a: "say", x: effect.text, c: effect.channel, to: effect.to, ...(effect.sound !== undefined ? { so: effect.sound } : {}), ...delay };
     if (effect.kind === "reward") return { a: "rew", co: effect.coins, bo: effect.bounty, to: effect.to, ...delay };
+    if (effect.kind === "spawn") return { a: "spn", e: effect.entity, n: effect.count, p: [...effect.at], ...delay };
     return { a: "end", r: RESULT_CODES[effect.result], ...delay };
 }
 
@@ -743,6 +776,7 @@ function readEffect(raw: unknown): unknown {
 
     if (raw["a"] === "say") return { kind: "say", text: raw["x"], channel: raw["c"], to: raw["to"], ...(raw["so"] !== undefined ? { sound: raw["so"] } : {}), ...delay };
     if (raw["a"] === "rew") return { kind: "reward", coins: raw["co"], bounty: raw["bo"], to: raw["to"], ...delay };
+    if (raw["a"] === "spn") return { kind: "spawn", entity: raw["e"], count: raw["n"], at: raw["p"], ...delay };
     if (raw["a"] === "end") return { kind: "end", result: raw["r"] === "w" ? "win" : raw["r"] === "f" ? "fail" : raw["r"], ...delay };
     return raw;
 }
@@ -1023,7 +1057,7 @@ export function removeElement(robbery: Robbery, id: string): RemoveResult {
 // ---------------------------------------------------------------------------------------------------------
 
 function usesAudience(effects: readonly Effect[], audience: Audience): boolean {
-    return effects.some((effect) => effect.kind !== "end" && effect.to === audience);
+    return effects.some((effect) => (effect.kind === "say" || effect.kind === "reward") && effect.to === audience);
 }
 
 /**

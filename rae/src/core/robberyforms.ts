@@ -2,11 +2,11 @@ import type { Player } from "@minecraft/server";
 import { ActionFormData, ModalFormData } from "@minecraft/server-ui";
 import { ROBBERY as R } from "../config/balance.js";
 import {
-    ELEMENT_KINDS, HOOK_NAMES, clearArea, findElement, holdsLoot, itemLabel, setArea, setHook, setSettings, updateElement, whyNotRunnable,
+    EFFECT_KINDS, ELEMENT_KINDS, HOOK_NAMES, clearArea, findElement, holdsLoot, itemLabel, setArea, setHook, setSettings, updateElement, whyNotRunnable,
     type Effect, type Element, type ElementKind, type HookName, type Lock, type LockKind, type Pos, type Robbery
 } from "../logic/robbery.js";
 import {
-    EFFECT_LABELS, LOCK_LABELS, describeEffect, describeElement, describeLock, describeRobbery, effectFields, effectFromAnswers,
+    EFFECT_LABELS, LOCK_LABELS, defaultEffect, describeEffect, describeElement, describeLock, describeRobbery, effectFields, effectFromAnswers,
     formatItemList, lockFields, lockFromAnswers, parseItemList, readAnswers, sentence, settingsFields, settingsFromAnswers,
     type Answers, type Field
 } from "../logic/robberymeta.js";
@@ -19,7 +19,7 @@ import {
 } from "./robberyedit.js";
 import { clock, cooldownLeftSeconds, resetSiteNow, startRobbery, stopRobbery, viewOf } from "./robberyrun.js";
 import { deleteRobbery, getRobbery, listStored, undoAvailable, undoLast } from "./robberystore.js";
-import { frameIsCaptured, lootTableExists, neighbourChest } from "./robberyworld.js";
+import { frameIsCaptured, lootTableExists, mobKnown, neighbourChest } from "./robberyworld.js";
 import { format, tell } from "./ui.js";
 
 /**
@@ -598,7 +598,7 @@ async function effectsScreen(player: Player, robberyId: string, target: Target):
         const actions: Action[] = effects.map((effect, index): Action => ({ label: describeEffect(effect), run: () => effectForm(player, robberyId, target, index) }));
 
         if (effects.length < R.maxEffectsPerList) {
-            for (const kind of ["say", "reward", "end"] as const) actions.push({ label: `Add: ${EFFECT_LABELS[kind].toLowerCase()}`, run: () => effectForm(player, robberyId, target, undefined, kind) });
+            for (const kind of EFFECT_KINDS) actions.push({ label: `Add: ${EFFECT_LABELS[kind].toLowerCase()}`, run: () => effectForm(player, robberyId, target, undefined, kind) });
         }
 
         actions.push(BACK);
@@ -621,7 +621,10 @@ async function effectForm(player: Player, robberyId: string, target: Target, ind
     const kind = existing?.kind ?? newKind;
     if (!kind) return;
 
-    const fields: Field[] = [...effectFields(kind, existing), ...(existing ? [{ kind: "toggle", key: "remove", label: "Delete this effect", value: false } as const] : [])];
+    // Mobs appear where the builder is asked to put them; a new spawn effect starts as the spot the builder stands on.
+    const start = existing ?? (kind === "spawn" ? { ...defaultEffect("spawn"), at: [Math.floor(player.location.x), Math.floor(player.location.y), Math.floor(player.location.z)] as Pos } : undefined);
+
+    const fields: Field[] = [...effectFields(kind, start), ...(existing ? [{ kind: "toggle", key: "remove", label: "Delete this effect", value: false } as const] : [])];
     const answers = await ask(player, `${EFFECT_LABELS[kind]}`, fields);
     if (!answers) return;
 
@@ -631,6 +634,12 @@ async function effectForm(player: Player, robberyId: string, target: Target, ind
     }
 
     const written = effectFromAnswers(kind, answers);
+
+    // The game is asked whether it knows the mob, so a typo is refused now and not found out by a player in the bank.
+    if (kind === "spawn" && typeof written === "object" && written !== null && !mobKnown(String((written as { entity?: unknown }).entity))) {
+        tell(player, warn(`The game has no mob called ${String((written as { entity?: unknown }).entity)}. Try minecraft:pillager, minecraft:vindicator or minecraft:zombie.`));
+        return;
+    }
     const next = existing && index !== undefined ? effects.map((effect, i): unknown => (i === index ? written : effect)) : [...effects, written];
 
     report(player, writeEffects(robberyId, target, next), existing ? "Changed." : "Added.");

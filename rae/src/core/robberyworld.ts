@@ -1,4 +1,4 @@
-import { ItemStack, StructureSaveMode, world, type Block, type Container, type Dimension, type Vector3 } from "@minecraft/server";
+import { EntityTypes, ItemStack, StructureSaveMode, world, type Block, type Container, type Dimension, type Entity, type Vector3 } from "@minecraft/server";
 import { ROBBERY as R } from "../config/balance.js";
 import { classOfBlockType, swingsOpen } from "../logic/blockclass.js";
 import { type Pos } from "../logic/robbery.js";
@@ -610,4 +610,131 @@ export function removeItemsNear(dimension: string, at: Vector3, reach: number, o
     }
 
     return removed;
+}
+
+// ---------------------------------------------------------------------------------------------------------
+// Guards
+// ---------------------------------------------------------------------------------------------------------
+
+/**
+ * The mobs a `spawn` effect puts into a robbery (pillagers on the way through a bank). Each carries two tags: one for every
+ * guard, so a single query finds them all, and one with its robbery's id, so putting a site back takes away only its own. That a
+ * guard is hostile, armed and where it goes is the game's own doing; the framework makes it and takes it away.
+ *
+ * NOT measured in the real game (docs/test-cards/ROBBERY-GUARDS.md): spawning at a point, a pillager's gear and temper, a removal
+ * reaching every guard, and what `entityLoad` reports for a chunk that comes back.
+ */
+
+const DIMENSION_NAMES = ["overworld", "nether", "the_end"] as const;
+
+/** The tag that says whose guard a mob is. */
+export const guardTag = (robbery: string): string => `${R.guardTagPrefix}${robbery}`;
+
+/** Whether the game has an entity type with this id, as typed and then with the minecraft: namespace (the game's lookups differ about it). */
+export function mobKnown(id: string): boolean {
+
+    try {
+        const bare = id.replace(/^minecraft:/, "");
+        return EntityTypes.get(id) !== undefined || EntityTypes.get(bare) !== undefined || (!id.includes(":") && EntityTypes.get(`minecraft:${id}`) !== undefined);
+    } catch {
+        return false;
+    }
+}
+
+/** Makes one guard of a robbery at a block, standing in its middle. False, and one line in the log, when the game would not. */
+export function spawnGuard(dimension: string, robbery: string, entity: string, at: Pos): boolean {
+
+    const dim = dimensionOf(dimension);
+    if (!dim) return false;
+
+    try {
+        const mob = dim.spawnEntity(entity, { x: at[0] + 0.5, y: at[1], z: at[2] + 0.5 });
+
+        mob.addTag(R.guardTag);
+        mob.addTag(guardTag(robbery));
+
+        return true;
+    } catch (err) {
+        once(`could not spawn ${entity} at ${label(at)}: ${errorText(err)}`);
+        return false;
+    }
+}
+
+/** The robbery a mob is a guard of, or undefined when it is not one (or cannot be read). */
+export function guardOf(entity: Entity): string | undefined {
+
+    try {
+        if (!entity.hasTag(R.guardTag)) return undefined;
+
+        for (const tag of entity.getTags()) if (tag.startsWith(R.guardTagPrefix)) return tag.slice(R.guardTagPrefix.length);
+    } catch {
+        // an entity that cannot be read is not ours to judge
+    }
+
+    return undefined;
+}
+
+function removeEntity(entity: Entity): boolean {
+
+    try {
+        entity.remove();
+        return true;
+    } catch (err) {
+        once(`could not remove a guard: ${errorText(err)}`);
+        return false;
+    }
+}
+
+/** Takes away every loaded guard of a robbery, in every dimension. Answers how many went. A guard in an unloaded chunk waits for the sweep. */
+export function removeGuards(robbery: string): number {
+
+    let removed = 0;
+
+    for (const name of DIMENSION_NAMES) {
+
+        const dim = dimensionOf(name);
+        if (!dim) continue;
+
+        try {
+            for (const entity of dim.getEntities({ tags: [guardTag(robbery)] })) if (removeEntity(entity)) removed++;
+        } catch (err) {
+            once(`could not look for the guards of ${robbery}: ${errorText(err)}`);
+        }
+    }
+
+    return removed;
+}
+
+/**
+ * Takes away every loaded guard whose robbery `live` does not call running: a guard outlives its run only after a crash or a reload
+ * (which ends a robbery in progress), and nothing may stand guard over a site that is not being robbed. Answers how many went.
+ */
+export function removeStrayGuards(live: (robbery: string) => boolean): number {
+
+    let removed = 0;
+
+    for (const name of DIMENSION_NAMES) {
+
+        const dim = dimensionOf(name);
+        if (!dim) continue;
+
+        try {
+            for (const entity of dim.getEntities({ tags: [R.guardTag] })) {
+                const owner = guardOf(entity);
+                if ((owner === undefined || !live(owner)) && removeEntity(entity)) removed++;
+            }
+        } catch (err) {
+            once(`could not look for stray guards: ${errorText(err)}`);
+        }
+    }
+
+    return removed;
+}
+
+/** Takes away one entity that has just loaded if it is a guard of a robbery that is not running. */
+export function removeIfStray(entity: Entity, live: (robbery: string) => boolean): boolean {
+
+    const owner = guardOf(entity);
+
+    return owner !== undefined && !live(owner) && removeEntity(entity);
 }

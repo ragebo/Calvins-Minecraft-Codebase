@@ -1,4 +1,5 @@
 import { ROBBERY as R } from "../config/balance.js";
+import { OVERWORLD_Y_BOUNDS } from "../config/world.js";
 import { bareId, classOfBlockType, swingsOpen, type BlockClass } from "./blockclass.js";
 import {
     AUDIENCES, CHANNELS, SETTING_KEYS, holdsLoot, isFlagSetting, itemLabel, kindLabel,
@@ -32,8 +33,8 @@ export interface Choice {
 
 export type Field =
     | { readonly kind: "text"; readonly key: string; readonly label: string; readonly placeholder: string; readonly value: string }
-    /** A whole number typed into a text box; the answer is checked against min and max. `what` names it in an error. */
-    | { readonly kind: "number"; readonly key: string; readonly label: string; readonly what: string; readonly min: number; readonly max: number; readonly value: number }
+    /** A whole number typed into a text box; the answer is checked against min and max. `what` names it in an error. `signed` allows a leading minus (a coordinate can be negative). */
+    | { readonly kind: "number"; readonly key: string; readonly label: string; readonly what: string; readonly min: number; readonly max: number; readonly value: number; readonly signed?: boolean }
     | { readonly kind: "toggle"; readonly key: string; readonly label: string; readonly value: boolean }
     | { readonly kind: "choice"; readonly key: string; readonly label: string; readonly options: readonly Choice[]; readonly value: string }
     | { readonly kind: "slider"; readonly key: string; readonly label: string; readonly min: number; readonly max: number; readonly step: number; readonly value: number };
@@ -49,6 +50,20 @@ export function wholeNumber(text: string, what: string, min: number, max: number
     const trimmed = text.trim();
 
     if (!/^\d+$/.test(trimmed)) return bad(`${what} must be a whole number from ${min} to ${max}`);
+
+    const value = Number(trimmed);
+
+    if (value < min || value > max) return bad(`${what} must be a whole number from ${min} to ${max}`);
+
+    return ok(value);
+}
+
+/** "-12" -> -12, "12" -> 12. A coordinate can be negative; nothing else changes: no decimals, no plus sign, no trailing words. */
+export function signedNumber(text: string, what: string, min: number, max: number): Result<number> {
+
+    const trimmed = text.trim();
+
+    if (!/^-?\d+$/.test(trimmed)) return bad(`${what} must be a whole number from ${min} to ${max}`);
 
     const value = Number(trimmed);
 
@@ -78,7 +93,8 @@ export function readAnswers(fields: readonly Field[], values: readonly unknown[]
         }
 
         if (field.kind === "number") {
-            const number = wholeNumber(typeof raw === "string" ? raw : String(raw ?? ""), field.what, field.min, field.max);
+            const text = typeof raw === "string" ? raw : String(raw ?? "");
+            const number = field.signed === true ? signedNumber(text, field.what, field.min, field.max) : wholeNumber(text, field.what, field.min, field.max);
             if (!number.ok) return number;
             answers[field.key] = number.value;
             continue;
@@ -150,7 +166,7 @@ export const CHANNEL_CHOICES: readonly Choice[] = CHANNELS.map((value) => ({ val
 export const RESULT_CHOICES: readonly Choice[] = [{ value: "win", label: "The robbery is won" }, { value: "fail", label: "The robbery fails" }];
 
 export const LOCK_LABELS: Record<LockKind, string> = { pick: "Pick lock", key: "Key", pay: "Price" };
-export const EFFECT_LABELS: Record<EffectKind, string> = { say: "Say something", reward: "Pay out", end: "End the robbery" };
+export const EFFECT_LABELS: Record<EffectKind, string> = { say: "Say something", reward: "Pay out", spawn: "Spawn mobs", end: "End the robbery" };
 
 // ---------------------------------------------------------------------------------------------------------
 // Locks
@@ -217,6 +233,8 @@ export function defaultEffect(kind: EffectKind): Effect {
 
     if (kind === "say") return { kind: "say", text: "", channel: "chat", to: "area" };
     if (kind === "reward") return { kind: "reward", coins: 100, bounty: 0, to: "area" };
+    // Where they appear is the builder's own spot, filled in by the form (this layer does not know where anyone stands).
+    if (kind === "spawn") return { kind: "spawn", entity: "minecraft:pillager", count: 3, at: [0, 64, 0] };
 
     return { kind: "end", result: "win" };
 }
@@ -245,6 +263,21 @@ export function effectFields(kind: EffectKind, current?: Effect): Field[] {
         ];
     }
 
+    if (effect.kind === "spawn") {
+
+        const coordinate = (key: string, label: string, value: number, min: number, max: number): Field =>
+            ({ kind: "number", key, label, what: label.toLowerCase(), min, max, value, signed: true });
+
+        return [
+            { kind: "text", key: "entity", label: "The mob", placeholder: "minecraft:pillager", value: effect.entity },
+            { kind: "number", key: "count", label: `How many (1 to ${R.maxSpawnCount})`, what: "how many", min: 1, max: R.maxSpawnCount, value: effect.count },
+            coordinate("x", "Where: X", effect.at[0], -R.maxCoordinate, R.maxCoordinate),
+            coordinate("y", "Where: Y", effect.at[1], OVERWORLD_Y_BOUNDS.min, OVERWORLD_Y_BOUNDS.max),
+            coordinate("z", "Where: Z", effect.at[2], -R.maxCoordinate, R.maxCoordinate),
+            delay
+        ];
+    }
+
     return [{ kind: "choice", key: "result", label: "How it ends", options: RESULT_CHOICES, value: effect.result }, delay];
 }
 
@@ -259,6 +292,13 @@ export function effectFromAnswers(kind: EffectKind, answers: Answers): unknown {
     }
 
     if (kind === "reward") return { kind, coins: answers["coins"], bounty: answers["bounty"], to: answers["to"], ...delay };
+
+    if (kind === "spawn") {
+        // "pillager" is as good as "minecraft:pillager": a builder should not have to know the namespace.
+        const typed = typeof answers["entity"] === "string" ? answers["entity"].trim().toLowerCase() : "";
+        const entity = typed.length === 0 || typed.includes(":") ? typed : `minecraft:${typed}`;
+        return { kind, entity, count: answers["count"], at: [answers["x"], answers["y"], answers["z"]], ...delay };
+    }
 
     return { kind, result: answers["result"], ...delay };
 }
@@ -276,6 +316,8 @@ export function describeEffect(effect: Effect): string {
         const parts = [effect.coins > 0 ? `${effect.coins} coins` : "", effect.bounty > 0 ? `${effect.bounty} bounty` : ""].filter((p) => p.length > 0);
         return `Pay ${parts.join(" and ")} to ${AUDIENCE_LABELS[effect.to].toLowerCase()}${wait}`;
     }
+
+    if (effect.kind === "spawn") return `Spawn ${effect.count} ${itemLabel(effect.entity)} at ${effect.at.join(", ")}${wait}`;
 
     return `End: ${effect.result === "win" ? "won" : "failed"}${wait}`;
 }

@@ -43,9 +43,9 @@ own header comment where it has one.
 | `registry.ts` | Where a system registers itself and its reset, so a round reset can never again forget one. |
 | `robberyedit.ts` | The robbery framework's editing session without a screen: each builder's selected robbery (kept on the player), the one `applyEdit` every change goes through (pure edit, whole-robbery validation, no block claimed by two robberies, then the store), binding blocks (and saving what an item frame shows), and what a wand click means. |
 | `robberyforms.ts` | Every screen the builder sees (menus, the add-element form, locks, requirements, effects, loot, settings, area), as presentation over `robberyedit.ts` and `logic/robberymeta.ts`. |
-| `robberyrun.ts` | Playing a robbery: starting it (and the director's slot), who may touch what, the locks, completing elements (handing a frame's loot to the thief), effects, ending, undoing a punch on an item frame, and putting the site back through one idempotent janitor. One shared loop; nothing registered per robbery. |
+| `robberyrun.ts` | Playing a robbery: starting it (and the director's slot), who may touch what, the locks, completing elements (handing a frame's loot to the thief), effects (including spawning guards), ending, undoing a punch on an item frame, and putting the site back through one idempotent janitor. One shared loop; nothing registered per robbery. |
 | `robberystore.ts` | Where robberies live: one world property each, written at once on every edit, refused up front when over the size cap, unreadable ones listed and never overwritten, one level of undo. Also the saved list of blocks a run changed and has not yet put back. |
-| `robberyworld.ts` | Everything a robbery does to blocks (swing a door, fill and empty a chest, empty an item frame and show it again from a saved one-block structure, chunk-loaded checks) in one place, because it is the one file that depends on engine behavior measured once. Never throws. |
+| `robberyworld.ts` | Everything a robbery does to the world (swing a door, fill and empty a chest, empty an item frame and show it again from a saved one-block structure, make and remove guard mobs, chunk-loaded checks) in one place, because it is the one file that depends on engine behavior measured once. Never throws. |
 | `round.ts` | The one `IDLE -> SETUP -> ACTIVE -> ENDING -> ENDED` phase machine. Also a `Persistable`: the phase itself is never restored into an active state. |
 | `screens.ts` | Menu plumbing for a builder's screens: a title, some text and buttons, each button an action that may open another screen, and one menu of a kind open per player. The shop's screens use it; `robberyforms.ts` has its own copy of the same few lines. |
 | `shopedit.ts` | What a builder does to shops without a screen: which shop they are working on (kept on the player), making and copying one, the one `applyEdit` every change goes through, deals made from what they hold, services made from what they type (the game is asked whether it knows the effect, enchantment or animal), where a teleport goes (typed, or where they stand) and who may take a deal. |
@@ -110,7 +110,7 @@ condition, in separate files. None of this needs fixing — it's just what's act
 | `bearing.ts` | Compass direction math and display. |
 | `blockclass.ts` | What kind of block a type id is (door, trapdoor, gate, container, button, lever, plate, tripwire, item frame, other), by suffix, for the robbery framework. |
 | `lockpick.ts` | The pick lock's rules (a hidden target, hot/cold pings, hits to open, a jam after too many misses), with the random source and the tick passed in. |
-| `robbery.ts` | A robbery as data: elements (door, chest, item frame, switch), locks (pick, key, pay), requirements, effects, settings; immutable edits that validate the whole result; the saved short-key form; `parse` never throws. |
+| `robbery.ts` | A robbery as data: elements (door, chest, item frame, switch), locks (pick, key, pay), requirements, effects (say, pay out, spawn mobs, end), settings; immutable edits that validate the whole result; the saved short-key form; `parse` never throws. |
 | `robberymeta.ts` | The builder's forms as data (a field list builds a form and reads its answers back into the validators) and the plain-language summaries of what was built. |
 | `route.ts` | The train's track math: smoothing, distance, heading, speed, steering. |
 | `schema.ts` | Config schema-version fingerprinting and migration for persisted data. |
@@ -180,6 +180,13 @@ refuses to save a frame that is waiting to be put back (it may be empty, and the
 A frame is put back by clearing the spot and placing the saved copy as a NEW block (`restoreFrame`): placed over the frame
 already standing there the copy filled it where nobody could see the item (the owner's report on BP 0.2.1, 2026-10-08).
 All of this is built on typings and tests, not on a measurement; `docs/test-cards/ROBBERY-FRAME.md` is what turns it into one.
+
+**Guards are the one thing a run makes that is an entity.** A `spawn` effect (`logic/robbery.ts`) goes through the same
+effect queue as any other: `core/robberyrun.ts` makes the first mob at once and queues the rest `spawnGapTicks` apart, so a run
+that is stopped spawns no more. `core/robberyworld.ts` makes each one and tags it twice: `rbg` (one query finds every guard)
+and `rbg:<robbery>` (whose it is). They are removed by the same moments that put a site back (the reset time, a stop, a
+hand reset, a deleted robbery, a round reset), and the stray sweep takes any guard whose robbery has no run: on `entityLoad`,
+and once after start-up, because a reload ends a robbery in progress but not its mobs.
 
 ### The NPC shops' shape
 
