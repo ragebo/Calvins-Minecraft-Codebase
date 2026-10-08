@@ -20,6 +20,11 @@
 //     comment), and structures that save the frames in their box with what each shows and bring them back on `place`,
 //   - `fake.passableBlocks`: type ids the default ray (`getBlockFromViewDirection`) looks straight through, as the engine's does for
 //     flowers and vines, unless it is asked with `includePassableBlocks: true`,
+//   - `fake.strictFrameSync` and `fake.frameShown`: what a PLAYER sees in an item frame. Off, it is the same as `fake.frameItemAt`.
+//     On, it models what the owner saw on 2026-10-08 (a frame put back by placing a structure over the frame standing there held
+//     its item and showed nothing): the screen is told only about a frame that is a NEW block (set from air or from another block,
+//     or placed by a structure over something that was not that same frame), about `fake.setFrameItem`, and about a punch's pop,
+//     never about a structure loaded into an identical frame. This is a model of a suspicion, not a measurement of the engine,
 //   - `fake.hideUnloadedEntities`: a query cannot see an entity standing in a stretch `fake.setUnloaded` marked, until a ticking
 //     area that has finished loading covers it; with `fake.tickingAreaDelay` (ticks a new area takes to load),
 //     `fake.tickingAreaFails` (a message every new area is refused with) and `fake.tickingAreaCapacity` (chunks that fit).
@@ -281,6 +286,9 @@ function matchesQuery(entity, options = {}) {
 function queryPlayers(options) { return fake.players.filter((p) => matchesQuery(p, options)); }
 
 /** The item frames in a box of a dimension, with what each shows, as offsets from the box's lowest corner (what a saved structure keeps of them). */
+/** A block's states as a list sorted by name, so two blocks can be compared whatever order their states were written in. */
+const sortedStates = (states) => Object.entries(states ?? {}).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
+
 function framesIn(dim, from, to) {
     const min = { x: Math.min(from.x, to.x), y: Math.min(from.y, to.y), z: Math.min(from.z, to.z) };
     const max = { x: Math.max(from.x, to.x), y: Math.max(from.y, to.y), z: Math.max(from.z, to.z) };
@@ -385,12 +393,12 @@ function makeBlock(dim, location) {
         setType(type) {
             restrictedCheck("Block.setType");
             dim.blocks.set(key, typeof type === "string" ? type : type.id);
-            dim.blockStates.delete(key); dim.containers.delete(key); dim.frameItems.delete(key);
+            dim.blockStates.delete(key); dim.containers.delete(key); dim.frameItems.delete(key); dim.frameSeen.delete(key);
         },
         setPermutation(permutation) {
             restrictedCheck("Block.setPermutation");
             // A different block is a different block entity: what a frame showed goes with it.
-            if (dim.blocks.get(key) !== permutation.type.id) { dim.containers.delete(key); dim.frameItems.delete(key); }
+            if (dim.blocks.get(key) !== permutation.type.id) { dim.containers.delete(key); dim.frameItems.delete(key); dim.frameSeen.delete(key); }
             dim.blocks.set(key, permutation.type.id);
             dim.blockStates.set(key, permutation.getAllStates());
         },
@@ -437,7 +445,7 @@ function makeDimension(id) {
                         const key = blockKey({ x, y, z });
                         dim.blocks.set(key, typeId);
                         if (states) dim.blockStates.set(key, { ...states }); else dim.blockStates.delete(key);
-                        dim.containers.delete(key); dim.frameItems.delete(key);
+                        dim.containers.delete(key); dim.frameItems.delete(key); dim.frameSeen.delete(key);
                     }
                 }
             }
@@ -450,6 +458,8 @@ function makeDimension(id) {
         // The item an item frame shows. In the game a frame is a BLOCK whose block entity holds it, and the scripting API cannot read
         // or set it: a test sets it with fake.setFrameItem and reads it with fake.frameItemAt, and only a structure restores it.
         frameItems: new Map(),
+        // What a player standing there SEES in the frame (see fake.strictFrameSync): updated only by changes the screen is told about.
+        frameSeen: new Map(),
         // A location in an unloaded chunk has no block (the engine answers undefined).
         getBlock(location) { return dim.isChunkLoaded(location) ? makeBlock(dim, location) : undefined; },
         getBlockFromRay() { return undefined; },
@@ -704,9 +714,12 @@ export const world = {
             for (const frame of fake.structureFrames.get(name) ?? []) {
                 const at = { x: Math.floor(location.x) + frame.dx, y: Math.floor(location.y) + frame.dy, z: Math.floor(location.z) + frame.dz };
                 const key = blockKey(at);
+                // A structure loaded into a block identical to the one it replaces is the suspected case the screen is not told about.
+                const identical = dimension.blocks.get(key) === frame.typeId && JSON.stringify(sortedStates(dimension.blockStates.get(key))) === JSON.stringify(sortedStates(frame.states));
                 dimension.blocks.set(key, frame.typeId);
                 if (frame.states) dimension.blockStates.set(key, { ...frame.states }); else dimension.blockStates.delete(key);
                 if (frame.item) dimension.frameItems.set(key, { ...frame.item }); else dimension.frameItems.delete(key);
+                if (!identical) { if (frame.item) dimension.frameSeen.set(key, { ...frame.item }); else dimension.frameSeen.delete(key); }
             }
             fake.structureLog.push({ op: "place", id: name, location: { ...location }, options });
         },
@@ -885,6 +898,7 @@ export const fake = {
     tickingAreaCapacity: Infinity,      // chunks that fit in all areas together
     hideUnloadedEntities: false,        // queries cannot see entities in a stretch fake.setUnloaded marked, unless a loaded ticking area covers them
     passableBlocks: new Set(),          // block type ids the default ray looks through (see getBlockFromViewDirection)
+    strictFrameSync: false,             // frameShown follows only the changes a player's screen is told about (see the header)
     shapes: [],                       // world.primitiveShapesManager.addText calls
     itemTypes: new Set(["minecraft:stick", "minecraft:gold_ingot"]),
     // What the engine knows about items: a per-id override of how many one slot holds, the enchantments (bare id -> highest
@@ -934,17 +948,24 @@ export const fake = {
         dim.blocks.set(key, typeId);
         const merged = { ...(hasOpenBit(typeId) ? DEFAULT_STATES : {}), ...(states ?? {}) };
         if (Object.keys(merged).length > 0) dim.blockStates.set(key, merged); else dim.blockStates.delete(key);
-        dim.containers.delete(key); dim.frameItems.delete(key);
+        dim.containers.delete(key); dim.frameItems.delete(key); dim.frameSeen.delete(key);
         return makeBlock(dim, pos);
     },
     // Item frames. The item a frame shows is kept per frame block; a frame holds one item or none.
     setFrameItem(dimension, pos, typeId, amount = 1) {
         const dim = typeof dimension === "string" ? fake.dimension(dimension) : dimension;
         dim.frameItems.set(blockKey(pos), { typeId, amount });
+        dim.frameSeen.set(blockKey(pos), { typeId, amount });          // putting an item in a frame is announced
     },
     frameItemAt(dimension, pos) {
         const dim = typeof dimension === "string" ? fake.dimension(dimension) : dimension;
         const item = dim.frameItems.get(blockKey(pos));
+        return item ? { ...item } : undefined;
+    },
+    /** What a player sees in the frame at `pos`: what it holds, unless `fake.strictFrameSync` is on and the screen was never told. */
+    frameShown(dimension, pos) {
+        const dim = typeof dimension === "string" ? fake.dimension(dimension) : dimension;
+        const item = fake.strictFrameSync ? dim.frameSeen.get(blockKey(pos)) : dim.frameItems.get(blockKey(pos));
         return item ? { ...item } : undefined;
     },
     /**
@@ -966,6 +987,7 @@ export const fake = {
             const item = dim.frameItems.get(key);
             if (!item || options.pop === false) return;
             dim.frameItems.delete(key);
+            dim.frameSeen.delete(key);                                  // the game's own pop is announced
             const entity = dim.spawnItem(new ItemStack(item.typeId, item.amount), { x: Math.floor(pos.x) + 0.5, y: Math.floor(pos.y) + 0.5, z: Math.floor(pos.z) + 0.5 });
             if (options.announce !== false) world.afterEvents.entitySpawn.emit({ entity, cause: "Spawned" });
         };
@@ -1037,13 +1059,13 @@ export const fake = {
         fake.players.length = 0; fake.entities.length = 0; fake.chat.length = 0;
         fake.dynamic.clear(); fake.structures.clear(); fake.structureFrames.clear(); fake.dynamicStringLimit = null;
         fake.structureMax = Infinity; fake.structureLog.length = 0; fake.lootTables.clear(); fake.tickingAreas.clear(); fake.shapes.length = 0;
-        fake.tickingAreaReady.clear(); fake.tickingAreaDelay = 0; fake.tickingAreaFails = null; fake.tickingAreaCapacity = Infinity; fake.hideUnloadedEntities = false; fake.passableBlocks.clear();
+        fake.tickingAreaReady.clear(); fake.tickingAreaDelay = 0; fake.tickingAreaFails = null; fake.tickingAreaCapacity = Infinity; fake.hideUnloadedEntities = false; fake.passableBlocks.clear(); fake.strictFrameSync = false;
         objectives.clear(); fake.calls = freshCalls();
         fake.physics.drag = 1; fake.physics.delivered = 1; fake.maxImpulse = Infinity; fake.cameraError = null;
         fake.restricted = 0; fake.strictBefore = false;
         // A loader a test installed by hand (the train tests do) is its own business; only setUnloaded's is undone here.
         for (const d of Object.values(fake.dimensions)) {
-            d.blocks.clear(); d.blockStates.clear(); d.containers.clear(); d.frameItems.clear();
+            d.blocks.clear(); d.blockStates.clear(); d.containers.clear(); d.frameItems.clear(); d.frameSeen.clear();
             if (d.fakeLoader && d.isChunkLoaded === d.fakeLoader) { d.isChunkLoaded = () => true; d.fakeLoader = undefined; }
         }
         for (const d of Object.values(fake.dimensions)) { d.commands.length = 0; d.played.length = 0; d.spawned.length = 0; d.explosions.length = 0; d.filled.length = 0; d.particles.length = 0; d.spawnedItems.length = 0; }

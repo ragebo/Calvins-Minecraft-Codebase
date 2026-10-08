@@ -177,6 +177,8 @@ thief keeps that item. Because the script can never read a frame, it cannot know
 notes EVERY frame of its robbery in the janitor's list the moment it starts (`noteFrames`), and so does a manual reset:
 whatever happened, the end of the run re-places each frame from its saved copy. For the same reason the edit layer
 refuses to save a frame that is waiting to be put back (it may be empty, and the empty copy would be what comes back).
+A frame is put back by clearing the spot and placing the saved copy as a NEW block (`restoreFrame`): placed over the frame
+already standing there the copy filled it where nobody could see the item (the owner's report on BP 0.2.1, 2026-10-08).
 All of this is built on typings and tests, not on a measurement; `docs/test-cards/ROBBERY-FRAME.md` is what turns it into one.
 
 ### The NPC shops' shape

@@ -2,7 +2,7 @@ import { ItemStack, StructureSaveMode, world, type Block, type Container, type D
 import { ROBBERY as R } from "../config/balance.js";
 import { classOfBlockType, swingsOpen } from "../logic/blockclass.js";
 import { type Pos } from "../logic/robbery.js";
-import { warn } from "./log.js";
+import { debug, warn } from "./log.js";
 
 /**
  * Everything a robbery does to the blocks of the world, in one place: swing a door, fill and empty a chest, ask what a
@@ -446,8 +446,9 @@ export function dropItems(dimension: string, at: Vector3, stacks: readonly ItemS
  * bound frame is saved as a one-block structure and put back from that.
  *
  * Measured in the real game: a World-mode structure with a `rae:` id survives leaving the world, and one made over an unloaded
- * area saves air without complaint (so the chunk is checked first). NOT measured: that a saved frame brings its item back, and
- * what a punch on a frame does; docs/test-cards/ROBBERY-FRAME.md measures both.
+ * area saves air without complaint (so the chunk is checked first). Measured 2026-10-08 (the owner, BP 0.2.1): a frame put back
+ * with the structure placed OVER the frame standing there held its item (it could be taken) but showed nothing. NOT measured: what
+ * a punch on a frame does; docs/test-cards/ROBBERY-FRAME.md measures that.
  */
 
 const coordinate = (n: number): string => (n < 0 ? `m${-n}` : String(n));
@@ -540,7 +541,16 @@ export function emptyFrame(dimension: string, pos: Pos): boolean {
  */
 export type Restored = "restored" | "missing" | "unreachable";
 
-/** Puts the frame back from its saved copy, with the item it showed. */
+/**
+ * Puts the frame back from its saved copy, with the item it showed.
+ *
+ * A frame already standing there is cleared first. Placed over it, the saved copy put its item in the frame (the owner could take
+ * it) and nobody could see it: the likely reason is that a structure loaded into a block identical to the one it replaces changes
+ * the frame's data in place and the players' screens are never told. Every other way a frame gets into the world is a NEW block, and
+ * that is announced, so the spot is made air and the frame placed again; it is the same two steps `emptyFrame` takes the other way.
+ * The saved copy is looked for first, so a frame that cannot be put back is never cleared; and if the placement fails after the
+ * clearing, the answer is "unreachable" and the next try finds air and places it.
+ */
 export function restoreFrame(dimension: string, robbery: string, pos: Pos): Restored {
 
     const dim = dimensionOf(dimension);
@@ -553,7 +563,14 @@ export function restoreFrame(dimension: string, robbery: string, pos: Pos): Rest
 
         if (manager.get(id) === undefined) return "missing";
 
+        const standing = blockAt(dimension, pos);
+        const clear = standing !== undefined && classOfBlockType(standing.typeId) === "frame";
+
+        if (clear) standing.setType("minecraft:air");
+
         manager.place(id, dim, vector(pos), { includeEntities: false });
+
+        debug(SOURCE, `the frame at ${label(pos)} was put back${clear ? " after clearing the frame standing there" : " on an empty spot"}`);
 
         return "restored";
     } catch (err) {

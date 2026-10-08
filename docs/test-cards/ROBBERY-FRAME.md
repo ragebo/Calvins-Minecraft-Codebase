@@ -15,7 +15,7 @@ cannot say, because the game's scripts have no item-frame support at all and nob
 - **How a frame works.** The game cannot tell a script what is inside a frame, so **the loot is set on the element** (a loot
   table, fixed items, or both), and what the frame shows is only the display. Binding a frame also saves what it shows, so it
   can be shown again after a theft. If you change the display later, press **Save what the frame shows now** in its screen.
-- `npm test` covers (1139 tests in all, 74 of them new for frames, and 75 deliberate breaks of the frame rules each caught by at least one): the data and
+- `npm test` covers (1146 tests in all, 81 of them new for frames, and 78 deliberate breaks of the frame rules each caught by at least one): the data and
   its validation, the saved form, binding and re-binding, the world layer (save, empty, restore, remove what popped out), the
   whole theft (locks, requirements, outlaws only, overflow, a table), the reset by timer, stop, reload, unloaded chunk and a
   missing copy, the right-click cancel, every order the game might report a punch in, the builder's screens, and the wand's
@@ -41,7 +41,7 @@ cannot say, because the game's scripts have no item-frame support at all and nob
 
 | # | Do | Expect |
 |---|---|---|
-| 12 | `/rae:robbery_reset jewels` (or wait about a minute after the win). | **Both frames show their item again**: the diamond in the plain frame, the emerald in the glow frame. Tell me if an item is missing, is a different item, is turned a different way, or the glow frame is no longer glowing. Look at the floor: nothing extra. |
+| 12 | `/rae:robbery_reset jewels` (or wait about a minute after the win). | **Both frames show their item again**: the diamond in the plain frame, the emerald in the glow frame, and you can SEE them. Tell me if an item is missing, is a different item, is turned a different way, or the glow frame is no longer glowing. Look at the floor: nothing extra. **If a frame holds its item but you cannot see it** (the first version did this), tell me whether it shows after you leave and rejoin the world, or walk far away and come back: that says the frame is right and only the picture is behind. |
 | 13 | Take the necklace again (right-click, empty hand), then **quit to the main menu and relaunch** (or close the world) before the reset time. Rejoin and wait a few seconds. | The diamond is back in the frame by itself once the area has loaded. |
 
 ## Punching (what the game really does: please look carefully)
@@ -73,7 +73,9 @@ seen this in the real game yet, so this part is the most useful for me.
 1. **Binding:** does a right-click with the wand on a frame open the bind form (step 2), and never also turn the item or open
    the main menu on top? (The wand's ray might look straight through a frame like it does through a flower; I added a second
    check for that, but only the game can say.)
-2. **Putting it back:** does the saved frame bring back the same item, the same way up, glowing if it was a glow frame (step 12)?
+2. **Putting it back:** does the saved frame bring back the same item, the same way up, glowing if it was a glow frame, and can you
+   SEE it (step 12)? The first version put the item in the frame where nobody could see it; since then each frame is cleared and
+   placed again as a new block, which is a guess at the cause and has to be looked at.
 3. **Punch:** which events the game sends, whether the popped item is announced as a new item, and whether the undo leaves exactly
    the loot and nothing else (steps 14 to 17). If the game pops the item **without** announcing it, the thief keeps the popped
    item AND is given the loot (two diamonds instead of one); the tests pin that as a known limit. If you see it, `guardFramePunches

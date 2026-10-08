@@ -348,7 +348,9 @@ to take from it, with the same locks and requirements as any element; when it op
 when everything it waits for is done. A **punch**, which the game answers by popping the item out, can be seen but not
 stopped, so it is undone a moment later: the item that appeared is taken away, the frame is put back, and the punch
 counts as an attempt to take it. (`/rae:config_set_bool robbery.guardFramePunches false` turns that off.) When the site
-is put back, **every** frame of the robbery is shown again from its saved copy, taken from or not: a script cannot read
+is put back, **every** frame of the robbery is cleared and placed again from its saved copy as a new block (placed over the
+frame standing there, the first version filled it where nobody could see the item: the owner's report of 2026-10-08), taken
+from or not: a script cannot read
 what a frame shows, so it cannot know that one was emptied behind its back (a punch the game never reported), and
 re-placing the small saved copy is cheaper and safer than trusting a guess. `/rae:robbery_reset` does the same by hand,
 so it is the fix for a frame that ever looks wrong. For the same reason "Save what the frame shows now" is refused while a

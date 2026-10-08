@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { fake, fakeApi, load, checks } from "./helpers.mjs";
+import { fake, fakeApi, world, load, checks } from "./helpers.mjs";
 import { L, at, ok, added } from "./robbery-fixtures.mjs";
 
 // Item frames in the robbery framework, the parts that need no player: what a frame element is as data (one block, loot,
@@ -216,6 +216,97 @@ test("emptying where a frame no longer stands leaves whatever is there alone", (
 
     check("nothing to empty, and no harm done", World.emptyFrame("overworld", FRAME) === true);
     check("the chest that stands there now still has its diamonds", chest.getComponent("minecraft:inventory").container.getItem(0)?.amount === 3);
+    done();
+});
+
+// The owner's report of 2026-10-08 (BP 0.2.1): after a frame was put back, the item was in it (it could be taken) and nobody could see
+// it. `fake.strictFrameSync` models the suspected reason: a structure loaded into a frame identical to the one it replaces changes the
+// frame in place and no screen is told. These tests mean something only because the second one shows the model really does that.
+
+test("the model: a structure placed straight over an identical empty frame fills it where nobody can see", () => {
+    setup();
+    fake.strictFrameSync = true;
+    const { check, done } = checks();
+
+    World.captureFrame("overworld", "jewels", FRAME);
+    World.emptyFrame("overworld", FRAME);
+    check("players see it empty", fake.frameShown("overworld", at(FRAME)) === undefined);
+
+    world.structureManager.place(World.frameStructureId("jewels", FRAME), fake.dimension("overworld"), at(FRAME), { includeEntities: false });
+
+    check("the frame holds the diamond", fake.frameItemAt("overworld", at(FRAME))?.typeId === "minecraft:diamond");
+    check("and players still see it empty: that is the reported bug", fake.frameShown("overworld", at(FRAME)) === undefined, JSON.stringify(fake.frameShown("overworld", at(FRAME))));
+
+    fake.strictFrameSync = false;
+    check("with the model off, what is shown is what is held", fake.frameShown("overworld", at(FRAME))?.typeId === "minecraft:diamond");
+    done();
+});
+
+test("a frame is put back as a NEW block, so players can see what it shows", () => {
+    setup();
+    fake.strictFrameSync = true;
+    const { check, done } = checks();
+
+    World.captureFrame("overworld", "jewels", FRAME);
+    World.emptyFrame("overworld", FRAME);
+    check("players see it empty", fake.frameShown("overworld", at(FRAME)) === undefined);
+
+    check("restored", World.restoreFrame("overworld", "jewels", FRAME) === "restored");
+    check("the frame holds the diamond", fake.frameItemAt("overworld", at(FRAME))?.typeId === "minecraft:diamond");
+    check("and players SEE the diamond", fake.frameShown("overworld", at(FRAME))?.typeId === "minecraft:diamond", JSON.stringify(fake.frameShown("overworld", at(FRAME))));
+
+    // The same for the glow frame, and for a frame that was never emptied (the end of a run puts every frame back).
+    World.captureFrame("overworld", "jewels", GLOW);
+    check("a frame that was never emptied is put back and seen too", World.restoreFrame("overworld", "jewels", GLOW) === "restored" && fake.frameShown("overworld", at(GLOW))?.typeId === "minecraft:emerald" && fake.frameShown("overworld", at(GLOW))?.amount === 3);
+    check("still a glow frame facing the same way", fake.blockAt("overworld", at(GLOW)).typeId === "minecraft:glow_frame" && fake.blockAt("overworld", at(GLOW)).permutation.getState("facing_direction") === 3);
+    done();
+});
+
+test("a frame that has no saved copy is left exactly as it is: nothing is cleared that cannot be put back", () => {
+    setup();
+    fake.strictFrameSync = true;
+    const { check, done } = checks();
+
+    check("no copy", World.restoreFrame("overworld", "jewels", FRAME) === "missing");
+    check("the frame still stands and still shows its diamond", fake.blockAt("overworld", at(FRAME)).typeId === "minecraft:frame" && fake.frameItemAt("overworld", at(FRAME))?.typeId === "minecraft:diamond" && fake.frameShown("overworld", at(FRAME))?.typeId === "minecraft:diamond");
+    done();
+});
+
+test("if the game refuses the placement after the spot was cleared, the answer is for later, and the next try places the frame", () => {
+    setup();
+    fake.strictFrameSync = true;
+    const { check, done } = checks();
+    const original = console.warn;
+    const place = world.structureManager.place;
+
+    World.captureFrame("overworld", "jewels", FRAME);
+    World.emptyFrame("overworld", FRAME);
+
+    let first;
+    console.warn = () => {};
+    world.structureManager.place = () => { throw new Error("the game refused"); };
+
+    try {
+        first = World.restoreFrame("overworld", "jewels", FRAME);
+    } finally {
+        world.structureManager.place = place;
+        console.warn = original;
+    }
+
+    check("for later", first === "unreachable");
+    check("the spot is empty air now", fake.blockAt("overworld", at(FRAME)).typeId === "minecraft:air");
+    check("the next try places the frame, and it is seen", World.restoreFrame("overworld", "jewels", FRAME) === "restored" && fake.frameShown("overworld", at(FRAME))?.typeId === "minecraft:diamond");
+    done();
+});
+
+test("restoring puts the frame back even where something else now stands", () => {
+    setup();
+    const { check, done } = checks();
+
+    World.captureFrame("overworld", "jewels", FRAME);
+    fake.placeBlock("overworld", at(FRAME), "minecraft:stone");                 // the frame was taken down and a block put there
+
+    check("restored over the stone", World.restoreFrame("overworld", "jewels", FRAME) === "restored" && fake.blockAt("overworld", at(FRAME)).typeId === "minecraft:frame" && fake.frameItemAt("overworld", at(FRAME))?.typeId === "minecraft:diamond");
     done();
 });
 

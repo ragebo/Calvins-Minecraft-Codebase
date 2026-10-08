@@ -374,6 +374,40 @@ test("a frame the game refuses to put back is tried again until it works", () =>
     done();
 });
 
+test("after a theft and the reset a player can SEE the item back in the frame, and in the one nobody touched", () => {
+    setup();
+    fake.strictFrameSync = true;                       // the suspected case the owner reported on 2026-10-08 (see the fake's header)
+    const { check, done } = checks();
+    const ada = outlaw();
+
+    check("before, players see both items", fake.frameShown("overworld", at(NECKLACE))?.typeId === "minecraft:diamond" && fake.frameShown("overworld", at(RING))?.typeId === "minecraft:emerald");
+
+    touch(ada, NECKLACE);
+    check("after the theft players see the necklace's frame empty", fake.frameShown("overworld", at(NECKLACE)) === undefined);
+
+    Run.stopRobbery("jewels");
+    fake.advance(R.janitorEvery * 2);
+
+    check("the diamond is back, and visible", fake.frameShown("overworld", at(NECKLACE))?.typeId === "minecraft:diamond", JSON.stringify(fake.frameShown("overworld", at(NECKLACE))));
+    check("the emeralds are visible too, three of them", fake.frameShown("overworld", at(RING))?.typeId === "minecraft:emerald" && fake.frameShown("overworld", at(RING))?.amount === 3, JSON.stringify(fake.frameShown("overworld", at(RING))));
+    done();
+});
+
+test("a punch that is undone leaves the frame looking full to a player", () => {
+    setup({ necklaceLocks: [pay] });
+    fake.strictFrameSync = true;
+    const { check, done } = checks();
+    const poor = outlaw("Poor", IN_STORE, 0);
+
+    fake.punchFrame(poor, "overworld", at(NECKLACE));
+    check("the game's pop is seen at once: the frame looks empty", fake.frameShown("overworld", at(NECKLACE)) === undefined);
+
+    fake.advance(R.frameCleanupTicks);
+
+    check("a moment later it looks full again", fake.frameShown("overworld", at(NECKLACE))?.typeId === "minecraft:diamond", JSON.stringify(fake.frameShown("overworld", at(NECKLACE))));
+    done();
+});
+
 test("a robbery that was running when the world closed has its frames put back after the reload", () => {
     setup();
     const { check, done } = checks();
