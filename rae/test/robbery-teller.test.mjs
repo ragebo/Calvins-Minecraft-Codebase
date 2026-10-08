@@ -319,6 +319,25 @@ test("a gun kept aimed at the teller holds it up: the robbery starts, the teller
     done();
 });
 
+test("holding up the teller can set the guards loose, and they go when the site is put back", () => {
+    const built = setup({ onDone: [say("Guards!", "area"), { kind: "spawn", entity: "minecraft:pillager", count: 2, at: [100, 65, 175] }] });
+    const { check, done } = checks();
+    const npc = npcFor(built.teller);
+    const ada = robber();
+    const guards = () => fake.entities.filter((e) => e.isValid && e.hasTag(R.guardTag));
+
+    aimAt(ada, npc);
+    fake.advance(seconds(2) + R.holdUpEvery * 3);
+    check("held up, and the first guard is there", elementState("Teller") === "done" && guards().length >= 1);
+
+    fake.advance(R.spawnGapTicks * 2 + R.tickEvery * 2);
+    check("both guards, pillagers, at the spot the builder chose", guards().length === 2 && guards().every((g) => g.typeId === "minecraft:pillager" && g.location.x === 100.5 && g.location.z === 175.5), String(guards().length));
+
+    Run.resetSiteNow("bank");
+    check("a reset takes the guards and leaves the teller where it stands", guards().length === 0 && npc.isValid === true && T.isTeller(npc));
+    done();
+});
+
 test("it takes the whole time: a bar fills while she aims, and nothing counts before it is full", () => {
     const built = setup({ holdSeconds: 3 });
     const { check, done } = checks();
