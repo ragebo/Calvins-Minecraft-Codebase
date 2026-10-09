@@ -17,7 +17,7 @@ import {
     addElementAt, applyEdit, createRobbery, recaptureFrame, removeElementFrom, select, selectedRobbery, setPending, suggestedKind,
     type Pending
 } from "./robberyedit.js";
-import { clock, cooldownLeftSeconds, resetSiteNow, startRobbery, stopRobbery, viewOf } from "./robberyrun.js";
+import { clock, cooldownLeftSeconds, resetSiteNow, runStateText, startRobbery, stopRobbery, viewOf } from "./robberyrun.js";
 import { deleteRobbery, getRobbery, listStored, undoAvailable, undoLast } from "./robberystore.js";
 import { frameIsCaptured, lootTableExists, mobKnown, neighbourChest } from "./robberyworld.js";
 import { format, tell } from "./ui.js";
@@ -155,8 +155,9 @@ const statusLine = (id: string): string => {
     const view = viewOf(id);
 
     if (view) {
-        const waiting = view.resetInSeconds !== undefined ? `, put back in ${clock(view.resetInSeconds)}` : "";
-        return `§7Right now: §f${view.phase === "running" ? "running" : `over (${view.result ?? "ended"})`}${view.test ? " (test)" : ""}${waiting}`;
+        // While it waits for people to leave there is no time to give: it is put back the moment the area is empty.
+        const back = view.resetInSeconds !== undefined && !view.waitingForPlayers ? `, put back in ${clock(view.resetInSeconds)}` : "";
+        return `§7Right now: §f${runStateText(view)}${view.test ? " (test)" : ""}${back}`;
     }
 
     const wait = cooldownLeftSeconds(id);

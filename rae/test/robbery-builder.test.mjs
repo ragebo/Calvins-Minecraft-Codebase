@@ -142,6 +142,23 @@ test("list tells empty from ready from not ready from running from unreadable", 
     done();
 });
 
+test("list says a robbery that was won is still open to loot, and one that failed is not", () => {
+    setup();
+    const { check, done } = checks();
+    const { as } = commands();
+    const op = operator();
+
+    save(bank("bank").r);
+    Run.activateElement("bank", "Keypad");      // starts it, opens the keypad and (by itself) the vault door
+    Run.activateElement("bank", "Lockbox");     // its done-effects win the robbery after three seconds
+    fake.advance(80);
+
+    check("it is won", Run.viewOf("bank")?.result === "win", JSON.stringify(Run.viewOf("bank")));
+    const won = strip(as(fromPlayer(op), "rae:robbery_list").message);
+    check("the list says won and open, not 'ending'", /bank: .*won, still open to loot/.test(won) && !/ending/.test(won), won);
+    done();
+});
+
 test("info shows the robbery and its elements; raw writes a backup to the log", () => {
     setup();
     const { check, done } = checks();

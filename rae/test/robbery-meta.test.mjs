@@ -188,7 +188,7 @@ test("describeEffect reads each kind", () => {
     check("a delay is shown", M.describeEffect({ kind: "say", text: "Hi", channel: "chat", to: "area", delaySeconds: 3 }).endsWith("after 3s"));
     check("reward with both", M.describeEffect({ kind: "reward", coins: 100, bounty: 250, to: "area" }) === "Pay 100 coins and 250 bounty to everyone in the area");
     check("reward with one", M.describeEffect({ kind: "reward", coins: 0, bounty: 250, to: "actor" }) === "Pay 250 bounty to the player who did it");
-    check("end", M.describeEffect({ kind: "end", result: "win", delaySeconds: 3 }) === "End: won after 3s" && M.describeEffect({ kind: "end", result: "fail" }) === "End: failed");
+    check("end", M.describeEffect({ kind: "end", result: "win", delaySeconds: 3 }) === "Win the robbery after 3s" && M.describeEffect({ kind: "end", result: "fail" }) === "Fail the robbery");
     done();
 });
 
@@ -312,6 +312,33 @@ test("the main menu summary says whether it is ready and what is missing", () =>
     done();
 });
 
+test("a robbery with no area is told it cannot wait for people, and one with an area is not nagged", () => {
+    const { check, done } = checks();
+    const { r } = bank();
+    const plain = (robbery) => M.describeRobbery(robbery, []).join("\n").replace(/§./g, "");
+
+    const without = plain(ok(L.newRobbery("empty", "Empty", "overworld")));
+    check("no area: it says the site is put back on time even with people inside, and to draw the area", /No area is set, so the site is put back on time even with people inside it\. Draw the area around the whole site\./.test(without), without);
+    check("with an area: no such line", !/No area is set/.test(plain(r)), plain(r));
+    done();
+});
+
+test("the screens speak of winning or failing, and the reset setting says it waits for people", () => {
+    const { check, done } = checks();
+
+    check("the effect is offered as winning or failing, not as an ending", M.EFFECT_LABELS.end === "Win or fail the robbery", M.EFFECT_LABELS.end);
+    check("a win is a success that locks nothing", M.RESULT_CHOICES.find((c) => c.value === "win")?.label === "Won (a success: nothing is locked)", JSON.stringify(M.RESULT_CHOICES));
+    check("a fail locks what is left", M.RESULT_CHOICES.find((c) => c.value === "fail")?.label === "Failed (what is left is locked)");
+
+    const reset = M.settingsFields(L.defaultSettings()).find((f) => f.key === "resetAfterSeconds");
+    check("the reset time counts from a win or a fail", /from a win or fail/.test(reset?.label ?? ""), reset?.label);
+    check("and says it never closes on somebody", /never while someone is inside/.test(reset?.label ?? ""), reset?.label);
+
+    const effect = M.effectFields("end").find((f) => f.key === "result");
+    check("the effect form asks what it decides", effect?.label === "What it decides", effect?.label);
+    done();
+});
+
 // ---------------------------------------------------------------------------------------------------------
 // One line on the action bar
 // ---------------------------------------------------------------------------------------------------------
@@ -323,7 +350,7 @@ test("briefly shortens a line for the action bar: whole when it fits, else its f
     check("a line exactly at the limit is left alone", M.briefly("x".repeat(56), 56) === "x".repeat(56));
     check("surrounding spaces are dropped", M.briefly("  hello  ", 56) === "hello");
 
-    const everything = "It is not finished: nothing ends it: add an End: win effect (on the last element, or on the start of the win hook); it fails when the area is empty, but the area is not set; \"Lockbox\": a chest with no loot, lock or requirement does nothing.";
+    const everything = "It is not finished: nothing makes it a success: add a \"Win or fail the robbery\" effect set to won, on any element (the vault door, say) or in the start hook; it fails when the area is empty, but the area is not set; \"Lockbox\": a chest with no loot, lock or requirement does nothing.";
     const short = M.briefly(everything, 56);
     check("the long list of what is missing becomes its first clause", short === "It is not finished.", short);
     check("and fits", short.length <= 56);

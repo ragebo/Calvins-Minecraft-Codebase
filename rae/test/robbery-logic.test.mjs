@@ -327,7 +327,7 @@ test("parse never throws, and says why when it cannot read something", () => {
 // Can it run?
 // ---------------------------------------------------------------------------------------------------------
 
-test("whyNotRunnable is the builder's checklist: empty, nothing ends it, an area is missing, a pointless chest", () => {
+test("whyNotRunnable is the builder's checklist: empty, no way to succeed, an area is missing, a pointless chest", () => {
     const { check, done } = checks();
     let r = ok(L.newRobbery("bank", "Bank", "overworld"));
 
@@ -335,7 +335,8 @@ test("whyNotRunnable is the builder's checklist: empty, nothing ends it, an area
 
     const door = added(L.addElement(r, { kind: "door", name: "Gate", cells: [[0, 64, 0]], locks: [pay] }));
     r = door.robbery;
-    check("with nothing that ends it, it says so", L.whyNotRunnable(r).some((p) => /nothing ends it/.test(p)), L.whyNotRunnable(r).join(" | "));
+    check("with nothing that makes it a success, it says so, and says it can sit on any element", L.whyNotRunnable(r).some((p) => /nothing makes it a success/.test(p) && /on any element/.test(p)), L.whyNotRunnable(r).join(" | "));
+    check("and no longer tells the builder it must be the last element", !L.whyNotRunnable(r).some((p) => /last element/.test(p)), L.whyNotRunnable(r).join(" | "));
     check("the default fail-when-empty needs an area", L.whyNotRunnable(r).some((p) => /area/.test(p)));
 
     r = ok(L.setSettings(r, { failWhenEmptySeconds: 0 }));
@@ -361,7 +362,7 @@ test("an end-win effect anywhere counts: in a hook, on an element, with a delay"
 
     check("in the win hook", L.whyNotRunnable(ok(L.setHook(withDoor.robbery, "win", [{ kind: "end", result: "win" }]))).length === 0);
     check("in the start hook, delayed", L.whyNotRunnable(ok(L.setHook(withDoor.robbery, "start", [{ kind: "end", result: "win", delaySeconds: 30 }]))).length === 0);
-    check("an end-fail alone does not count", L.whyNotRunnable(ok(L.setHook(withDoor.robbery, "fail", [{ kind: "end", result: "fail" }]))).some((p) => /nothing ends it/.test(p)));
+    check("an end-fail alone does not count", L.whyNotRunnable(ok(L.setHook(withDoor.robbery, "fail", [{ kind: "end", result: "fail" }]))).some((p) => /nothing makes it a success/.test(p)));
     done();
 });
 

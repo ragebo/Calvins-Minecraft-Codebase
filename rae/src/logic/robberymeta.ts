@@ -130,7 +130,7 @@ export function sentence(text: string): string {
 /**
  * A line made short enough for the action bar, which is one centred line that is cut off at the screen's edges. Text that
  * fits is left alone; otherwise it is the first clause (up to a colon or semicolon) when that fits, else the start of it
- * cut at `limit` and ended with "...". "it is not finished: nothing ends it: add an End: win effect ...; it fails when..."
+ * cut at `limit` and ended with "...". "it is not finished: nothing makes it a success: add a ...; it fails when..."
  * becomes "It is not finished."; the caller keeps the whole text for wherever there is room for it.
  */
 export function briefly(text: string, limit: number): string {
@@ -163,10 +163,13 @@ const CHANNEL_LABELS: Record<Channel, string> = { chat: "Chat", bar: "Action bar
 
 export const AUDIENCE_CHOICES: readonly Choice[] = AUDIENCES.map((value) => ({ value, label: AUDIENCE_LABELS[value] }));
 export const CHANNEL_CHOICES: readonly Choice[] = CHANNELS.map((value) => ({ value, label: CHANNEL_LABELS[value] }));
-export const RESULT_CHOICES: readonly Choice[] = [{ value: "win", label: "The robbery is won" }, { value: "fail", label: "The robbery fails" }];
+export const RESULT_CHOICES: readonly Choice[] = [
+    { value: "win", label: "Won (a success: nothing is locked)" },
+    { value: "fail", label: "Failed (what is left is locked)" }
+];
 
 export const LOCK_LABELS: Record<LockKind, string> = { pick: "Pick lock", key: "Key", pay: "Price" };
-export const EFFECT_LABELS: Record<EffectKind, string> = { say: "Say something", reward: "Pay out", spawn: "Spawn mobs", end: "End the robbery" };
+export const EFFECT_LABELS: Record<EffectKind, string> = { say: "Say something", reward: "Pay out", spawn: "Spawn mobs", end: "Win or fail the robbery" };
 
 // ---------------------------------------------------------------------------------------------------------
 // Locks
@@ -278,7 +281,7 @@ export function effectFields(kind: EffectKind, current?: Effect): Field[] {
         ];
     }
 
-    return [{ kind: "choice", key: "result", label: "How it ends", options: RESULT_CHOICES, value: effect.result }, delay];
+    return [{ kind: "choice", key: "result", label: "What it decides", options: RESULT_CHOICES, value: effect.result }, delay];
 }
 
 /** The answers of an effect form as the untyped shape validateEffect takes. */
@@ -319,7 +322,7 @@ export function describeEffect(effect: Effect): string {
 
     if (effect.kind === "spawn") return `Spawn ${effect.count} ${itemLabel(effect.entity)} at ${effect.at.join(", ")}${wait}`;
 
-    return `End: ${effect.result === "win" ? "won" : "failed"}${wait}`;
+    return `${effect.result === "win" ? "Win" : "Fail"} the robbery${wait}`;
 }
 
 // ---------------------------------------------------------------------------------------------------------
@@ -338,7 +341,7 @@ export function settingsFields(settings: Settings): Field[] {
         { kind: "toggle", key: "outlawsOnly", label: "Only outlaws can take part", value: settings.outlawsOnly },
         seconds("cooldownSeconds", "Seconds before it can be robbed again", "the cooldown"),
         seconds("timeLimitSeconds", "Time limit in seconds (0 = none)", "the time limit"),
-        seconds("resetAfterSeconds", "Seconds after it ends until the site is put back", "the reset time"),
+        seconds("resetAfterSeconds", "Seconds from a win or fail until the site is put back (never while someone is inside the area)", "the reset time"),
         seconds("failWhenEmptySeconds", "Fails if nobody is in the area this long (0 = never)", "the empty-area time")
     ];
 }
@@ -516,6 +519,8 @@ export function describeRobbery(robbery: Robbery, problems: readonly string[]): 
     return [
         `§l${robbery.name}§r §7(${robbery.id}, ${robbery.dimension})`,
         `§7Elements: §f${robbery.elements.length}   §7Area: §f${area}`,
+        // The reset can only wait for people it can see: with no area there is no "inside".
+        ...(robbery.area ? [] : ["§eNo area is set, so the site is put back on time even with people inside it. Draw the area around the whole site."]),
         ...describeSettings(robbery.settings).map((line) => `§7${line}`),
         problems.length === 0 ? "§aReady to run." : `§eNot ready: §f${problems.join("; ")}`
     ];

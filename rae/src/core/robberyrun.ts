@@ -38,6 +38,12 @@ import { ACTION_BAR_PRIORITY, format, setActionBar, showTitle, tell } from "./ui
  * robbery that was running when the world closed cannot leave a vault open for good, and a robbery that was deleted or
  * edited while its site was dirty is still cleaned.
  *
+ * How a run comes out. A SUCCESS ("win") decides the outcome and starts the reset countdown, but shuts nothing: the doors and
+ * chests that are left can still be worked until the site is put back, because a vault is many chests and the first thing done in
+ * it is rarely the last. A FAILURE (time up, nobody left, an alarm) does shut them. Either way the site is put back when the
+ * countdown runs out AND nobody is standing in the robbery's area, so a door never closes behind a player; only an operator's
+ * stop or reset puts it back under someone.
+ *
  * What is NOT kept across a reload: the run itself (which elements were done, a lock's progress). A reload ends a robbery
  * in progress; the site is put back and the next touch starts it afresh.
  */
@@ -89,7 +95,7 @@ interface Run {
     readonly pending: Pending[];
     ended: boolean;
     result: RunResult | undefined;
-    /** The tick the site is put back. Infinite while it is running. */
+    /** The tick the site is due to be put back: infinite while it is running, and then only when nobody is inside the area. */
     resetAt: number;
     lastAreaCheck: number;
     /** The last tick anybody was inside the area. */
@@ -106,6 +112,12 @@ const runs = new Map<string, Run>();
 const hasRun = (robbery: string): boolean => runs.has(robbery);
 /** The tick each robbery may be started again, after it ended. */
 const cooldownUntil = new Map<string, number>();
+/**
+ * Robberies whose site an operator put back by hand while some blocks were out of reach (their chunk not loaded). Those blocks go
+ * the moment their chunk loads, whoever is inside: an operator's reset is the one thing that does not wait for the area to empty.
+ * Only a run or a hand reset can add to the cleanup list, and both settle this flag first, so it never outlives what it is for.
+ */
+const forcedBack = new Set<string>();
 /** Each player's last scored pick guess, for the mash-protection. */
 const lastGuessTick = new Map<string, number>();
 /** Who is in a pick form right now, so a double click does not open two. */
@@ -120,6 +132,13 @@ const registeredEvents = new Set<string>();
 export type RunOutcome = { readonly ok: true } | { readonly ok: false; readonly reason: string };
 const fail = (reason: string): RunOutcome => ({ ok: false, reason });
 const ok: RunOutcome = { ok: true };
+
+/**
+ * Whether players can still work the run's elements. While it is under way, yes. After it SUCCEEDED, also yes, until the site is
+ * put back: a vault holds many chests and the way out can be through more doors, so a success decides the outcome and starts the
+ * reset countdown but shuts nothing. After it FAILED, was stopped or was cut short, no: that is over, and the elements say so.
+ */
+const usable = (run: Run): boolean => !run.ended || run.result === "win";
 
 function stateOf(run: Run, element: Element, now: number): ElementState {
 
@@ -139,17 +158,35 @@ function playerById(id: string | undefined): Player | undefined {
     return id === undefined ? undefined : players().find((player) => player.id === id && player.isValid);
 }
 
+/** Whether the player is standing in the robbery's area: the right dimension, inside the box. */
+function standsIn(robbery: Robbery, player: Player): boolean {
+
+    const area = robbery.area;
+
+    return area !== undefined
+        && player.isValid
+        && sameDimension(player.dimension.id) === robbery.dimension
+        && boxContains(area, player.location.x, player.location.y, player.location.z);
+}
+
 /** Players inside the robbery's area: outlaws only when the robbery says so, and anyone at all in a test run. */
 function insideArea(robbery: Robbery, run: Run | undefined): Player[] {
 
-    const area = robbery.area;
-    if (!area) return [];
+    if (!robbery.area) return [];
 
     const pool = run?.test ? players() : robbery.settings.outlawsOnly ? aliveOutlaws() : alivePlayers();
 
-    return pool.filter((player) => player.isValid
-        && sameDimension(player.dimension.id) === robbery.dimension
-        && boxContains(area, player.location.x, player.location.y, player.location.z));
+    return pool.filter((player) => standsIn(robbery, player));
+}
+
+/**
+ * Whether anyone at all is in the robbery's area. Not "who is taking part": the law and a bystander count, whatever the robbery's
+ * outlaws-only setting says, and so does a test run's crowd, because this is asked to keep from shutting a door behind somebody.
+ * Only someone eliminated from the round does not (they spectate, and no block can trap them). A robbery with no area has no
+ * "inside", so it is never held back.
+ */
+function someoneInside(robbery: Robbery | undefined): boolean {
+    return robbery !== undefined && robbery.area !== undefined && alivePlayers().some((player) => standsIn(robbery, player));
 }
 
 function recipientsFor(audience: Audience, robbery: Robbery, run: Run | undefined, actorId: string | undefined): Player[] {
@@ -399,7 +436,7 @@ function changeWorld(robbery: Robbery, element: Element, actor: Player | undefin
 
 function complete(run: Run, robbery: Robbery, element: Element, actor: Player | undefined): void {
 
-    if (run.done.has(element.id) || run.ended) return;
+    if (run.done.has(element.id) || !usable(run)) return;
 
     run.done.add(element.id);
     if (actor) run.lastActorId = actor.id;
@@ -460,6 +497,9 @@ function begin(id: string, by: Player | undefined, test: boolean, holdsSlot: boo
     };
 
     runs.set(id, run);
+
+    // A robbery only starts once its site is fully put back, so an operator's earlier reset is finished with.
+    forcedBack.delete(id);
 
     noteFrames(robbery);
 
@@ -549,6 +589,11 @@ export function startRobbery(id: string, options: { readonly by?: Player; readon
     }
 }
 
+/**
+ * Decides how the run came out. The first ending is the only one: a failure after a success (the time limit, an empty area, an
+ * alarm pressed on the way out) changes nothing. A win or a fail runs its effects, starts the reset countdown and the cooldown and
+ * gives the director's slot back. Whether the elements can still be worked afterwards is `usable`'s rule, not this function's.
+ */
 function endRun(run: Run, result: RunResult, reason?: string): void {
 
     if (run.ended) return;
@@ -632,6 +677,10 @@ export function resetSiteNow(id: string): { readonly cleaned: number; readonly l
         }
     }
 
+    // What could not be reached was asked for by an operator too, so it does not wait for the area to empty either.
+    if (left > 0) forcedBack.add(id);
+    else forcedBack.delete(id);
+
     return { cleaned, left };
 }
 
@@ -685,7 +734,7 @@ export function whyCannotActivate(id: string, elementId: string): string | undef
         if (blocked) return blocked;
     }
 
-    if (run?.ended) return "it is over";
+    if (run && !usable(run)) return "it is over";
     if (run?.done.has(element.id)) return `${element.name} is already done`;
 
     const waiting = element.req.filter((required) => run?.done.has(required) !== true).map((required) => findElement(robbery, required)?.name ?? required);
@@ -795,7 +844,7 @@ const paramsOf = (lock: PickLock): PickParams => ({ hits: lock.hits, tolerance: 
 /** The run, robbery and element as they are NOW, or undefined when the run is over or the element is not up for a try. */
 function liveTarget(run: Run, elementId: string): { readonly robbery: Robbery; readonly element: Element } | undefined {
 
-    if (runs.get(run.id) !== run || run.ended) return undefined;
+    if (runs.get(run.id) !== run || !usable(run)) return undefined;
 
     const robbery = getRobbery(run.id);
     const element = robbery ? findElement(robbery, elementId) : undefined;
@@ -994,7 +1043,7 @@ function handleTouch(player: Player, ref: Bound): void {
         if (!run) return;
     }
 
-    if (run.ended) {
+    if (!usable(run)) {
         if (!run.done.has(element.id)) deny(player, "it is over for now");
         return;
     }
@@ -1121,7 +1170,32 @@ function watchArea(run: Run, robbery: Robbery, now: number): void {
 
 let lastJanitorTick = 0;
 
+/**
+ * Whether a robbery's site must wait because someone is standing in its area. A door shut behind a player in the vault would trap
+ * them (nothing is running to open it again), so nothing is put back under anyone: the countdown runs out as always, and the site
+ * then waits for the area to empty. Not held: an operator's stop (put back at once, as it always was: `resetSiteNow` never comes
+ * through the janitor), and a robbery with no area, which has no "inside". A site with no run at all (a reload or a round reset
+ * ended it) is held the same way, since players can be standing in it when the world comes back.
+ */
+function heldBack(id: string, run: Run | undefined): boolean {
+    return run?.result !== "stopped" && !forcedBack.has(id) && someoneInside(getRobbery(id));
+}
+
 function janitor(now: number): void {
+
+    // Asked at most once per robbery in a pass: it walks the player list.
+    const held = new Map<string, boolean>();
+
+    const isHeld = (id: string): boolean => {
+        let answer = held.get(id);
+
+        if (answer === undefined) {
+            answer = heldBack(id, runs.get(id));
+            held.set(id, answer);
+        }
+
+        return answer;
+    };
 
     for (const entry of dirtyEntries()) {
 
@@ -1130,12 +1204,14 @@ function janitor(now: number): void {
         // Its robbery is still using it: leave it until that robbery has ended and its reset time has come.
         if (run && !(run.ended && now >= run.resetAt)) continue;
 
+        if (isHeld(entry.robbery)) continue;
+
         if (putBack(entry)) clearDirty(entry);
     }
 
-    // Its time is up: the guards go, once, along with the site being put back.
+    // Its time is up and nobody is inside: the guards go, once, along with the site being put back.
     for (const run of runs.values()) {
-        if (run.ended && now >= run.resetAt && !run.guardsCleared) {
+        if (run.ended && now >= run.resetAt && !run.guardsCleared && !isHeld(run.id)) {
             run.guardsCleared = true;
             removeGuards(run.id);
         }
@@ -1143,7 +1219,7 @@ function janitor(now: number): void {
 
     // A run that has ended and been put back is finished with, and its robbery can be started again.
     for (const run of [...runs.values()]) {
-        if (run.ended && now >= run.resetAt && !robberyIsDirty(run.id)) runs.delete(run.id);
+        if (run.ended && now >= run.resetAt && run.guardsCleared && !robberyIsDirty(run.id)) runs.delete(run.id);
     }
 }
 
@@ -1210,6 +1286,10 @@ export interface RunView {
     readonly elapsedSeconds: number;
     /** Seconds until the site is put back, once it has ended. */
     readonly resetInSeconds: number | undefined;
+    /** Players can still work its elements: it is under way, or it succeeded and has not been put back yet. */
+    readonly open: boolean;
+    /** Its time to be put back has come, but someone is in the area, so it waits for them to leave. */
+    readonly waitingForPlayers: boolean;
     readonly elements: readonly ElementView[];
 }
 
@@ -1229,8 +1309,20 @@ export function viewOf(id: string): RunView | undefined {
         test: run.test,
         elapsedSeconds: Math.floor((now - run.startedTick) / TICKS_PER_SECOND),
         resetInSeconds: run.ended && Number.isFinite(run.resetAt) ? Math.max(0, Math.ceil((run.resetAt - now) / TICKS_PER_SECOND)) : undefined,
+        open: usable(run),
+        waitingForPlayers: run.ended && now >= run.resetAt && heldBack(id, run),
         elements: robbery.elements.map((element) => ({ id: element.id, name: element.name, kind: element.kind, state: stateOf(run, element, now) }))
     };
+}
+
+/** What a run is doing, in a few words for the builder's screens: "running", "won, still open to loot", "failed". */
+export function runStateText(view: RunView): string {
+
+    if (view.phase === "running") return "running";
+
+    const outcome = view.result === "win" ? "won" : view.result === "fail" ? "failed" : view.result === "stopped" ? "stopped" : "cut short";
+
+    return `${outcome}${view.open ? ", still open to loot" : ""}${view.waitingForPlayers ? ", waiting for everyone to leave" : ""}`;
 }
 
 /** Ids of the robberies that are under way (not the ones only waiting to be put back). */
@@ -1269,6 +1361,7 @@ registerSystem({
         // With no run left, every guard is a stray: they go with the runs.
         removeStrayGuards(hasRun);
         cooldownUntil.clear();
+        forcedBack.clear();
         lastGuessTick.clear();
         lastDetail.clear();
         lastFrameHit.clear();

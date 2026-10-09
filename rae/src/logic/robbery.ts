@@ -95,6 +95,11 @@ export interface RewardEffect extends EffectBase {
     readonly to: Audience;
 }
 
+/**
+ * Decides how the robbery comes out. A "win" is a success: it runs the win effects and starts the reset countdown, and what is left
+ * (doors, chests) stays workable until the site is put back, so it can sit on ANY element, not only the last. A "fail" locks what is
+ * left. Whichever fires first is the only one.
+ */
 export interface EndEffect extends EffectBase {
     readonly kind: "end";
     readonly result: "win" | "fail";
@@ -113,7 +118,7 @@ export interface SpawnEffect extends EffectBase {
     readonly at: Pos;
 }
 
-/** Something that happens: a line of text, a payout, mobs appearing, the end of the robbery. */
+/** Something that happens: a line of text, a payout, mobs appearing, the robbery being won or failed. */
 export type Effect = SayEffect | RewardEffect | SpawnEffect | EndEffect;
 export type EffectKind = Effect["kind"];
 export const EFFECT_KINDS: readonly EffectKind[] = ["say", "reward", "spawn", "end"];
@@ -1103,7 +1108,7 @@ export function whyNotRunnable(robbery: Robbery): string[] {
     const everyList = [robbery.hooks.start, robbery.hooks.win, robbery.hooks.fail, ...robbery.elements.flatMap((e) => [e.onDone, e.onFail])];
 
     if (!everyList.some((list) => list.some((effect) => effect.kind === "end" && effect.result === "win"))) {
-        problems.push("nothing ends it: add an End: win effect (on the last element, or on the start of the win hook)");
+        problems.push("nothing makes it a success: add a \"Win or fail the robbery\" effect set to won, on any element (the vault door, say) or in the start hook");
     }
 
     if (!robbery.area && everyList.some((list) => usesAudience(list, "area"))) problems.push("an effect goes to the area but the area is not set");

@@ -273,6 +273,8 @@ test("when the robbery ends and its reset time comes, every frame shows its item
     fake.advance(R.janitorEvery * 3);
     check("not yet: the reset time has not come", shows(NECKLACE) === undefined && refills().length === 2);
 
+    // The thief has left the store: nothing is put back while anyone is inside (robbery-success.test.mjs).
+    ada.teleport({ ...OUTSIDE });
     fake.advance(60 * 20 + R.janitorEvery * 2);
     check("the necklace is back", JSON.stringify(shows(NECKLACE)) === JSON.stringify({ typeId: "minecraft:diamond", amount: 1 }), JSON.stringify(shows(NECKLACE)));
     check("the ring is back, with its three emeralds", JSON.stringify(shows(RING)) === JSON.stringify({ typeId: "minecraft:emerald", amount: 3 }), JSON.stringify(shows(RING)));
@@ -416,9 +418,10 @@ test("a robbery that was running when the world closed has its frames put back a
     touch(ada, NECKLACE);
     check("emptied", shows(NECKLACE) === undefined);
 
-    // The world closes: memory is lost, the saved note is not.
+    // The world closes: memory is lost, the saved note is not, and nobody is left standing in the store.
     resetAllSystems();
     S.forgetLoaded();
+    ada.teleport({ ...OUTSIDE });
     fake.advance(R.janitorEvery * 2);
 
     check("the frame is full again", shows(NECKLACE)?.typeId === "minecraft:diamond", JSON.stringify(shows(NECKLACE)));

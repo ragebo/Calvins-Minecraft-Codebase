@@ -148,7 +148,7 @@ test("a robbery built entirely through the screens is the bank, and it plays", a
         press("Loot"), fill({ "A loot table": "chests/gold_2", "Items to add": "minecraft:diamond 2" }),
         press("When it is done"),
         press("Add: pay out"), fill({ "Coins": "0", "Bounty": "250", "Who gets it": "Everyone in the area" }),
-        press("Add: end the robbery"), fill({ "How it ends": "won", "Seconds to wait": "3" }),
+        press("Add: win or fail the robbery"), fill({ "What it decides": "Won", "Seconds to wait": "3" }),
         press("Back"),
         press("Back")
     );
@@ -426,7 +426,7 @@ test("the effects of the whole robbery: start, win and fail", async () => {
 
     script(
         press("Start, win and fail effects"),
-        press("When it fails"), press("Add: end the robbery"), fill({ "How it ends": "fails" }), press("Back"),
+        press("When it fails"), press("Add: win or fail the robbery"), fill({ "What it decides": "Failed" }), press("Back"),
         press("Back"), press("Close")
     );
     await F.openMainMenu(ann);
@@ -551,7 +551,7 @@ test("run controls: it will not start until it is finished, then starts, stops, 
 
     script(press("Run it"), press("Start it now"), press("Back"), press("Close"));
     await F.openMainMenu(ann);
-    check("not finished: refused with why", said(ann).some((m) => /Not changed: it is not finished: .*End: win|nothing ends it/.test(m)), said(ann).join("|"));
+    check("not finished: refused with why", said(ann).some((m) => /Not changed: it is not finished: .*nothing makes it a success/.test(m)), said(ann).join("|"));
     check("nothing running", Run.runningIds().length === 0);
 
     E.applyEdit("bank", (r) => L.setHook(r, "win", [{ kind: "end", result: "win" }]));

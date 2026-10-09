@@ -30,6 +30,7 @@ const SAFE = [302, 65, 300];
 const SPOT = [310, 65, 305];
 const AREA = { min: [290, 60, 290], max: [320, 80, 320] };
 const IN_AREA = { x: 301, y: 65, z: 297 };
+const OUTSIDE = { x: 600, y: 65, z: 600 };
 
 const overworld = fake.dimension("overworld");
 
@@ -425,6 +426,8 @@ test("after a win the guards stay until the site is put back, and then they go",
     world.afterEvents.entityLoad.emit({ entity: guardsOf("bank")[0] });
     check("a guard that loads while the run waits for its reset stays", guardsOf("bank").length === 3);
 
+    // The robber has walked out: nothing is put back, and no guard taken away, while anyone is still inside (robbery-success.test.mjs).
+    ada.teleport({ ...OUTSIDE });
     fake.advance(60 * 20 + R.janitorEvery * 2);
     check("gone once the site is put back", guards().length === 0, String(guards().length));
     check("and the robbery can start again", Run.viewOf("bank") === undefined);
@@ -544,7 +547,7 @@ test("every effects screen offers Add: spawn mobs", async () => {
     const buttons = buttonsOf(ui.shown.find((form) => /when it is done/.test(strip(titleOf(form))))).map(strip);
 
     check("on an element's screen", buttons.includes("Add: spawn mobs"), buttons.join(" | "));
-    check("between paying out and ending", buttons.indexOf("Add: pay out") < buttons.indexOf("Add: spawn mobs") && buttons.indexOf("Add: spawn mobs") < buttons.indexOf("Add: end the robbery"));
+    check("between paying out and winning or failing", buttons.indexOf("Add: pay out") < buttons.indexOf("Add: spawn mobs") && buttons.indexOf("Add: spawn mobs") < buttons.indexOf("Add: win or fail the robbery"));
     done();
 });
 

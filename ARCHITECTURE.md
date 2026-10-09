@@ -44,7 +44,7 @@ own header comment where it has one.
 | `robberyedit.ts` | The robbery framework's editing session without a screen: each builder's selected robbery (kept on the player), the one `applyEdit` every change goes through (pure edit, whole-robbery validation, no block claimed by two robberies, then the store), binding blocks (and saving what an item frame shows), and what a wand click means. |
 | `robberyforms.ts` | Every screen the builder sees (menus, the add-element form, locks, requirements, effects, loot, settings, area), as presentation over `robberyedit.ts` and `logic/robberymeta.ts`. |
 | `robberyholdup.ts` | Holding up a teller: a player who keeps a gun aimed at one for its hold-up time counts as touching its element, through the ordinary `touch`. One tick handler, free when no teller exists or nobody aims. |
-| `robberyrun.ts` | Playing a robbery: starting it (and the director's slot), who may touch what, the locks, completing elements (handing a frame's loot to the thief), effects (including spawning guards), ending, undoing a punch on an item frame, and putting the site back through one idempotent janitor. One shared loop; nothing registered per robbery. |
+| `robberyrun.ts` | Playing a robbery: starting it (and the director's slot), who may touch what, the locks, completing elements (handing a frame's loot to the thief), effects (including spawning guards), winning or failing (a win shuts nothing), undoing a punch on an item frame, and putting the site back through one idempotent janitor that waits while anyone is in the area. One shared loop; nothing registered per robbery. |
 | `robberystore.ts` | Where robberies live: one world property each, written at once on every edit, refused up front when over the size cap, unreadable ones listed and never overwritten, one level of undo. Also the saved list of blocks a run changed and has not yet put back. |
 | `robberyteller.ts` | Which entities are tellers (a tag on the NPC or villager: `rbt` and `rbt:<robbery>:<element>`), and what a player is looking at. |
 | `robberyworld.ts` | Everything a robbery does to the world (swing a door, fill and empty a chest, empty an item frame and show it again from a saved one-block structure, make and remove guard mobs, chunk-loaded checks) in one place, because it is the one file that depends on engine behavior measured once. Never throws. |
@@ -198,6 +198,19 @@ nothing searches for tellers: `core/robberyholdup.ts` casts a player's own view 
 `touch`, so autostart, outlaws-only, requirements, locks and every effect (including spawning guards) apply with no new
 machinery. Who is aiming is a core contract (`core/aim.ts`, written by `systems/guns.ts`) because a system may not import a system.
 `systems/robberyteller.ts` is only the click.
+
+**A win is not an ending, and a reset never closes a door on somebody.** Two small rules in `core/robberyrun.ts` carry this.
+`usable(run)` is "not ended, or ended in a win": every place that used to refuse work once a run had ended (completing an
+element, a command or NPC activating one, a pick that lands, a touch) asks it instead, so a win decides the outcome, runs its
+effects and starts the reset countdown but shuts nothing, while a fail, a stop and a round reset still do. The first ending is the
+only one (`endRun` returns if the run has ended), which is what keeps a late alarm, the time limit or an empty area from turning a
+win into a fail now that elements can still be worked after one. The other rule is in the janitor: `heldBack` is true while any
+alive player stands in the robbery's area (`someoneInside`; the same dimension-and-box test as the "everyone in the area"
+audience, but ANY role, because the question is who a shut door would trap, not who is taking part), and then neither the blocks
+nor the guards of that site are put back. It applies to a run whose countdown has run out and, the same way, to a site with no run
+at all (a reload or round reset ended it), since players can be standing in it when the world comes back. It does not apply to an
+operator's stop or `resetSiteNow`, nor to what a hand reset could not reach because a chunk was unloaded (`forcedBack`), and a
+robbery with no area has no "inside" and is put back on time.
 
 ### The NPC shops' shape
 

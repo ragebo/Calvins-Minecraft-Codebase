@@ -219,7 +219,8 @@ test("the bank, part two: the lockbox takes a pick and 25 coins, the win lands a
     check("a chest opened this run is let through to the player", Run.interactionDecision(ref(SITE.box)) === "pass");
     check("a door that is open stays shut to clicks", Run.interactionDecision(ref(SITE.doorLow)) === "cancel");
 
-    // 4. A minute later the site is put back.
+    // 4. A minute later the site is put back, once the robber has left (nothing is put back under anyone: robbery-success.test.mjs).
+    ada.teleport({ ...OUTSIDE });
     fake.advance(60 * 20 - 20);
     check("before the minute is up the door is still open", openBit(SITE.doorLow) === true);
     fake.advance(40);
@@ -503,7 +504,7 @@ test("a refusal that lists everything a robbery lacks is one short line on the b
     const line = bar(builder).at(-1) ?? "";
     check("the action bar says it in a few words", line === "It is not finished.", line);
     check("and never more than fits on the bar", line.length <= R.noticeChars, String(line.length));
-    check("the builder is told everything in chat", said(builder).some((m) => /nothing ends it/.test(m) && /area is not set/.test(m)), said(builder).join("|"));
+    check("the builder is told everything in chat", said(builder).some((m) => /nothing makes it a success/.test(m) && /area is not set/.test(m)), said(builder).join("|"));
     check("with one thud", builder.privateSounds.filter((s) => s.id === R.cues.denied.id).length === 1);
 
     Run.touch(builder, S.boundAt("overworld", 1, 70, 1));
@@ -575,6 +576,7 @@ test("the time limit fails the run, tells the actor, and puts the site back afte
     check("the actor was told why", said(ada).some((m) => /Time is up/.test(m)), said(ada).join("|"));
     check("and it is on cooldown", Run.cooldownLeftSeconds("bank") > 0);
 
+    ada.teleport({ ...OUTSIDE });                      // she has gone: the site waits for the area to be empty
     fake.advance(5 * 20 + 20);
     check("after the reset time the door is shut", openBit(SITE.doorLow) === false && openBit(SITE.doorHigh) === false);
     check("and the run is gone", Run.viewOf("bank") === undefined);
@@ -654,6 +656,7 @@ test("a round reset drops every run at once, frees the slot, and the janitor sti
     check("the notes survive: the site is still dirty", S.dirtyCount() === 2);
     check("the director is free", director.activeEvent() === null);
 
+    ada.teleport({ ...OUTSIDE });                      // the round has moved everyone on: the janitor waits for the area to be empty
     fake.advance(R.janitorEvery + R.tickEvery);
     check("the janitor shut the door", openBit(SITE.doorLow) === false && openBit(SITE.doorHigh) === false && S.dirtyCount() === 0);
     check("and it can be started again", Run.startRobbery("bank", { by: ada }).ok === true);
@@ -675,6 +678,7 @@ test("crash recovery: the run is lost but the cleanup list is not, so a reload s
     S.forgetLoaded();                           // and everything read from the world is read again
     check("the cleanup list is read back from the world", S.dirtyCount() === 3);
 
+    ada.teleport({ ...OUTSIDE });                      // nobody is left in the bank after a crash; the janitor waits for the area to be empty
     fake.advance(R.janitorEvery + R.tickEvery);
     check("the vault door is shut and the lockbox empty", openBit(SITE.doorLow) === false && contents().length === 0 && S.dirtyCount() === 0);
     done();

@@ -323,11 +323,22 @@ the train route), no coordinates in config and no command chains. Fort, ranch an
   touched. An element that waits and has no lock opens by itself the moment what it waits for is done (a vault door
   that opens when the keypad is picked).
 - *Effects:* say something (chat, action bar or title, with a sound, to the player, the area, outlaws, law or
-  everyone), pay out coins and bounty, and end the robbery as won or failed, each with an optional delay. They run
+  everyone), pay out coins and bounty, and win or fail the robbery, each with an optional delay. They run
   when an element is done, when its lock jams, and at the start, win and fail of the whole robbery.
 - *Settings, per robbery:* starts by touch, one event at a time (shares the fort/ranch/train slot), round only,
   protected blocks (a player cannot break or blow them up; operators can), outlaws only, cooldown, time limit, how long
-  after it ends the site is put back, and fail-when-nobody-is-in-the-area.
+  after a win or fail the site is put back (never while anyone is inside the area), and fail-when-nobody-is-in-the-area.
+
+**A win, a fail, and putting the site back.** A **win** is a success, not an ending: it pays the win effects and starts the
+reset countdown, and it shuts nothing. The doors and chests that are left stay workable until the site is put back, so a vault of
+many chests needs no "last" one: put the win on the vault door (or the first chest) and the rest can still be opened, picked and
+bought, and the chests that waited on that door fill the moment it opens. A **fail** (the time limit, nobody left in the area, an
+alarm) does lock what is left. Whichever happens first is the only outcome: a late alarm, the time limit or an empty area cannot
+turn a win into a fail. When the countdown runs out the site is put back only once **nobody is standing in the robbery's
+area**, whoever they are (outlaw, law or bystander; not someone eliminated from the round), so a door never shuts behind a
+player; the guards wait with it. Nothing is put back under anyone except by an operator's own **Stop** or **Put the site back now**.
+Draw the area around the whole site, vault included: a robbery with no area is put back on time, and its screen says so. This is
+the one thing a player who falls asleep inside can abuse (the bank stays as it is), and `Put the site back now` is the way out.
 
 **Building one.** `/give @s bountysys:robbery_wand` or `/rae:robbery_wand`. Left-click the air, or sneak and right-click any block, for the menu (make a
 robbery, settings, area, effects, run it); right-click a block that is not bound to bind it (the form suggests door,

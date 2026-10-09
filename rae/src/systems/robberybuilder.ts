@@ -8,7 +8,7 @@ import { isOperator } from "../core/players.js";
 import { registerSystem } from "../core/registry.js";
 import { applyEdit, bindTeller, createRobbery, giveWand, select, selectedId, selectedRobbery, wandOnAir, wandOnBlock, type WandAction } from "../core/robberyedit.js";
 import { hasMenuOpen, openAddElement, openElementMenu, openMainMenu, openNewRobbery, openPickRobbery } from "../core/robberyforms.js";
-import { activateElement, cooldownLeftSeconds, resetSiteNow, startRobbery, stopRobbery, viewOf, whyCannotActivate, whyCannotStart, whyCannotStop, clock } from "../core/robberyrun.js";
+import { activateElement, cooldownLeftSeconds, resetSiteNow, runStateText, startRobbery, stopRobbery, viewOf, whyCannotActivate, whyCannotStart, whyCannotStop, clock } from "../core/robberyrun.js";
 import { boundAt, deleteRobbery, getRobbery, getStored, listStored, rawText, undoLast } from "../core/robberystore.js";
 import { aimedEntity } from "../core/robberyteller.js";
 import { onTick } from "../core/tick.js";
@@ -367,7 +367,7 @@ function describeList(): string {
         const problems = whyNotRunnable(robbery);
         const wait = cooldownLeftSeconds(entry.id);
 
-        const state = view ? (view.phase === "running" ? "§arunning" : "§eending") : problems.length > 0 ? `§enot ready (${problems.length} thing${problems.length === 1 ? "" : "s"} missing)` : wait > 0 ? `§7closed for ${clock(wait)}` : "§7ready";
+        const state = view ? (view.phase === "running" ? "§arunning" : `§e${runStateText(view)}`) : problems.length > 0 ? `§enot ready (${problems.length} thing${problems.length === 1 ? "" : "s"} missing)` : wait > 0 ? `§7closed for ${clock(wait)}` : "§7ready";
 
         return `§f${entry.id}§7: ${robbery.name}, ${robbery.elements.length} element${robbery.elements.length === 1 ? "" : "s"}, ${state}`;
     }).join("\n");
