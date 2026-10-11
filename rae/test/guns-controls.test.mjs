@@ -33,6 +33,7 @@ function armed(gun, name = "Deputy", options = {}) {
     p.giveAmmo(AMMO[gun.ammo].itemId, 64);
     fake.advance(200);
     overworld().played.length = 0;
+    p.messages.length = 0;          // the one-time "how to use it" tip arrives while the 200 ticks run; the controls tests below read it from a fresh player
     return p;
 }
 
@@ -827,6 +828,60 @@ test("firing drops the loaded count shown, and reloading shows a countdown that 
 
     fake.advance(gun.reloadTicks + 8);
     check("back to a full magazine once the reload actually finishes", ammoLine(p)?.includes(`${gun.magazineSize}/${gun.magazineSize}`), ammoLine(p));
+    done();
+});
+
+test("a player is told the controls the first time they hold each gun, once, from what the gun does", () => {
+    const { check, done } = checks();
+
+    fake.reset();
+    resetGuns();
+    const p = fake.makePlayer("Newcomer", { location: { x: 1, y: 64, z: 2 }, holding: GUNS.pistol.itemId });
+    fake.advance(20);
+    const tips = () => p.messages.map(strip).filter((m) => /left-click fires/.test(m));
+
+    check("holding the pistol tells them once", tips().length === 1 && tips()[0].startsWith("Pistol:") && /right-click aims, Q reloads\.$/.test(tips()[0]), JSON.stringify(p.messages));
+    check("a plain gun says nothing about cycling", !/cycle/.test(tips()[0] ?? ""));
+
+    fake.advance(200);
+    check("and not again while they keep holding it", tips().length === 1, JSON.stringify(p.messages));
+
+    p.holding = GUNS.revolver.itemId;
+    fake.advance(20);
+    check("the revolver is told separately, and says to click between shots", tips().length === 2 && /Revolver: .*click once between shots to cycle the action\.$/.test(tips()[1] ?? ""), JSON.stringify(p.messages));
+
+    p.holding = GUNS.pistol.itemId;
+    fake.advance(40);
+    check("going back to the pistol does not repeat it", tips().length === 2, JSON.stringify(p.messages));
+
+    resetGuns();
+    fake.advance(40);
+    check("a new round does not repeat it either", tips().length === 2, JSON.stringify(p.messages));
+    done();
+});
+
+test("the readout says what the next click will do when it will not fire: cycle the action, or reload an empty gun", () => {
+    const { check, done } = checks();
+    const gun = GUNS.revolver;
+    const p = armed(gun, "reader");
+
+    check("a full gun says nothing extra", !/click/.test(ammoLine(p) ?? ""), ammoLine(p));
+
+    leftClick(p);
+    fake.advance(gun.fireRateTicks + 8);
+    check("after a shot with rounds left it says to cycle", /5\/6.*click to cycle/.test(strip(ammoLine(p) ?? "")), ammoLine(p));
+
+    leftClick(p);
+    fake.advance(gun.primeTicks + 8);
+    check("after the cycle click it is plain again", !/click/.test(ammoLine(p) ?? ""), ammoLine(p));
+
+    const r = armed(gun, "dry-reader");
+    for (let i = 0; i < gun.magazineSize; i++) {
+        leftClick(r); fake.advance(gun.fireRateTicks);
+        if (i < gun.magazineSize - 1) { leftClick(r); fake.advance(gun.primeTicks); }
+    }
+    fake.advance(8);
+    check("an empty gun says to click to reload, in red, and has no cycle to ask for", /0\/6.*click to reload/.test(strip(ammoLine(r) ?? "")) && !/cycle/.test(ammoLine(r) ?? ""), ammoLine(r));
     done();
 });
 

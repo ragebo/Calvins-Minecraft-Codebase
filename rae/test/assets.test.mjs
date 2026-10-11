@@ -134,6 +134,15 @@ test("the resource pack declares the pbr capability, or Vibrant Visuals cannot b
     done();
 });
 
+test("the build the load line announces is the behavior pack's manifest version (config/build.ts)", async () => {
+    const { check, done } = checks();
+    const { BUILD_VERSION } = await load("config/build.js");
+    const manifest = readJson(path.join(BP, "manifest.json"));
+
+    check("they match", BUILD_VERSION === manifest.header.version.join("."), `${BUILD_VERSION} vs ${manifest.header.version.join(".")}`);
+    done();
+});
+
 test("each pack's manifest has one version, on the header and on every module", () => {
     const { check, done } = checks();
 

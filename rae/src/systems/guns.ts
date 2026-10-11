@@ -11,7 +11,7 @@ import { error, warn } from "../core/log.js";
 import { registerSystem } from "../core/registry.js";
 import { playFor, playSequence } from "../core/sound.js";
 import { onTick } from "../core/tick.js";
-import { ACTION_BAR_PRIORITY, setActionBar } from "../core/ui.js";
+import { ACTION_BAR_PRIORITY, setActionBar, tell } from "../core/ui.js";
 
 /**
  * One shared engine for all 6 guns, parameterized entirely by
@@ -892,6 +892,30 @@ function gunInUse(player: Player): GunConfig | undefined {
     return mount ? gunsByMountEntityId.get(mount.typeId) : undefined;
 }
 
+/**
+ * How to use a gun, in one line, from what its config says it does. Nothing else in the game tells a player the keys.
+ * (The Gatling gun is ridden: a click toggles its fire, and where the rider looks is where it points.)
+ */
+function controlsLine(gun: GunConfig): string {
+
+    const how = gun.automatic
+        ? "click to start firing, click again to stop. It points where you look."
+        : `left-click fires, right-click aims, Q reloads${gun.primeTicks !== undefined ? ", and click once between shots to cycle the action" : ""}.`;
+
+    return `§7${gun.displayName}: ${how}`;
+}
+
+/** Player+gun pairs that have been told the controls this session. Not cleared by a round reset: once is enough. */
+const taughtControls = new Set<string>();
+
+/** What the readout adds after the count when the next click will not fire: it has to cycle the action, or the gun is empty. */
+function readoutHint(gun: GunConfig, key: string, loaded: number): string {
+
+    if (loaded <= 0) return gun.automatic ? " §c- empty" : " §c- click to reload";
+
+    return needsPrimeKeys.has(key) ? " §6- click to cycle" : "";
+}
+
 let lastAmmoReadoutErrorTick = -Infinity;
 
 onTick("guns:ammo-readout", (ctx) => {
@@ -910,12 +934,18 @@ onTick("guns:ammo-readout", (ctx) => {
 
             const key = stateKey(player, gun.id);
 
+            if (!taughtControls.has(key)) {
+                taughtControls.add(key);
+                tell(player, controlsLine(gun));
+            }
+
             if (reloadingKeys.has(key)) {
                 const ticksLeft = (reloadEndsAtTick.get(key) ?? system.currentTick) - system.currentTick;
                 const secondsLeft = Math.max(0, Math.ceil(ticksLeft / 20));
                 setActionBar(player, "guns:ammo", `§eReloading ${gun.displayName}... §7${secondsLeft}s`);
             } else {
-                setActionBar(player, "guns:ammo", `§f${gun.displayName} §7| §a${getLoadedRounds(player, gun)}/${gun.magazineSize}`);
+                const loaded = getLoadedRounds(player, gun);
+                setActionBar(player, "guns:ammo", `§f${gun.displayName} §7| ${loaded <= 0 ? "§c" : "§a"}${loaded}/${gun.magazineSize}${readoutHint(gun, key, loaded)}`);
             }
 
         } catch (err) {

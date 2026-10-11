@@ -589,7 +589,7 @@ export function startRobbery(id: string, options: { readonly by?: Player; readon
     launching = { id, by: options.by, test };
 
     try {
-        const result = requestEvent(eventId(id));
+        const result = requestEvent(eventId(id), { by: options.by });
         return result.status === "started" ? ok : fail("another event is in the way");
     } finally {
         launching = undefined;

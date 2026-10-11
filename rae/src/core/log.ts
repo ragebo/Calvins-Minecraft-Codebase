@@ -72,11 +72,48 @@ export function error(source: string, message: string, options?: { readonly to?:
         return;
     }
 
+    const repeats = quietRepeats(text);
+
+    // The same failure from a handler that runs every tick would fill every operator's chat: the console has each one, chat has the first and a count.
+    if (repeats === undefined) return;
+
+    const shown = repeats > 0 ? `${chatLine} §7(and ${repeats} more of the same since)` : chatLine;
+
     for (const player of world.getAllPlayers()) {
         if (player.playerPermissionLevel === PlayerPermissionLevel.Operator) {
-            player.sendMessage(chatLine);
+            player.sendMessage(shown);
         }
     }
+}
+
+/** How long the same failure is kept out of operators' chat after it was last shown there. */
+const REPEAT_QUIET_TICKS = 600;
+
+/** The most distinct failures remembered at once; past that the memory starts over (a flood of different lines is not a repeat). */
+const MAX_REMEMBERED = 200;
+
+const shownAt = new Map<string, { tick: number; held: number }>();
+
+/**
+ * Whether chat should hear this failure now: undefined when it was shown recently (it is counted instead), otherwise how many
+ * of the same line were held back since it was last shown (0 for one never seen).
+ */
+function quietRepeats(text: string): number | undefined {
+
+    const now = system.currentTick;
+    const seen = shownAt.get(text);
+
+    // A tick count that went backwards (a test resetting the clock) is not "recently".
+    if (seen && now >= seen.tick && now - seen.tick < REPEAT_QUIET_TICKS) {
+        seen.held++;
+        return undefined;
+    }
+
+    if (shownAt.size >= MAX_REMEMBERED) shownAt.clear();
+
+    shownAt.set(text, { tick: now, held: 0 });
+
+    return seen?.held ?? 0;
 }
 
 /**

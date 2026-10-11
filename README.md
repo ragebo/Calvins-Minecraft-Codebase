@@ -554,6 +554,10 @@ cost an entire debugging session to discover; don't skip it.
 Plain script changes (no new items/entities) don't seem to need this, but bumping
 anyway costs nothing and avoids finding out the hard way.
 
+A behavior pack bump has one more place: `rae/src/config/build.ts` (`BUILD_VERSION`), the
+number the load line prints in chat ("RAE 0.2.4 loaded."), so you can see which build a world
+is really running. `test/assets.test.mjs` fails when it differs from the manifest.
+
 ### In-game testing
 
 ```

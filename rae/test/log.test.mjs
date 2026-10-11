@@ -68,6 +68,36 @@ test("error() always reaches the console, and only operators among online player
     done();
 });
 
+test("the same failure over and over reaches the console every time but operators' chat once, then with a count", () => {
+    const { check, done } = checks();
+    fresh();
+    const chief = fake.makePlayer("Chief", { permission: PlayerPermissionLevel.Operator });
+
+    for (let i = 0; i < 50; i++) { error("loop", "a handler that throws every tick"); fake.advance(1); }
+
+    check("the console has all 50", errors.filter((e) => e === "[loop] a handler that throws every tick").length === 50, String(errors.length));
+    check("chat has the first only", chief.messages.length === 1 && chief.messages[0].includes("a handler that throws every tick") && !chief.messages[0].includes("more of the same"), JSON.stringify(chief.messages));
+
+    fake.advance(700);
+    error("loop", "a handler that throws every tick");
+    check("half a minute later it is said again, with how many were held back", chief.messages.length === 2 && /and 49 more of the same since/.test(chief.messages[1]), JSON.stringify(chief.messages));
+
+    error("loop", "something else entirely");
+    check("a different failure is never held back by that", chief.messages.length === 3 && chief.messages[2].includes("something else entirely"), JSON.stringify(chief.messages));
+    done();
+});
+
+test("a failure sent to one player is never held back: it is their own answer", () => {
+    const { check, done } = checks();
+    fresh();
+    const target = fake.makePlayer("Target", { permission: PlayerPermissionLevel.Member });
+
+    for (let i = 0; i < 3; i++) error("loop", "your command failed", { to: target });
+
+    check("all three arrive", target.messages.length === 3, JSON.stringify(target.messages));
+    done();
+});
+
 test("error() with nobody operator online still logs to the console and never throws", () => {
     const { check, done } = checks();
     fresh();

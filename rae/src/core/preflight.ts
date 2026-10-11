@@ -1,4 +1,5 @@
 import { ItemTypes, world, type Vector3 } from "@minecraft/server";
+import { BUILD_VERSION } from "../config/build.js";
 import { AMMO, GUNS } from "../config/guns.js";
 import {
     BOAT_NPC, BOAT_WIN_TELEPORT, BRIDGE_AREA, FORT_AREA, FORT_REWARD_CHEST, FORT_SPAWNS,
@@ -161,4 +162,18 @@ export function runPreflightChecks(): { readonly ok: boolean; readonly problems:
     }
 
     return { ok, problems };
+}
+
+/**
+ * The line everyone sees at load: which build is running, and whether the startup checks were clean. The checks run first (they make
+ * a missing scoreboard and tell the operators about anything they cannot fix), so the line never claims a clean start that did not
+ * happen.
+ */
+export function announceStart(): void {
+
+    const { ok } = runPreflightChecks();
+
+    world.sendMessage(ok
+        ? `§aRAE ${BUILD_VERSION} loaded.`
+        : `§eRAE ${BUILD_VERSION} loaded, but a startup check found a problem (operators have been told).`);
 }

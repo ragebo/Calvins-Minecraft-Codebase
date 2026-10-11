@@ -98,6 +98,48 @@ test("a busy slot: the request is refused with the exact line and nothing starts
     done();
 });
 
+test("a refusal goes to the one player who asked, and to everyone only when nobody in particular did", () => {
+    const { check, done } = checks();
+    scene();
+    const ann = fake.makePlayer("Ann");
+    const bob = fake.makePlayer("Bob");
+    requestEvent("a");
+
+    requestEvent("b", { by: ann });
+    check("Ann is told", same(ann.messages, [busy("b", "a")]), JSON.stringify(ann.messages));
+    check("nobody else is", bob.messages.length === 0 && fake.chat.length === 0, JSON.stringify({ bob: bob.messages, chat: fake.chat }));
+
+    requestEvent("b", { by: undefined });
+    check("with nobody asking (a command block) it is said to everyone, as before", same(fake.chat, [busy("b", "a")]), JSON.stringify(fake.chat));
+
+    fake.chat.length = 0;
+    ann.messages.length = 0;
+    finishEvent("a");
+    requestEvent("c");
+    finishEvent("c");
+    requestEvent("c", { by: bob });
+    check("a cooldown refusal goes to the asker too", fake.chat.length === 0 && bob.messages.length <= 1, JSON.stringify({ chat: fake.chat, bob: bob.messages }));
+
+    done();
+});
+
+test("a script event's trigger passes the player who ran it, so a refusal is private to them", () => {
+    const { check, done } = checks();
+    scene();
+    // Events cannot be unregistered, so this reuses c (the next scene() registers a plain c over it again) instead of adding an event the random picks would find.
+    registerEvent({ id: "c", label: "c event", trigger: "test:trigger_private", start() { return true; } });
+    requestEvent("a");
+    const ann = fake.makePlayer("Ann");
+
+    system.afterEvents.scriptEventReceive.emit({ id: "test:trigger_private", sourceEntity: ann, message: "" });
+    check("Ann was told, and the world was not", ann.messages.some((m) => m.includes("already in progress")) && fake.chat.length === 0, JSON.stringify({ ann: ann.messages, chat: fake.chat }));
+
+    ann.messages.length = 0;
+    system.afterEvents.scriptEventReceive.emit({ id: "test:trigger_private", sourceEntity: undefined, message: "" });
+    check("from a command block it is a world line again", fake.chat.some((m) => m.includes("already in progress")) && ann.messages.length === 0, JSON.stringify({ ann: ann.messages, chat: fake.chat }));
+    done();
+});
+
 test("finishEvent frees the slot, so the next request starts, in the same tick", () => {
     const { check, done } = checks();
     scene();

@@ -1,8 +1,9 @@
-import { world, system } from "@minecraft/server";
+import { world, system, type Player } from "@minecraft/server";
 import { registerSystem } from "./registry.js";
 import { onScriptEvent } from "./events.js";
 import { error } from "./log.js";
 import { onTick } from "./tick.js";
+import { tell } from "./ui.js";
 
 /**
  * Fixes the hand-wired lock problem from V1.
@@ -73,6 +74,8 @@ export type RequestResult =
 export interface RequestOptions {
     /** When the request can't start now (the slot is taken, or it is cooling down), wait in line instead of being rejected. */
     readonly queue?: boolean;
+    /** The one player who asked. A refusal then goes to them alone; with nobody (a command block asked) it is said to everyone, as it always was. */
+    readonly by?: Player;
 }
 
 const TICKS_PER_SECOND = 20;
@@ -105,8 +108,8 @@ export function registerEvent(definition: EventDefinition): void {
     definitions.set(definition.id, definition);
 
     if (definition.trigger !== undefined) {
-        onScriptEvent(definition.trigger, () => {
-            requestEvent(definition.id);
+        onScriptEvent(definition.trigger, (player) => {
+            requestEvent(definition.id, { by: player });
         });
     }
 }
@@ -167,13 +170,20 @@ export function requestEvent(id: string, options: RequestOptions = {}): RequestR
     if (options.queue) return enqueue(id);
 
     if (active !== null) {
-        world.sendMessage(definition.busyMessage?.(active) ?? `§cCan't start a ${definition.label} — ${active} is already in progress.`);
+        refuse(options, definition.busyMessage?.(active) ?? `§cCan't start a ${definition.label} — ${active} is already in progress.`);
         return { status: "rejected", reason: "busy", active };
     }
 
     const seconds = Math.ceil(cooldownLeft(id) / TICKS_PER_SECOND);
-    world.sendMessage(`§cCan't start a ${definition.label} yet — ${seconds}s of cooldown left.`);
+    refuse(options, `§cCan't start a ${definition.label} yet — ${seconds}s of cooldown left.`);
     return { status: "rejected", reason: "cooldown" };
+}
+
+/** Says why a request was turned down: to the player who asked, or to everyone when it was not one player. */
+function refuse(options: RequestOptions, text: string): void {
+
+    if (options.by?.isValid) tell(options.by, text);
+    else world.sendMessage(text);
 }
 
 /**

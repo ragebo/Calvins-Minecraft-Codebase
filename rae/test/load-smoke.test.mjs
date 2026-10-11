@@ -8,6 +8,7 @@ const { listSystems } = await load("core/registry.js");
 const { listScriptEvents } = await load("core/events.js");
 const { AMMO, GUNS } = await load("config/guns.js");
 const { TRAIN_STRUCTURE } = await load("config/world.js");
+const { announceStart } = await load("core/preflight.js");
 
 // Everything main.ts's load hook now checks (core/preflight.ts) beyond the two scoreboards:
 // every gun/ammo item id, and the train structure. Kept as a list here (not hardcoded ids) so a
@@ -91,9 +92,25 @@ test("startup announces itself and reports no errors when the scoreboards exist"
         console.error = originalError;
     }
     const chat = fake.chat.map(strip);
-    assert.ok(chat.some((m) => m.includes("RAE loaded")), `chat was: ${chat.join(" | ")}`);
+    assert.ok(chat.some((m) => /^RAE \d+\.\d+\.\d+ loaded\.$/.test(m)), `chat was: ${chat.join(" | ")}`);
     assert.ok(!fake.chat.some((m) => m.includes("§c[")), `unexpected error in chat: ${fake.chat.join(" | ")}`);
     assert.ok(errors.length === 0, `unexpected console errors: ${errors.join(" | ")}`);
+});
+
+test("startup does not claim a clean start when a check found a problem the game could not fix", () => {
+    fakeReadyWorld();
+    fake.structures.clear();                            // the train structure is missing, which nothing can make up for
+
+    const originalError = console.error;
+    console.error = () => {};
+    try {
+        announceStart();
+    } finally {
+        console.error = originalError;
+    }
+    const chat = fake.chat.map(strip);
+    assert.ok(chat.some((m) => /^RAE \d+\.\d+\.\d+ loaded, but a startup check found a problem/.test(m)), `chat was: ${chat.join(" | ")}`);
+    assert.ok(!chat.some((m) => /^RAE \d+\.\d+\.\d+ loaded\.$/.test(m)), `chat was: ${chat.join(" | ")}`);
 });
 
 test("rae:debug lists the registered systems", () => {
