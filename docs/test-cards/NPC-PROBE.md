@@ -35,7 +35,7 @@ Tidy up afterwards: `/kill @e[tag=rae_npc_probe]`.
 | What you see | What it means for the shop |
 |---|---|
 | Step 5: with `cancel on` the game's box does NOT open (and the report shows 0 "after" events for the cancelled clicks) | Interception works: leave `shop.interceptClicks` on (the default). One screen. |
-| Step 5: the game's box STILL opens | Interception cannot replace it: `/rae:config_set_bool shop.interceptClicks false`. The shop then opens from the box's one button (two screens). |
+| Step 5: the game's box STILL opens | Interception cannot replace it: `/rae:config set shop.interceptClicks off`. The shop then opens from the box's one button (two screens). |
 | Step 3 is (b) or (c), or `dialogue change` threw | The button route does not work as built: interception is the only way in. If cancel also fails, the NPC needs another approach (a different entity). |
 | Step 10: the box went back to ordinary after the reload | The scene assignment does not survive a reload: the shop code re-points its NPCs when they load (a small change, I will make it). |
 | Step 9: `fromNpc=false`, or no name | The button route cannot tell the customer: interception only. |

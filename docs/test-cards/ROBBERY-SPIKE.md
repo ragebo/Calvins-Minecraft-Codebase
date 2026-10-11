@@ -8,7 +8,7 @@ script read and fill a chest, make loot from a loot table, save a big structure,
 one block interaction tried before, placing the Gatling gun, did NOT fire.) This card records the facts; the
 design branches on them (decision table at the bottom), so please run all of it before the framework is built.
 
-- `/scriptevent rae:robbery_probe <command>` and `/rae:robbery_probe_ctx <text>` (a custom command, operators only).
+- `/scriptevent rae:robbery_probe <command>`. (The custom command `/rae:robbery_probe_ctx <text>` this card once used is gone: that measurement is finished, and it sat among the real commands in autocomplete.)
 - The item `bountysys:robbery_wand` ("Robbery Wand", it borrows the menu's icon) is the real builder wand, here only
   so the probe can see what a right-click with it does. Get it with `/give @s bountysys:robbery_wand`.
 - Everything is written to the content log as `[robbery-probe]` lines; the findings are the `RESULT` lines. I read
@@ -41,7 +41,7 @@ is what this card is for.
 | 7 | `/scriptevent rae:robbery_probe cancel break on`, try to break a bench block, then `cancel break off`. Optional: `cancel explode on`, blow up TNT next to the bench, `cancel explode off`. | Breaking is refused while it is on. Explosions leave the bench alone (or not). |
 | 8 | `/scriptevent rae:robbery_probe report` again. | The cancelled column is now filled in: `cancel EFFECTIVE` or `cancel INEFFECTIVE` per block. |
 | 9 | `/scriptevent rae:robbery_probe restricted on`, right-click the chest, `restricted off`. | Nothing visible. The log gets one `RESULT restricted[before interact] ...` line per API, showing which ones are refused inside a before-event. |
-| 10 | `/rae:robbery_probe_ctx hi` from chat (autocomplete should offer it). Then put a command block with `/rae:robbery_probe_ctx hi` next to a lever and pull it. Then, if you have one, an NPC whose dialogue button runs it. | Chat says "Context probe ran". The log shows `ctx origin = ...` (who the game says ran it: the player, a block, or an NPC plus the player who clicked) and which world changes a command may make. A non-op (second account, or `/deop` yourself) should be refused by the game itself. |
+| 10 | **(Run and finished; the command was removed on 2026-10-11, so this step cannot be run again.)** `/rae:robbery_probe_ctx hi` from chat (autocomplete should offer it). Then put a command block with `/rae:robbery_probe_ctx hi` next to a lever and pull it. Then, if you have one, an NPC whose dialogue button runs it. | Chat says "Context probe ran". The log shows `ctx origin = ...` (who the game says ran it: the player, a block, or an NPC plus the player who clicked) and which world changes a command may make. A non-op (second account, or `/deop` yourself) should be refused by the game itself. |
 | 11 | Look at the **iron door**: `door check`, then `door open both`, wait 6 seconds, `door close both`, `door open lower`, `door close both`, `door open upper`. Then place a block beside the door, break it, and `door check` again. | Watch the door: does it swing, does it snap shut by itself, does only one half move? The log samples the state at +1, +20, +40 and +100 ticks. |
 | 12 | Look at the chest: `container`. Then the double chest, the barrel and the trapped chest. | The chest is filled with a few items and emptied again. The log has its size (27 single, 54 double), whether items can be set and read back. |
 | 13 | `/scriptevent rae:robbery_probe loot` | Chat says it is done. The log says whether the pack's `chests/gold_2` table, a vanilla one and a made-up one are found, and what items they make. |
@@ -66,7 +66,7 @@ is what this card is for.
 | Right-click on chests, doors, buttons, levers reaches the before-event and `cancel` works everywhere | Full interception: a locked door or chest simply refuses to open. |
 | Iron doors or buttons never reach the before-event | Their locks go through a "keypad" switch instead; the wand warns when you wire a lock straight onto an iron door. |
 | Only the after-events fire | Observe-and-react: close a door again a tick after it swings, treat the container-opened event as the trigger. Docs say never to wire a vault door to real redstone. |
-| The wand's right-click does not reach a script on interactive blocks | `/rae:robbery_edit` (aim, run the command) becomes the main way to edit; the wand works on everything else. |
+| The wand's right-click does not reach a script on interactive blocks | `/rae:robbery` (aim, run the command) becomes the main way to edit; the wand works on everything else. |
 | Command callbacks are read-only | Commands validate, then make the change one tick later. |
 | The loot-table API cannot see this pack's tables | Chests are filled with the proven `loot insert` command instead. |
 | Structures have a small size limit, or do not survive a relaunch | Breakable walls are capped, or stored block by block inside the robbery's own data. |

@@ -214,7 +214,7 @@ test("the settings form reflects the settings, and its answers are a patch setSe
     done();
 });
 
-test("a /rae:robbery_set value is read by the kind of setting it is for", () => {
+test("a /rae:robbery set value is read by the kind of setting it is for", () => {
     const { check, done } = checks();
     const parse = (key, value) => M.parseSettingValue(key, value);
 

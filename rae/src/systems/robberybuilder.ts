@@ -1,8 +1,6 @@
-import {
-    CommandPermissionLevel, CustomCommandParamType, CustomCommandStatus, EquipmentSlot, system, world,
-    type Block, type CustomCommandOrigin, type CustomCommandResult, type ItemStack, type Player, type Vector3
-} from "@minecraft/server";
+import { EquipmentSlot, system, world, type Block, type CustomCommandOrigin, type ItemStack, type Player, type Vector3 } from "@minecraft/server";
 import { ROBBERY as R } from "../config/balance.js";
+import { failure, later as laterTo, ok, playerOf, registerFamily, type Family } from "../core/commands.js";
 import { debug, error, info, warn } from "../core/log.js";
 import { isOperator } from "../core/players.js";
 import { registerSystem } from "../core/registry.js";
@@ -15,7 +13,7 @@ import { onTick } from "../core/tick.js";
 import { ACTION_BAR_PRIORITY, format, setActionBar, tell } from "../core/ui.js";
 import { classOfBlockType } from "../logic/blockclass.js";
 import { describeElement, describeRobbery, parseSettingValue } from "../logic/robberymeta.js";
-import { SETTING_KEYS, edgePoints, itemLabel, sameDimension, setArea, setSettings, whyNotRunnable, type Pos, type SettingKey } from "../logic/robbery.js";
+import { SETTING_KEYS, edgePoints, itemLabel, sameDimension, setSettings, whyNotRunnable, type Pos } from "../logic/robbery.js";
 
 /**
  * Building a robbery in the game: the wand, the commands, and the builder view. Operators only, all of it.
@@ -33,34 +31,8 @@ import { SETTING_KEYS, edgePoints, itemLabel, sameDimension, setArea, setSetting
 
 const SOURCE = "robbery";
 
-const ok = (message: string): CustomCommandResult => ({ status: CustomCommandStatus.Success, message });
-const failure = (message: string): CustomCommandResult => ({ status: CustomCommandStatus.Failure, message });
-
-const SETTING_ENUM = "rae:robbery_setting";
-
-// ---------------------------------------------------------------------------------------------------------
-// Who is asking
-// ---------------------------------------------------------------------------------------------------------
-
-/** The player behind a command: whoever typed it, or, from an NPC's button, the player who pressed it. */
-function playerOf(origin: CustomCommandOrigin): Player | undefined {
-
-    const source = origin.sourceEntity;
-    if (source?.typeId === "minecraft:player") return source as Player;
-
-    const initiator = origin.initiator;
-
-    return initiator?.typeId === "minecraft:player" ? (initiator as Player) : undefined;
-}
-
 /** How a deferred command reports back: to the player who ran it, or to the log when there is none (a command block). */
-function later(origin: CustomCommandOrigin, text: string): void {
-
-    const player = playerOf(origin);
-
-    if (player?.isValid) tell(player, text);
-    else info(SOURCE, text.replace(/§./g, ""));
-}
+const later = (origin: CustomCommandOrigin, text: string): void => laterTo(origin, SOURCE, text);
 
 const holdsWand = (player: Player, item: ItemStack | undefined): boolean => item?.typeId === R.wandItemId && isOperator(player);
 
@@ -336,8 +308,16 @@ onTick("robbery:view", (context) => {
 }, { everyTicks: R.viewEvery });
 
 // ---------------------------------------------------------------------------------------------------------
-// The commands
+// The command: /rae:robbery
 // ---------------------------------------------------------------------------------------------------------
+
+/*
+ * ONE command (it was sixteen: list, info, new, select, delete, start, stop, reset, activate, teller, wand, edit, view, undo, area
+ * and set). With nothing after it, it gives the builder the wand if they have none and opens the menu, which does everything the
+ * rest of them did and more; the actions below are the typed way, and the way for something with no player to click.
+ * Dropped as redundant: `wand` and `edit` (the bare command does both) and `area` (the menu sets it from where you stand or from
+ * two clicks; two corner positions do not fit a text slot).
+ */
 
 /** The robbery a command means: the one named, or, with none named, the one the builder selected. */
 function target(origin: CustomCommandOrigin, named?: string): { readonly id: string } | { readonly problem: string } {
@@ -349,14 +329,14 @@ function target(origin: CustomCommandOrigin, named?: string): { readonly id: str
 
     if (chosen) return { id: chosen.id };
 
-    return { problem: player ? "select a robbery first: /rae:robbery_select <id>" : "name the robbery: this was not run by a player" };
+    return { problem: player ? "select a robbery first: /rae:robbery select <id>, or open the menu with /rae:robbery" : "name the robbery: this was not run by a player" };
 }
 
 function describeList(): string {
 
     const stored = listStored();
 
-    if (stored.length === 0) return "No robberies yet. Make one with /rae:robbery_new <id> <name>, then take the wand with /rae:robbery_wand.";
+    if (stored.length === 0) return "No robberies yet. /rae:robbery opens the menu: make one there.";
 
     return stored.map((entry) => {
 
@@ -385,315 +365,274 @@ function describeInfo(id: string): string {
     return lines.join("\n");
 }
 
-interface Parameter { readonly name: string; readonly type: CustomCommandParamType }
+/** "yes", "true" or "confirm" typed after a destructive action: anything else is not a yes. */
+const isYes = (text: string | undefined): boolean => text !== undefined && ["yes", "true", "confirm", "y"].includes(text.toLowerCase());
 
-interface CommandSpec {
-    readonly name: string;
-    readonly description: string;
-    readonly mandatory?: readonly Parameter[];
-    readonly optional?: readonly Parameter[];
-    readonly run: (origin: CustomCommandOrigin, ...args: any[]) => CustomCommandResult;
-}
+const FAMILY: Family = {
+    name: "rae:robbery",
+    description: "Build and run robberies. With nothing after it, gives you the wand and opens the builder's menu. help lists the rest.",
+    actionEnum: "rae:robbery_action",
+    first: { name: "target" },
+    second: { name: "value" },
+    bareHelp: "gives you the wand if you have none and opens the builder's menu (everything the actions below do, by buttons)",
+    bare: (origin) => {
+        const player = playerOf(origin);
+        if (!player) return failure("the menu opens for a player: run this as a player. From a command block use start, stop, reset or activate.");
 
-const STRING = CustomCommandParamType.String;
-const BOOLEAN = CustomCommandParamType.Boolean;
+        system.run(() => {
+            if (!player.isValid) return;
 
-const COMMANDS: readonly CommandSpec[] = [
-    {
-        name: "rae:robbery_list",
-        description: "Lists every robbery and whether it is ready.",
-        run: () => ok(describeList())
+            if (giveWand(player)) tell(player, format("ok", "You have the wand. Right-click a block to bind it; left-click the air, or sneak and right-click, for the menu."));
+
+            void openMainMenu(player);
+        });
+
+        return ok("Opening the menu. Close the chat to see it.");
     },
-    {
-        name: "rae:robbery_info",
-        description: "Shows a robbery's settings and elements. Add true to write its saved text to the content log as a backup.",
-        mandatory: [{ name: "robbery", type: STRING }],
-        optional: [{ name: "raw", type: BOOLEAN }],
-        run: (origin, id: string, raw?: boolean) => {
-            const wanted = target(origin, id);
-            if ("problem" in wanted) return failure(wanted.problem);
+    actions: [
+        {
+            name: "list",
+            usage: "",
+            description: "Lists every robbery and whether it is ready.",
+            run: () => ok(describeList())
+        },
+        {
+            name: "info",
+            usage: "[robbery] [raw]",
+            description: "Shows a robbery's settings and elements. Add raw to write its saved text to the content log as a backup.",
+            run: (origin, id, raw) => {
+                const wanted = target(origin, id);
+                if ("problem" in wanted) return failure(wanted.problem);
 
-            if (raw === true) {
-                const text = rawText(wanted.id);
-                if (text === undefined) return failure(`there is no robbery ${wanted.id}`);
-                info(SOURCE, `${wanted.id} saved as: ${text}`);
-                return ok(`Written to the content log (${text.length} characters).`);
-            }
-
-            return getRobbery(wanted.id) ? ok(describeInfo(wanted.id)) : failure(`there is no robbery ${wanted.id}`);
-        }
-    },
-    {
-        name: "rae:robbery_new",
-        description: "Makes a new robbery in the dimension you stand in, and selects it.",
-        mandatory: [{ name: "id", type: STRING }, { name: "name", type: STRING }],
-        run: (origin, id: string, name: string) => {
-            const player = playerOf(origin);
-            if (!player) return failure("a new robbery takes the dimension of the player who makes it: run this as a player");
-
-            const made = createRobbery(player, id, name);
-
-            return made.ok ? ok(`Made ${made.robbery.name} (${made.robbery.id}) and selected it. Take the wand with /rae:robbery_wand.`) : failure(made.reason);
-        }
-    },
-    {
-        name: "rae:robbery_select",
-        description: "Chooses the robbery you are building.",
-        mandatory: [{ name: "robbery", type: STRING }],
-        run: (origin, id: string) => {
-            const player = playerOf(origin);
-            if (!player) return failure("this is for a player building a robbery");
-
-            const robbery = getRobbery(id.toLowerCase());
-            if (!robbery) return failure(`there is no robbery ${id}`);
-
-            select(player, robbery.id);
-
-            return ok(`Now building ${robbery.name}.`);
-        }
-    },
-    {
-        name: "rae:robbery_delete",
-        description: "Deletes a robbery for good (until the world is reloaded, undo brings it back). Needs true to be sure.",
-        mandatory: [{ name: "robbery", type: STRING }, { name: "confirm", type: BOOLEAN }],
-        run: (origin, id: string, confirm: boolean) => {
-            if (confirm !== true) return failure("add true at the end to really delete it");
-
-            const key = id.toLowerCase();
-            if (!getStored(key)) return failure(`there is no robbery ${id}`);
-
-            const gone = deleteRobbery(key);
-            if (!gone.ok) return failure(gone.reason);
-
-            // What it changed in the world is still noted, so the site is put back by the janitor within a second.
-            const player = playerOf(origin);
-            if (player && selectedId(player) === key) select(player, undefined);
-
-            return ok(`Deleted ${key}. Its doors are shut and chests emptied within a second. /rae:robbery_undo ${key} brings it back.`);
-        }
-    },
-    {
-        name: "rae:robbery_start",
-        description: "Starts a robbery by hand. Add true for a test run: anyone can take part and there is no cooldown.",
-        mandatory: [{ name: "robbery", type: STRING }],
-        optional: [{ name: "test", type: BOOLEAN }],
-        run: (origin, id: string, test?: boolean) => {
-            const wanted = target(origin, id);
-            if ("problem" in wanted) return failure(wanted.problem);
-
-            const why = whyCannotStart(wanted.id, { test: test === true });
-            if (why) return failure(`${wanted.id}: ${why}`);
-
-            const player = playerOf(origin);
-
-            system.run(() => {
-                const result = startRobbery(wanted.id, { by: player, test: test === true });
-                if (!result.ok) later(origin, format("warn", `${wanted.id} did not start: ${result.reason}.`));
-            });
-
-            return ok(`Starting ${wanted.id}${test === true ? " as a test run" : ""}.`);
-        }
-    },
-    {
-        name: "rae:robbery_stop",
-        description: "Stops a robbery that is under way. No win or fail effects; its site is put back at once.",
-        mandatory: [{ name: "robbery", type: STRING }],
-        run: (origin, id: string) => {
-            const wanted = target(origin, id);
-            if ("problem" in wanted) return failure(wanted.problem);
-
-            const why = whyCannotStop(wanted.id);
-            if (why) return failure(`${wanted.id}: ${why}`);
-
-            system.run(() => { stopRobbery(wanted.id); });
-
-            return ok(`Stopping ${wanted.id}.`);
-        }
-    },
-    {
-        name: "rae:robbery_reset",
-        description: "Puts a robbery's site back now (doors shut, chests emptied), ending it if it is under way, and clears its cooldown.",
-        mandatory: [{ name: "robbery", type: STRING }],
-        run: (origin, id: string) => {
-            const wanted = target(origin, id);
-            if ("problem" in wanted) return failure(wanted.problem);
-            if (!getStored(wanted.id)) return failure(`there is no robbery ${wanted.id}`);
-
-            system.run(() => {
-                const result = resetSiteNow(wanted.id);
-                later(origin, format("ok", `${wanted.id}: put back ${result.cleaned} block${result.cleaned === 1 ? "" : "s"}${result.left > 0 ? `; ${result.left} more wait for their chunk to load` : ""}.`));
-            });
-
-            return ok(`Putting ${wanted.id} back.`);
-        }
-    },
-    {
-        name: "rae:robbery_activate",
-        description: "Completes one element of a robbery from outside (a command block, an NPC button). Locks are skipped; what it waits for is not.",
-        mandatory: [{ name: "robbery", type: STRING }, { name: "element", type: STRING }],
-        run: (origin, id: string, element: string) => {
-            const key = id.toLowerCase();
-            const why = whyCannotActivate(key, element);
-            if (why) return failure(`${key}: ${why}`);
-
-            const player = playerOf(origin);
-
-            system.run(() => {
-                const result = activateElement(key, element, player);
-                if (!result.ok) later(origin, format("warn", `${key}: ${result.reason}.`));
-            });
-
-            return ok(`Activating ${element} in ${key}.`);
-        }
-    },
-    {
-        name: "rae:robbery_teller",
-        description: "Makes the NPC or villager you are looking at a teller of the robbery you are building: keeping a gun aimed at it holds it up. With the name of a teller you already made, moves that teller to it.",
-        optional: [{ name: "name", type: STRING }],
-        run: (origin, name?: string) => {
-            const player = playerOf(origin);
-            if (!player) return failure("look at the teller yourself: run this as a player");
-
-            const wanted = target(origin);
-            if ("problem" in wanted) return failure(wanted.problem);
-
-            const entity = aimedEntity(player, R.holdUpReach);
-            if (!entity) return failure(`look at the NPC or villager that should be the teller, within ${R.holdUpReach} blocks`);
-
-            system.run(() => {
-                const result = bindTeller(wanted.id, entity, name ?? "");
-
-                if (!result.ok) {
-                    later(origin, format("warn", `Not changed: ${result.reason.replace(/\.$/, "")}.`));
-                    return;
+                if (raw?.toLowerCase() === "raw") {
+                    const text = rawText(wanted.id);
+                    if (text === undefined) return failure(`there is no robbery ${wanted.id}`);
+                    info(SOURCE, `${wanted.id} saved as: ${text}`);
+                    return ok(`Written to the content log (${text.length} characters).`);
                 }
 
-                later(origin, format("ok", result.moved
-                    ? `${result.element.name} is now this one.`
-                    : `${result.element.name} is a teller. Aim a gun at it to hold it up; set what happens with the wand.`));
+                return getRobbery(wanted.id) ? ok(describeInfo(wanted.id)) : failure(`there is no robbery ${wanted.id}`);
+            }
+        },
+        {
+            name: "new",
+            usage: "<name> [id]",
+            description: "Makes a new robbery in the dimension you stand in, and selects it. Its id is made from its name unless you give one.",
+            run: (origin, name, id) => {
+                const player = playerOf(origin);
+                if (!player) return failure("a new robbery takes the dimension of the player who makes it: run this as a player");
+                if (name === undefined) return failure("name it: /rae:robbery new \"Saint Diego Bank\"");
 
-                if (!result.moved) void openElementMenu(player, wanted.id, result.element.id);
-            });
+                const made = createRobbery(player, id ?? "", name);
 
-            return ok("Making it a teller. Close the chat to see its screen.");
+                return made.ok ? ok(`Made ${made.robbery.name} (${made.robbery.id}) and selected it. /rae:robbery opens its menu.`) : failure(made.reason);
+            }
+        },
+        {
+            name: "select",
+            usage: "<robbery>",
+            description: "Chooses the robbery you are building.",
+            run: (origin, id) => {
+                const player = playerOf(origin);
+                if (!player) return failure("this is for a player building a robbery");
+                if (id === undefined) return failure("which one? /rae:robbery select <id>. /rae:robbery list shows them.");
+
+                const robbery = getRobbery(id.toLowerCase());
+                if (!robbery) return failure(`there is no robbery ${id}`);
+
+                select(player, robbery.id);
+
+                return ok(`Now building ${robbery.name}.`);
+            }
+        },
+        {
+            name: "delete",
+            usage: "<robbery> yes",
+            description: "Deletes a robbery for good (until the world is reloaded, undo brings it back). Needs yes to be sure.",
+            run: (origin, id, confirm) => {
+                if (id === undefined) return failure("which one? /rae:robbery delete <id> yes");
+                if (!isYes(confirm)) return failure("add yes at the end to really delete it");
+
+                const key = id.toLowerCase();
+                if (!getStored(key)) return failure(`there is no robbery ${id}`);
+
+                const gone = deleteRobbery(key);
+                if (!gone.ok) return failure(gone.reason);
+
+                // What it changed in the world is still noted, so the site is put back by the janitor within a second.
+                const player = playerOf(origin);
+                if (player && selectedId(player) === key) select(player, undefined);
+
+                return ok(`Deleted ${key}. Its doors are shut and chests emptied within a second. /rae:robbery undo ${key} brings it back.`);
+            }
+        },
+        {
+            name: "start",
+            usage: "[robbery] [test]",
+            description: "Starts a robbery by hand. Add test for a test run: anyone can take part and there is no cooldown.",
+            run: (origin, id, mode) => {
+                const wanted = target(origin, id);
+                if ("problem" in wanted) return failure(wanted.problem);
+
+                const test = mode?.toLowerCase() === "test";
+
+                const why = whyCannotStart(wanted.id, { test });
+                if (why) return failure(`${wanted.id}: ${why}`);
+
+                const player = playerOf(origin);
+
+                system.run(() => {
+                    const result = startRobbery(wanted.id, { by: player, test });
+                    if (!result.ok) later(origin, format("warn", `${wanted.id} did not start: ${result.reason}.`));
+                });
+
+                return ok(`Starting ${wanted.id}${test ? " as a test run" : ""}.`);
+            }
+        },
+        {
+            name: "stop",
+            usage: "[robbery]",
+            description: "Stops a robbery that is under way. No win or fail effects; its site is put back at once.",
+            run: (origin, id) => {
+                const wanted = target(origin, id);
+                if ("problem" in wanted) return failure(wanted.problem);
+
+                const why = whyCannotStop(wanted.id);
+                if (why) return failure(`${wanted.id}: ${why}`);
+
+                system.run(() => { stopRobbery(wanted.id); });
+
+                return ok(`Stopping ${wanted.id}.`);
+            }
+        },
+        {
+            name: "reset",
+            usage: "[robbery]",
+            description: "Puts a robbery's site back now (doors shut, chests emptied), ending it if it is under way, and clears its cooldown.",
+            run: (origin, id) => {
+                const wanted = target(origin, id);
+                if ("problem" in wanted) return failure(wanted.problem);
+                if (!getStored(wanted.id)) return failure(`there is no robbery ${wanted.id}`);
+
+                system.run(() => {
+                    const result = resetSiteNow(wanted.id);
+                    later(origin, format("ok", `${wanted.id}: put back ${result.cleaned} block${result.cleaned === 1 ? "" : "s"}${result.left > 0 ? `; ${result.left} more wait for their chunk to load` : ""}.`));
+                });
+
+                return ok(`Putting ${wanted.id} back.`);
+            }
+        },
+        {
+            name: "activate",
+            usage: "<robbery> <element>",
+            description: "Completes one element of a robbery from outside (a command block, an NPC button). Locks are skipped; what it waits for is not.",
+            run: (origin, id, element) => {
+                if (id === undefined || element === undefined) return failure("which robbery and which element? /rae:robbery activate <robbery> <element> (an element with a space in its name goes in quotes)");
+
+                const key = id.toLowerCase();
+                const why = whyCannotActivate(key, element);
+                if (why) return failure(`${key}: ${why}`);
+
+                const player = playerOf(origin);
+
+                system.run(() => {
+                    const result = activateElement(key, element, player);
+                    if (!result.ok) later(origin, format("warn", `${key}: ${result.reason}.`));
+                });
+
+                return ok(`Activating ${element} in ${key}.`);
+            }
+        },
+        {
+            name: "teller",
+            usage: "[name]",
+            description: "Makes the NPC or villager you are looking at a teller of the robbery you are building: keeping a gun aimed at it holds it up. With the name of a teller you already made, moves that teller to it.",
+            run: (origin, name) => {
+                const player = playerOf(origin);
+                if (!player) return failure("look at the teller yourself: run this as a player");
+
+                const wanted = target(origin);
+                if ("problem" in wanted) return failure(wanted.problem);
+
+                const entity = aimedEntity(player, R.holdUpReach);
+                if (!entity) return failure(`look at the NPC or villager that should be the teller, within ${R.holdUpReach} blocks`);
+
+                system.run(() => {
+                    const result = bindTeller(wanted.id, entity, name ?? "");
+
+                    if (!result.ok) {
+                        later(origin, format("warn", `Not changed: ${result.reason.replace(/\.$/, "")}.`));
+                        return;
+                    }
+
+                    later(origin, format("ok", result.moved
+                        ? `${result.element.name} is now this one.`
+                        : `${result.element.name} is a teller. Aim a gun at it to hold it up; set what happens with the wand.`));
+
+                    if (!result.moved) void openElementMenu(player, wanted.id, result.element.id);
+                });
+
+                return ok("Making it a teller. Close the chat to see its screen.");
+            }
+        },
+        {
+            name: "view",
+            usage: "[on|off]",
+            description: "Marks the robbery you are building in the world (its blocks and its area), and shows what the wand points at.",
+            run: (origin, on) => {
+                const player = playerOf(origin);
+                if (!player) return failure("the view is drawn for a player: run this as a player");
+
+                const typed = on?.toLowerCase();
+                const want = typed === undefined ? !viewers.has(player.id) : ["on", "true", "yes"].includes(typed);
+
+                if (want) viewers.add(player.id);
+                else viewers.delete(player.id);
+
+                return ok(want ? "The builder view is on." : "The builder view is off.");
+            }
+        },
+        {
+            name: "undo",
+            usage: "[robbery]",
+            description: "Undoes the last change to a robbery (or the deletion of one). Doing it again redoes.",
+            run: (origin, id) => {
+                const wanted = target(origin, id);
+                if ("problem" in wanted) return failure(wanted.problem);
+
+                const result = undoLast(wanted.id);
+
+                return result.ok ? ok(`Undone for ${wanted.id}. Run it again to put it back.`) : failure(result.reason);
+            }
+        },
+        {
+            name: "set",
+            usage: "<setting> <value>",
+            description: "Changes a setting of the robbery you are building: on or off for a switch, whole seconds for a time. The menu shows them all.",
+            run: (origin, key, value) => {
+                const wanted = target(origin);
+                if ("problem" in wanted) return failure(wanted.problem);
+
+                const setting = key === undefined ? undefined : SETTING_KEYS.find((candidate) => candidate.toLowerCase() === key.toLowerCase());
+
+                if (setting === undefined) return failure(`${key === undefined ? "which setting?" : `there is no setting ${key}.`} They are: ${SETTING_KEYS.join(", ")}.`);
+                if (value === undefined) return failure(`${setting} needs a value: on or off for a switch, whole seconds for a time.`);
+
+                const parsed = parseSettingValue(setting, value);
+                if (!parsed.ok) return failure(parsed.reason);
+
+                const outcome = applyEdit(wanted.id, (robbery) => setSettings(robbery, { [setting]: parsed.value }));
+
+                return outcome.ok ? ok(`${setting} is now ${String(parsed.value)} for ${outcome.robbery.name}.`) : failure(outcome.reason);
+            }
         }
-    },
-    {
-        name: "rae:robbery_wand",
-        description: "Gives you the builder's wand: right-click a door, chest or button to bind it; left-click the air, or sneak and right-click, for the menu.",
-        run: (origin) => {
-            const player = playerOf(origin);
-            if (!player) return failure("the wand goes to a player: run this as a player");
+    ]
+};
 
-            system.run(() => {
-                tell(player, giveWand(player) ? format("ok", "You have the wand. Right-click a block to bind it; left-click the air, or sneak and right-click, for the menu.") : format("info", "You already have the wand."));
-            });
-
-            return ok("Giving you the wand.");
-        }
-    },
-    {
-        name: "rae:robbery_edit",
-        description: "Opens the builder's menu (the same as left-clicking the air with the wand).",
-        run: (origin) => {
-            const player = playerOf(origin);
-            if (!player) return failure("the menu opens for a player: run this as a player");
-
-            system.run(() => { void openMainMenu(player); });
-
-            return ok("Opening the menu. Close the chat to see it.");
-        }
-    },
-    {
-        name: "rae:robbery_view",
-        description: "Marks the robbery you are building in the world (its blocks and its area), and shows what the wand points at.",
-        optional: [{ name: "on", type: BOOLEAN }],
-        run: (origin, on?: boolean) => {
-            const player = playerOf(origin);
-            if (!player) return failure("the view is drawn for a player: run this as a player");
-
-            const want = on ?? !viewers.has(player.id);
-
-            if (want) viewers.add(player.id);
-            else viewers.delete(player.id);
-
-            return ok(want ? "The builder view is on." : "The builder view is off.");
-        }
-    },
-    {
-        name: "rae:robbery_undo",
-        description: "Undoes the last change to a robbery (or the deletion of one). Doing it again redoes.",
-        optional: [{ name: "robbery", type: STRING }],
-        run: (origin, id?: string) => {
-            const wanted = target(origin, id);
-            if ("problem" in wanted) return failure(wanted.problem);
-
-            const result = undoLast(wanted.id);
-
-            return result.ok ? ok(`Undone for ${wanted.id}. Run it again to put it back.`) : failure(result.reason);
-        }
-    },
-    {
-        name: "rae:robbery_area",
-        description: "Sets the area of the robbery you are building from two corners (~ ~ ~ works).",
-        mandatory: [{ name: "from", type: CustomCommandParamType.Location }, { name: "to", type: CustomCommandParamType.Location }],
-        run: (origin, from: Vector3, to: Vector3) => {
-            const wanted = target(origin);
-            if ("problem" in wanted) return failure(wanted.problem);
-
-            const corner = (v: Vector3): Pos => [Math.floor(v.x), Math.floor(v.y), Math.floor(v.z)];
-            const outcome = applyEdit(wanted.id, (robbery) => setArea(robbery, corner(from), corner(to)));
-
-            return outcome.ok ? ok(`The area of ${outcome.robbery.name} is set.`) : failure(outcome.reason);
-        }
-    },
-    {
-        name: "rae:robbery_set",
-        description: "Changes a setting of the robbery you are building: on or off for a switch, whole seconds for a time.",
-        mandatory: [{ name: SETTING_ENUM, type: CustomCommandParamType.Enum }, { name: "value", type: STRING }],
-        run: (origin, key: SettingKey, value: string) => {
-            const wanted = target(origin);
-            if ("problem" in wanted) return failure(wanted.problem);
-
-            const parsed = parseSettingValue(key, value);
-            if (!parsed.ok) return failure(parsed.reason);
-
-            const outcome = applyEdit(wanted.id, (robbery) => setSettings(robbery, { [key]: parsed.value }));
-
-            return outcome.ok ? ok(`${key} is now ${String(parsed.value)} for ${outcome.robbery.name}.`) : failure(outcome.reason);
-        }
-    }
-];
-
-// A registration mistake (a bare name, an enum used before it exists) throws and, uncaught, would take every command after it
-// down too: that is exactly how the rae:config_* commands once all failed at once. So each is tried on its own. Only the log
-// hears of a failure, because this runs while the scripts are still starting.
+// A registration mistake takes only this command down, and only the log hears of it, because this runs while the scripts are
+// still starting (registerFamily reports it).
 system.beforeEvents.startup.subscribe((event) => {
-
-    const registry = event.customCommandRegistry;
-
-    const attempt = (what: string, fn: () => void): void => {
-        try {
-            fn();
-        } catch (err) {
-            warn(SOURCE, `registering ${what} failed: ${err instanceof Error ? err.message : String(err)}`);
-        }
-    };
-
-    attempt(SETTING_ENUM, () => registry.registerEnum(SETTING_ENUM, [...SETTING_KEYS]));
-
-    for (const spec of COMMANDS) {
-        attempt(spec.name, () => registry.registerCommand(
-            {
-                name: spec.name,
-                description: spec.description,
-                permissionLevel: CommandPermissionLevel.GameDirectors,
-                ...(spec.mandatory ? { mandatoryParameters: spec.mandatory.map((p) => ({ name: p.name, type: p.type })) } : {}),
-                ...(spec.optional ? { optionalParameters: spec.optional.map((p) => ({ name: p.name, type: p.type })) } : {})
-            },
-            spec.run
-        ));
-    }
+    registerFamily(event.customCommandRegistry, SOURCE, FAMILY);
 });
 
 registerSystem({

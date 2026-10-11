@@ -36,6 +36,11 @@ export interface Screens {
     hasMenuOpen(player: Player): boolean;
     /** Closes the player's whole stack of menus (an action that needs a click in the world calls this). */
     closeAll(player: Player): void;
+    /**
+     * Says how the last step went at the top of the next screen they see (once), instead of in chat, where the screen being drawn
+     * over it hides it until the menu is closed. A step that was refused uses it too, so a button that did nothing says why.
+     */
+    notify(player: Player, text: string): void;
     /** Runs a menu for a player unless one is already open, and always leaves them with none open. */
     menuFor(player: Player, body: () => Promise<void>): Promise<void>;
     /** Shows a screen, runs what is pressed, and shows it again, until it is closed, goes "back", or has nothing left to show. */
@@ -46,6 +51,7 @@ export function createScreens(source: string): Screens {
 
     const open = new Set<string>();
     const closing = new Set<string>();
+    const notices = new Map<string, string>();
 
     return {
 
@@ -53,6 +59,10 @@ export function createScreens(source: string): Screens {
 
         closeAll(player) {
             closing.add(player.id);
+        },
+
+        notify(player, text) {
+            notices.set(player.id, text);
         },
 
         async menuFor(player, body) {
@@ -73,6 +83,8 @@ export function createScreens(source: string): Screens {
             } finally {
                 open.delete(player.id);
                 closing.delete(player.id);
+                // A notice nobody got to see (the menu closed first) must not turn up at the top of the next menu.
+                notices.delete(player.id);
             }
         },
 
@@ -85,7 +97,10 @@ export function createScreens(source: string): Screens {
                 const screen = build();
                 if (!screen) return;
 
-                const form = new ActionFormData().title(screen.title).body(screen.body);
+                const notice = notices.get(player.id);
+                notices.delete(player.id);
+
+                const form = new ActionFormData().title(screen.title).body(notice !== undefined ? `${notice}\n\n${screen.body}` : screen.body);
                 for (const action of screen.actions) form.button(action.label);
 
                 const response = await showForm(player, form);

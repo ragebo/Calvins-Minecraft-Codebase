@@ -3,8 +3,8 @@ import assert from "node:assert/strict";
 import { fake, fakeApi, system, world, load, checks, strip } from "./helpers.mjs";
 import { ui, problems, close, press, script, buttonsOf, titleOf } from "./robbery-ui.mjs";
 
-// What a builder types and presses to move an NPC and to name a shop: /rae:shop_move (and its list), /rae:shop_place's new care not
-// to make a second NPC, shops found by the name they were given in every command, /rae:shop_list showing where each NPC is,
+// What a builder types and presses to move an NPC and to name a shop: /rae:shop move (and its list), /rae:shop place's new care not
+// to make a second NPC, shops found by the name they were given in every command, /rae:shop list showing where each NPC is,
 // the click that teaches where an NPC stands, and the editor's "Bring its NPC here". The machinery under them is in
 // shop-npc-reach.test.mjs.
 
@@ -65,7 +65,7 @@ function strand(op, shop, at = FAR) {
 const near = (npc, op) => Math.hypot(npc.location.x - op.location.x, npc.location.z - op.location.z) < 5;
 
 // ---------------------------------------------------------------------------------------------------------
-// /rae:shop_move
+// /rae:shop move
 // ---------------------------------------------------------------------------------------------------------
 
 test("move brings an NPC from out of sight by the name it was given, and says where it came from", async () => {
@@ -75,7 +75,7 @@ test("move brings an NPC from out of sight by the name it was given, and says wh
     const shop = shopFor(op, "Habiti the Horseman");
     const npc = strand(op, shop);
 
-    const result = as(fromPlayer(op), "rae:shop_move", "Habiti the Horseman");
+    const result = as(fromPlayer(op), "rae:shop", "move", "Habiti the Horseman");
     check("the command succeeds at once", succeeded(result), JSON.stringify(result));
 
     await pass(5);
@@ -86,7 +86,7 @@ test("move brings an NPC from out of sight by the name it was given, and says wh
 
     npc.teleport(FAR);
     npcs.rememberSpot(shop.id, npc);
-    as(fromPlayer(op), "rae:shop_move", "habiti-the-horseman");
+    as(fromPlayer(op), "rae:shop", "move", "habiti-the-horseman");
     await pass(5);
     check("the name works in lower case with hyphens too", near(npc, op));
     done();
@@ -99,13 +99,13 @@ test("move never makes an NPC: when it is gone it says where it was and how to m
     const shop = shopFor(op, "Habiti");
     strand(op, shop).remove();
 
-    as(fromPlayer(op), "rae:shop_move", "habiti");
+    as(fromPlayer(op), "rae:shop", "move", "habiti");
     await pass(40);
 
     check("nothing was made", npcCount() === 0);
-    check("it says it is not there any more, and what makes a new one", /not at 900, 70, 900 in the overworld any more\. \/rae:shop_place habiti makes a new one here/.test(said(op)), said(op));
+    check("it says it is not there any more, and what makes a new one", /not at 900, 70, 900 in the overworld any more\. \/rae:shop place habiti makes a new one here/.test(said(op)), said(op));
     check("the bad news is yellow, not green", op.messages.some((m) => m.startsWith("§e") && /any more/.test(m)) && !op.messages.some((m) => m.startsWith("§a") && /any more/.test(m)), op.messages.join(" | "));
-    check("an unknown shop is a Failure naming what was typed", failed(as(fromPlayer(op), "rae:shop_move", "nobody")) && /there is no shop "nobody"/.test(as(fromPlayer(op), "rae:shop_move", "nobody").message));
+    check("an unknown shop is a Failure naming what was typed", failed(as(fromPlayer(op), "rae:shop", "move", "nobody")) && /there is no shop "nobody"/.test(as(fromPlayer(op), "rae:shop", "move", "nobody").message));
     done();
 });
 
@@ -117,11 +117,11 @@ test("move when the area will not load makes nothing and says what to do", async
     const npc = strand(op, shop);
     fake.tickingAreaFails = "TickingAreaError: not today";
 
-    as(fromPlayer(op), "rae:shop_move", "habiti");
+    as(fromPlayer(op), "rae:shop", "move", "habiti");
     await pass(5);
 
     check("nothing was made and the NPC is where it was", npcCount() === 1 && !near(npc, op));
-    check("the builder is told why and the way out", /could not be brought \(TickingAreaError: not today\)/.test(said(op)) && /shop_place habiti true/.test(said(op)), said(op));
+    check("the builder is told why and the way out", /could not be brought \(TickingAreaError: not today\)/.test(said(op)) && /shop place habiti new/.test(said(op)), said(op));
     done();
 });
 
@@ -135,7 +135,7 @@ test("move with no name lists the shops by name with where each NPC is, and pres
     npcs.spawnShopNpc(op, here);
 
     script(press("Habiti"));
-    const result = as(fromPlayer(op), "rae:shop_move");
+    const result = as(fromPlayer(op), "rae:shop", "move");
     check("the command opens the list", succeeded(result) && /Opening the list/.test(result.message), JSON.stringify(result));
 
     await pass(8);
@@ -157,7 +157,7 @@ test("pressing a shop in the list whose NPC is gone makes nothing: the list only
     strand(op, shop).remove();
 
     script(press("Habiti"));
-    as(fromPlayer(op), "rae:shop_move");
+    as(fromPlayer(op), "rae:shop", "move");
     await pass(40);
 
     check("no NPC was made", npcCount() === 0);
@@ -171,7 +171,7 @@ test("the list with no shops says so, and only closes", async () => {
     const { as } = commands();
 
     script(close);
-    as(fromPlayer(op), "rae:shop_move");
+    as(fromPlayer(op), "rae:shop", "move");
     await pass(3);
 
     const picker = ui.shown.find((form) => strip(titleOf(form)) === "Bring an NPC here");
@@ -180,7 +180,7 @@ test("the list with no shops says so, and only closes", async () => {
 });
 
 // ---------------------------------------------------------------------------------------------------------
-// /rae:shop_place
+// /rae:shop place
 // ---------------------------------------------------------------------------------------------------------
 
 test("place brings a loaded NPC, makes one when it is gone, and with true makes one regardless", async () => {
@@ -191,11 +191,11 @@ test("place brings a loaded NPC, makes one when it is gone, and with true makes 
     const npc = npcs.spawnShopNpc(op, shop);
     npc._location = { x: 300, y: 64, z: 300 };
 
-    as(fromPlayer(op), "rae:shop_place", "habiti");
+    as(fromPlayer(op), "rae:shop", "place", "habiti");
     await pass(3);
     check("a loaded NPC is brought, not copied", npcCount() === 1 && near(npc, op));
 
-    as(fromPlayer(op), "rae:shop_place", "habiti", true);
+    as(fromPlayer(op), "rae:shop", "place", "habiti", "new");
     await pass(3);
     check("with true a second one is made on purpose", npcCount() === 2 && /Made a new NPC for Habiti in front of you/.test(said(op)), said(op));
     done();
@@ -209,12 +209,12 @@ test("place never makes a second NPC just because the first is out of sight and 
     strand(op, shop);
     fake.tickingAreaFails = "TickingAreaError: not today";
 
-    as(fromPlayer(op), "rae:shop_place", "habiti");
+    as(fromPlayer(op), "rae:shop", "place", "habiti");
     await pass(5);
     check("no second NPC", npcCount() === 1);
-    check("it says so, and offers true", /could not be brought/.test(said(op)) && /shop_place habiti true/.test(said(op)), said(op));
+    check("it says so, and offers new", /could not be brought/.test(said(op)) && /shop place habiti new/.test(said(op)), said(op));
 
-    as(fromPlayer(op), "rae:shop_place", "habiti", true);
+    as(fromPlayer(op), "rae:shop", "place", "habiti", "new");
     await pass(3);
     check("and true really does make one anyway", npcCount() === 2);
     done();
@@ -226,7 +226,7 @@ test("place makes a new NPC when the remembered place loads and holds none", asy
     const shop = shopFor(op, "Habiti");
     strand(op, shop).remove();
 
-    as(fromPlayer(op), "rae:shop_place", "habiti");
+    as(fromPlayer(op), "rae:shop", "place", "habiti");
     await pass(40);
 
     assert.equal(npcCount(), 1);
@@ -245,25 +245,25 @@ test("every command that takes a shop takes the name it was given, in any case",
     shopFor(op, "Mule Dealer", true);
     shopFor(op, "Habiti");
 
-    check("select by name", succeeded(as(fromPlayer(op), "rae:shop_select", "mule dealer")) && op.getDynamicProperty("rae:shop:selected") === "mule_dealer");
-    check("select reports the proper name", /Now building Mule Dealer/.test(as(fromPlayer(op), "rae:shop_select", "MULE DEALER").message));
-    check("info by name", /Mule Dealer \(mule_dealer\): 1 deal/.test(as(fromPlayer(op), "rae:shop_info", "Mule-Dealer").message));
-    check("info by a start of the name", /Mule Dealer \(mule_dealer\)/.test(as(fromPlayer(op), "rae:shop_info", "mule").message));
+    check("select by name", succeeded(as(fromPlayer(op), "rae:shop", "select", "mule dealer")) && op.getDynamicProperty("rae:shop:selected") === "mule_dealer");
+    check("select reports the proper name", /Now building Mule Dealer/.test(as(fromPlayer(op), "rae:shop", "select", "MULE DEALER").message));
+    check("info by name", /Mule Dealer \(mule_dealer\): 1 deal/.test(as(fromPlayer(op), "rae:shop", "info", "Mule-Dealer").message));
+    check("info by a start of the name", /Mule Dealer \(mule_dealer\)/.test(as(fromPlayer(op), "rae:shop", "info", "mule").message));
 
     script(close);
-    check("open by name", succeeded(as(fromPlayer(op), "rae:shop_open", "Mule Dealer")));
+    check("open by name", succeeded(as(fromPlayer(op), "rae:shop", "open", "Mule Dealer")));
     await pass(3);
     check("and the shop is the one shown", strip(titleOf(ui.shown[0])) === "Mule Dealer", ui.shown.map((f) => strip(titleOf(f))).join());
 
     script(close);
-    check("edit by name", succeeded(as(fromPlayer(op), "rae:shop_edit", "Mule Dealer")));
+    check("edit by name", succeeded(as(fromPlayer(op), "rae:shop", "edit", "Mule Dealer")));
     await pass(3);
     check("and the editor is the one shown", ui.shown.some((f) => strip(titleOf(f)) === "Mule Dealer" && buttonsOf(f).some((b) => /Add a deal/.test(b))));
 
-    const copy = as(fromPlayer(op), "rae:shop_copy", "Mule Dealer", "Second Mule");
+    const copy = as(fromPlayer(op), "rae:shop", "copy", "Mule Dealer", "Second Mule");
     check("copy from a shop by its name", succeeded(copy) && store.getShop("second_mule")?.trades.length === 1, JSON.stringify(copy));
     fake.advance(1);
-    check("copy says how to stand it elsewhere", /go there and run \/rae:shop_move second_mule/.test(said(op)), said(op));
+    check("copy says how to stand it elsewhere", /go there and run \/rae:shop move second_mule/.test(said(op)), said(op));
     done();
 });
 
@@ -274,11 +274,11 @@ test("a start of a name that fits two shops is refused and names them; the id st
     shopFor(op, "Stall One");
     shopFor(op, "Stall Two");
 
-    const refused = as(fromPlayer(op), "rae:shop_info", "Stall");
+    const refused = as(fromPlayer(op), "rae:shop", "info", "Stall");
     check("refused", failed(refused));
     check("names both, with ids", /Stall One \(stall_one\)/.test(refused.message) && /Stall Two \(stall_two\)/.test(refused.message), refused.message);
-    check("the id works", succeeded(as(fromPlayer(op), "rae:shop_info", "stall_two")));
-    check("so does a whole name", succeeded(as(fromPlayer(op), "rae:shop_info", "Stall One")));
+    check("the id works", succeeded(as(fromPlayer(op), "rae:shop", "info", "stall_two")));
+    check("so does a whole name", succeeded(as(fromPlayer(op), "rae:shop", "info", "Stall One")));
     done();
 });
 
@@ -289,14 +289,14 @@ test("delete takes an id or a whole name, never a start of one, and clears a sho
     shopFor(op, "Mule Dealer");
     shopFor(op, "Habiti");
 
-    check("a start of a name is refused", failed(as(fromPlayer(op), "rae:shop_delete", "Mule", true)) && store.getShop("mule_dealer") !== undefined);
-    check("a whole name deletes", succeeded(as(fromPlayer(op), "rae:shop_delete", "Mule Dealer", true)) && store.getShop("mule_dealer") === undefined);
-    check("undo by id brings it back", succeeded(as(fromPlayer(op), "rae:shop_undo", "mule_dealer")) && store.getShop("mule_dealer") !== undefined);
-    check("undo by the whole name of a shop that exists undoes its last change", /Undone for mule_dealer/.test(as(fromPlayer(op), "rae:shop_undo", "Mule Dealer").message ?? ""));
+    check("a start of a name is refused", failed(as(fromPlayer(op), "rae:shop", "delete", "Mule", "yes")) && store.getShop("mule_dealer") !== undefined);
+    check("a whole name deletes", succeeded(as(fromPlayer(op), "rae:shop", "delete", "Mule Dealer", "yes")) && store.getShop("mule_dealer") === undefined);
+    check("undo by id brings it back", succeeded(as(fromPlayer(op), "rae:shop", "undo", "mule_dealer")) && store.getShop("mule_dealer") !== undefined);
+    check("undo by the whole name of a shop that exists undoes its last change", /Undone for mule_dealer/.test(as(fromPlayer(op), "rae:shop", "undo", "Mule Dealer").message ?? ""));
 
     world.setDynamicProperty("rae:shop:def:broken", "{ no");
     store.forgetLoaded();
-    check("a shop too damaged to read is deleted by its id", succeeded(as(fromPlayer(op), "rae:shop_delete", "broken", true)));
+    check("a shop too damaged to read is deleted by its id", succeeded(as(fromPlayer(op), "rae:shop", "delete", "broken", "yes")));
     done();
 });
 
@@ -320,7 +320,7 @@ test("the list says where each NPC is, and looking at it teaches where one stand
     strand(op, stranded);
     void never;
 
-    const list = as(fromPlayer(op), "rae:shop_list").message;
+    const list = as(fromPlayer(op), "rae:shop", "list").message;
     check("a placed one says where", /placed: Placed, 0 deals, NPC: at 0, 64, 2 in the overworld/.test(list), list);
     check("one moved by hand says where it is NOW", /strayed: Strayed, 0 deals, NPC: at 300, 64, 300 in the overworld/.test(list), list);
     check("one out of sight says where it was last", /stranded: Stranded, 0 deals, NPC: not loaded, last at 900, 70, 900 in the overworld/.test(list), list);
@@ -406,5 +406,5 @@ test("copying from the editor says how to stand the copy somewhere else", async 
     await forms.openShopEditor(op, "habiti");
 
     assert.ok(store.getShop("second_stall"));
-    assert.match(said(op), /To stand it somewhere else, go there and run \/rae:shop_move second_stall/);
+    assert.match(said(op), /To stand it somewhere else, go there and run \/rae:shop move second_stall/);
 });

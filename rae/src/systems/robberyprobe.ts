@@ -1,8 +1,5 @@
 import * as game from "@minecraft/server";
-import {
-    BlockPermutation, CommandPermissionLevel, CustomCommandParamType, CustomCommandStatus, StructureSaveMode, system, world,
-    type Block, type CustomCommandOrigin, type CustomCommandResult, type Dimension, type Player, type Vector3
-} from "@minecraft/server";
+import { BlockPermutation, StructureSaveMode, system, world, type Block, type Dimension, type Player, type Vector3 } from "@minecraft/server";
 import { ROBBERY as R } from "../config/balance.js";
 import { onScriptEvent } from "../core/events.js";
 import { error, warn } from "../core/log.js";
@@ -12,7 +9,7 @@ import { format, tell } from "../core/ui.js";
 import { classOfBlockType, swingsOpen, type BlockClass } from "../logic/blockclass.js";
 
 /**
- * A measurement, not a feature: `/scriptevent rae:robbery_probe`, and the command `/rae:robbery_probe_ctx`.
+ * A measurement, not a feature: `/scriptevent rae:robbery_probe`.
  *
  * The robbery framework wires behavior onto blocks the builder built (an iron door, a chest, a button) instead of
  * adding custom blocks. Whether that works depends on how the real game reports things nothing here has ever
@@ -826,48 +823,12 @@ onScriptEvent("rae:robbery_probe", (player, message) => {
 });
 
 // ---------------------------------------------------------------------------------------------------------
-// The command-context probe: what may a custom command's callback do, and who is "the player" from an NPC?
+// The command-context probe is gone
 // ---------------------------------------------------------------------------------------------------------
 
-function describeEntity(entity: { typeId: string } | undefined): string {
-    return entity ? entity.typeId : "none";
-}
-
-function runContextProbe(origin: CustomCommandOrigin): CustomCommandResult {
-
-    const source = origin.sourceEntity;
-    const player = source?.typeId === "minecraft:player" ? (source as Player) : undefined;
-    const block = origin.sourceBlock;
-
-    result("ctx origin", `sourceType=${origin.sourceType} sourceEntity=${describeEntity(origin.sourceEntity)} initiator=${describeEntity(origin.initiator)} sourceBlock=${block ? block.typeId : "none"}`);
-
-    const dimension = (block ?? source ?? origin.initiator)?.dimension;
-    const location = block?.location ?? source?.location ?? origin.initiator?.location;
-
-    if (!dimension || !location) {
-        result("ctx battery", "skipped: no dimension or location on this origin");
-        return { status: CustomCommandStatus.Failure, message: "No location to test at: see the log." };
-    }
-
-    restrictedBattery("custom command", dimension, location, player ?? (origin.initiator?.typeId === "minecraft:player" ? (origin.initiator as Player) : undefined));
-    return { status: CustomCommandStatus.Success, message: "Context probe ran: see the content log (RESULT ctx / restricted[custom command])." };
-}
-
-system.beforeEvents.startup.subscribe((event) => {
-    try {
-        event.customCommandRegistry.registerCommand(
-            {
-                name: "rae:robbery_probe_ctx",
-                description: "Robbery probe: tries a list of world changes from inside a command and logs which are refused, plus who the origin is.",
-                permissionLevel: CommandPermissionLevel.GameDirectors,
-                mandatoryParameters: [{ name: "note", type: CustomCommandParamType.String }]
-            },
-            (origin: CustomCommandOrigin) => runContextProbe(origin)
-        );
-    } catch (err) {
-        error(LOG_SOURCE, `registering rae:robbery_probe_ctx failed: ${errorText(err)}`);
-    }
-});
+// (There used to be a command here, /rae:robbery_probe_ctx, that tried the same battery from inside a custom command and logged who
+// the origin was. That measurement is finished (CLAUDE.md has what it found: a command's callback is restricted, and a command block
+// has no entity), and the command sat among the real ones in /rae: autocomplete, so it is gone.)
 
 registerSystem({
     name: "robberyprobe",

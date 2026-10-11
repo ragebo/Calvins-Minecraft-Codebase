@@ -52,14 +52,12 @@ test("the public script-event ids are all still registered", () => {
 // Custom commands (/rae:...) are public API too: operators and command blocks type them. Every system that registers some does
 // it inside the one startup event, into ONE registry, so this loads them all together under the real registry's rules: a bare
 // name, an enum used before it exists, or two systems claiming the same name fails here instead of silently in the game.
-const PUBLIC_COMMANDS = [
-    "rae:config_get", "rae:config_list", "rae:config_reset", "rae:config_set_bool", "rae:config_set_coordinate", "rae:config_set_number",
-    "rae:robbery_probe_ctx",
-    ...["list", "info", "new", "select", "delete", "start", "stop", "reset", "activate", "wand", "edit", "view", "undo", "area", "set", "teller"].map((n) => `rae:robbery_${n}`),
-    ...["list", "info", "new", "sell", "buy", "trade", "service", "edit", "open", "select", "copy", "place", "move", "delete", "undo"].map((n) => `rae:shop_${n}`)
-];
+//
+// There are THREE, one per area (it was 38 separate ones, which filled the command bar's list): a new area gets a family
+// (core/commands.ts), not a command of its own, and an action is a word in that family's list, not an entry in this one.
+const PUBLIC_COMMANDS = ["rae:config", "rae:robbery", "rae:shop"];
 
-test("every public custom command registers together under the real registry's rules", () => {
+test("every public custom command registers together under the real registry's rules, and they are the only /rae: commands", () => {
     fake.reset();
     const warnings = [];
     const originalWarn = console.warn;
@@ -75,7 +73,8 @@ test("every public custom command registers together under the real registry's r
     const why = warnings.filter((w) => /registering/.test(w)).join(" | ");
     assert.deepEqual(missing, [], `commands that did not register: ${missing.join(", ")} ${why}`);
     assert.deepEqual(warnings.filter((w) => /registering .* failed/.test(w)), [], "a registration failed");
-    assert.ok(started.enums.has("rae:robbery_setting") && started.enums.has("rae:number_field"), "the enums are registered");
+    assert.deepEqual([...started.commands.keys()].sort(), [...PUBLIC_COMMANDS].sort(), "an extra /rae: command crept back into the command bar's list");
+    assert.ok(["rae:config_action", "rae:config_field", "rae:robbery_action", "rae:shop_action"].every((name) => started.enums.has(name)), "the enums are registered");
 });
 
 test("startup announces itself and reports no errors when the scoreboards exist", () => {

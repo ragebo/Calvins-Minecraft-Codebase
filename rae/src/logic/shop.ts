@@ -215,7 +215,7 @@ export function findShop(shops: readonly Shop[], text: string, loose: boolean): 
         if (starts.length > 1) return bad(`"${text.trim()}" fits more than one shop: ${fits(starts)}. Type more of the name, or the id.`);
     }
 
-    return bad(`there is no shop "${text.trim()}" (/rae:shop_list shows them)`);
+    return bad(`there is no shop "${text.trim()}" (/rae:shop list shows them)`);
 }
 
 // ---------------------------------------------------------------------------------------------------------

@@ -429,15 +429,15 @@ export function broughtText(shop: ShopRef, brought: Brought): string {
         case "made":
             return brought.last
                 ? `${shop.name}'s NPC was not at ${describeDestination(brought.last)} any more, so a new one is in front of you.`
-                : `Made a new NPC for ${shop.name} in front of you. None was loaded and nothing remembered where one was: if an old one is somewhere else you now have two (/rae:shop_list shows how many are loaded).`;
+                : `Made a new NPC for ${shop.name} in front of you. None was loaded and nothing remembered where one was: if an old one is somewhere else you now have two (/rae:shop list shows how many are loaded).`;
 
         case "none":
             return brought.last
-                ? `${shop.name}'s NPC is not at ${describeDestination(brought.last)} any more. /rae:shop_place ${shop.id} makes a new one here.`
-                : `No NPC of ${shop.name} is loaded and nothing remembers where it was. Go near it and try again, or /rae:shop_place ${shop.id} makes a new one here.`;
+                ? `${shop.name}'s NPC is not at ${describeDestination(brought.last)} any more. /rae:shop place ${shop.id} makes a new one here.`
+                : `No NPC of ${shop.name} is loaded and nothing remembers where it was. Go near it and try again, or /rae:shop place ${shop.id} makes a new one here.`;
 
         case "stuck":
-            return `${shop.name}'s NPC${brought.last ? ` was last at ${describeDestination(brought.last)} and` : ""} could not be brought (${brought.why}). Go near it and try again, or /rae:shop_place ${shop.id} true makes a new one here anyway.`;
+            return `${shop.name}'s NPC${brought.last ? ` was last at ${describeDestination(brought.last)} and` : ""} could not be brought (${brought.why}). Go near it and try again, or /rae:shop place ${shop.id} new makes a new one here anyway.`;
     }
 }
 

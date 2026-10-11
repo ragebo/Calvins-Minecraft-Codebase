@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { fake, fakeApi, world, load, checks, strip } from "./helpers.mjs";
 import { ui, problems, close, fill, press, script, buttonsOf, titleOf } from "./robbery-ui.mjs";
 
-// The builder's side of services and requirements (core/shopedit.ts, core/shopforms.ts, the /rae:shop_service command) and what
+// The builder's side of services and requirements (core/shopedit.ts, core/shopforms.ts, the /rae:shop service command) and what
 // a customer sees of them. A typo in an effect, an enchantment or an animal is caught when the builder types it, with what to
 // try, because the game is asked; a teleport goes where the builder stands; who may take a deal is one small form.
 
@@ -259,16 +259,16 @@ test("a customer buys an enchantment for the item in hand, or is told to hold on
 // The command
 // ---------------------------------------------------------------------------------------------------------
 
-test("/rae:shop_service opens the service screen for the shop being built", async () => {
+test("/rae:shop service opens the service screen for the shop being built", async () => {
     const ada = setup();
     const { check, done } = checks();
     const started = fake.startUp();
 
-    check("it is registered, operator-only", started.commands.has("rae:shop_service") && started.commands.get("rae:shop_service").def.permissionLevel === fakeApi.CommandPermissionLevel.GameDirectors);
+    check("it is registered, operator-only", started.commands.has("rae:shop") && started.commands.get("rae:shop").def.permissionLevel === fakeApi.CommandPermissionLevel.GameDirectors);
 
     edit.select(ada, "habiti");
     script(close);
-    const result = started.run("rae:shop_service", { sourceEntity: ada });
+    const result = started.run("rae:shop", { sourceEntity: ada }, "service");
     check("it answers at once", result.status === fakeApi.CustomCommandStatus.Success);
     check("and nothing is up until the next tick", ui.shown.length === 0);
 
@@ -279,6 +279,6 @@ test("/rae:shop_service opens the service screen for the shop being built", asyn
 
     edit.select(ada, undefined);
     store.deleteShop("habiti");
-    check("with no shop to mean it is a Failure that says so", started.run("rae:shop_service", { sourceEntity: ada }).status === fakeApi.CustomCommandStatus.Failure);
+    check("with no shop to mean it is a Failure that says so", started.run("rae:shop", { sourceEntity: ada }, "service").status === fakeApi.CustomCommandStatus.Failure);
     done();
 });

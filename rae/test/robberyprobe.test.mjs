@@ -629,45 +629,15 @@ test("a round reset turns logging, restricted mode and cancel off and forgets th
 });
 
 // ---------------------------------------------------------------------------------------------------------
-// The command-context probe
+// The command-context probe is gone
 // ---------------------------------------------------------------------------------------------------------
 
-// The validating registry: a bare name, an unregistered enum or a bad permission level fails here, as it does in the game.
-function startUp() {
-    return fake.startUp().commands;
-}
-
-test("rae:robbery_probe_ctx is an operator command that logs who the origin is and what it may change", () => {
+test("no measurement command is left among the real ones in the command bar's list", () => {
     const { check, done } = checks();
-    const p = fresh();
-    const commands = startUp();
-    const command = commands.get("rae:robbery_probe_ctx");
+    // The validating registry: a bare name, an unregistered enum or a bad permission level fails here, as it does in the game.
+    const commands = fake.startUp().commands;
 
-    check("registered", command !== undefined);
-    check("operator-only", command?.def.permissionLevel === CommandPermissionLevel.GameDirectors);
-    check("takes one text argument", command?.def.mandatoryParameters?.length === 1);
-
-    // From chat: the origin is the player.
-    const fromChat = command.callback({ sourceType: "Entity", sourceEntity: p, initiator: undefined, sourceBlock: undefined }, "hello");
-    check("chat: it succeeds", fromChat.status === CustomCommandStatus.Success, JSON.stringify(fromChat));
-    check("chat: the origin line", results().some((r) => r === "ctx origin = sourceType=Entity sourceEntity=minecraft:player initiator=none sourceBlock=none"), results().join("\n"));
-    check("chat: the battery ran", results().filter((r) => r.startsWith("restricted[custom command]")).length === 10);
-
-    // From an NPC dialogue button: the NPC is the source entity and the PLAYER is the initiator.
-    logs.length = 0;
-    const npc = fake.makeEntity({ typeId: "minecraft:npc", location: { x: 5, y: 64, z: 5 } });
-    command.callback({ sourceType: "NPCDialogue", sourceEntity: npc, initiator: p, sourceBlock: undefined }, "hello");
-    check("npc: both entities are named", results().some((r) => r === "ctx origin = sourceType=NPCDialogue sourceEntity=minecraft:npc initiator=minecraft:player sourceBlock=none"), results().join("\n"));
-
-    // From a command block: no entity at all, only a block.
-    logs.length = 0;
-    const block = putBlock("minecraft:command_block", 8, 64, 8);
-    command.callback({ sourceType: "Block", sourceEntity: undefined, initiator: undefined, sourceBlock: block }, "hello");
-    check("command block: the block is named", results().some((r) => r === "ctx origin = sourceType=Block sourceEntity=none initiator=none sourceBlock=minecraft:command_block"), results().join("\n"));
-
-    // From somewhere with no location at all.
-    logs.length = 0;
-    const nowhere = command.callback({ sourceType: "Entity", sourceEntity: undefined, initiator: undefined, sourceBlock: undefined }, "hello");
-    check("no location: it fails cleanly and says so", nowhere.status === CustomCommandStatus.Failure && results().some((r) => /ctx battery = skipped/.test(r)), JSON.stringify(nowhere));
+    check("rae:robbery_probe_ctx (the finished command-context probe) is not registered", !commands.has("rae:robbery_probe_ctx"), [...commands.keys()].join(","));
+    check("this system registers no command at all", [...commands.keys()].every((name) => !/probe/.test(name)), [...commands.keys()].join(","));
     done();
 });

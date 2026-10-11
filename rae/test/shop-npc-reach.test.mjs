@@ -324,7 +324,7 @@ test("when the area will not load, nothing is made and the builder is told where
     check("stuck, with the game's own reason and the last place", brought.how === "stuck" && /too many ticking areas/.test(brought.why) && brought.last?.x === 900, JSON.stringify(brought));
     check("NO second NPC, even though a new one was allowed", fake.entities.filter((e) => e.typeId === "minecraft:npc").length === 1 && npc.isValid);
     check("nothing left behind", fake.tickingAreas.size === 0);
-    check("the sentence says what to do", /could not be brought \(TickingAreaError: too many ticking areas\)/.test(npcs.broughtText(shop, brought)) && /shop_place habiti true/.test(npcs.broughtText(shop, brought)), npcs.broughtText(shop, brought));
+    check("the sentence says what to do", /could not be brought \(TickingAreaError: too many ticking areas\)/.test(npcs.broughtText(shop, brought)) && /shop place habiti new/.test(npcs.broughtText(shop, brought)), npcs.broughtText(shop, brought));
     done();
 });
 
@@ -420,9 +420,9 @@ test("every outcome has a sentence that says what happened and, when it did not 
     check("fetched", say({ how: "fetched", from: at }) === "Habiti's NPC came from 900, 70, 900 in the nether and is in front of you.");
     check("made where one was remembered", /was not at 900, 70, 900 in the nether any more, so a new one is in front of you/.test(say({ how: "made", last: at })));
     check("made with nothing remembered: warns there may now be two", /Made a new NPC for Habiti/.test(say({ how: "made" })) && /you now have two/.test(say({ how: "made" })));
-    check("none where it was remembered: says how to make one", /not at 900, 70, 900 in the nether any more\. \/rae:shop_place habiti makes a new one here/.test(say({ how: "none", last: at })));
+    check("none where it was remembered: says how to make one", /not at 900, 70, 900 in the nether any more\. \/rae:shop place habiti makes a new one here/.test(say({ how: "none", last: at })));
     check("none, nothing remembered: says to go near it", /nothing remembers where it was\. Go near it/.test(say({ how: "none" })));
-    check("stuck: the reason, the place, the way out", /last at 900, 70, 900 in the nether and could not be brought \(no luck\)\. Go near it and try again, or \/rae:shop_place habiti true/.test(say({ how: "stuck", why: "no luck", last: at })));
+    check("stuck: the reason, the place, the way out", /last at 900, 70, 900 in the nether and could not be brought \(no luck\)\. Go near it and try again, or \/rae:shop place habiti new/.test(say({ how: "stuck", why: "no luck", last: at })));
     check("stuck with no place known", !/last at/.test(say({ how: "stuck", why: "no luck" })));
     done();
 });

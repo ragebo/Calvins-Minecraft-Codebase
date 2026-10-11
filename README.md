@@ -282,12 +282,14 @@ PNG with your own art whenever you like.
 
 ### Live config editor
 
-Six commands — `/rae:config_list`, `_get`, `_set_number`, `_set_bool`, `_set_coordinate`, `_reset` —
-let an operator change a gun's balance numbers or a world coordinate while the game is running, with
-the change applying immediately and surviving a reload, no redeploy or relaunch needed. Each
-command's `field` argument is tab-completed by the game itself; `_set_coordinate`'s value accepts
-Bedrock's own relative syntax (`~ ~ ~` for where you're standing). Unlike every other command in this
-addon, these are real custom commands (`@minecraft/server`'s `CustomCommandRegistry`, registered in
+One command, `/rae:config`, lets an operator change a gun's balance numbers or a world coordinate while the game is
+running, with the change applying immediately and surviving a reload, no redeploy or relaunch needed. Typed alone it opens an
+editor: pick a group (a long one, such as the guns, is split by gun), or search by any words of a setting's name, and change it
+with the right control (a box for a number, a switch for on/off, three boxes for a position); the result shows at the top of the
+next screen, a refused value brings the same form back with what was typed, and a changed setting has a switch to put it back.
+Typed, it is `/rae:config set <field> <value>` (also `get`, `reset`, `list`; `help` lists them), and the `field` is
+tab-completed by the game itself; a position takes `here`, `x y z`, or `~ ~ ~` for the middle of the block you stand in. Unlike every other command in this
+addon, this is a real custom command (`@minecraft/server`'s `CustomCommandRegistry`, registered in
 `systems/liveconfig.ts`), not `/scriptevent` — which is also how "operator-only" is enforced: the
 engine refuses a non-operator before the command ever runs, rather than a hand-rolled check.
 
@@ -340,14 +342,14 @@ player; the guards wait with it. Nothing is put back under anyone except by an o
 Draw the area around the whole site, vault included: a robbery with no area is put back on time, and its screen says so. This is
 the one thing a player who falls asleep inside can abuse (the bank stays as it is), and `Put the site back now` is the way out.
 
-**Building one.** `/give @s bountysys:robbery_wand` or `/rae:robbery_wand`. Left-click the air, or sneak and right-click any block, for the menu (make a
+**Building one.** `/give @s bountysys:robbery_wand` or `/rae:robbery`. Left-click the air, or sneak and right-click any block, for the menu (make a
 robbery, settings, area, effects, run it); right-click a block that is not bound to bind it (the form suggests door,
 chest, item frame or switch from the block); right-click a bound block for its screen (rename, locks, what it waits
-for, what happens when it is done or its lock jams, loot, change its blocks, delete). `/rae:robbery_view` marks the robbery's
-blocks and area in the world and shows what the wand points at. Everything also has a command (`/rae:robbery_list`,
-`info`, `new`, `select`, `delete`, `start [test]`, `stop`, `reset`, `activate`, `edit`, `view`, `undo`, `area`,
-`set`, `teller`), all operator-only; `start`, `stop`, `reset` and `activate` take a robbery id and also work from a command block
-or an NPC button. A test run (`/rae:robbery_start <id> true`) lets anyone take part and sets no cooldown.
+for, what happens when it is done or its lock jams, loot, change its blocks, delete). `/rae:robbery view` marks the robbery's
+blocks and area in the world and shows what the wand points at. Everything also has a typed form, ONE command whose first word picks the action (`/rae:robbery list`,
+`info`, `new`, `select`, `delete`, `start [test]`, `stop`, `reset`, `activate`, `view`, `undo`, `set`, `teller`; `help` lists them, and typed
+alone it gives you the wand and opens the menu), operator-only; `start`, `stop`, `reset` and `activate` take a robbery id and also work from a command block
+or an NPC button. A test run (`/rae:robbery start <id> test`) lets anyone take part and sets no cooldown.
 
 **Item frames.** A jewelry store's cases can be item frames. The game's scripts cannot read what a frame holds (the
 installed typings have no item-frame API at all), so a frame's **loot is set on the element**, the same way as a
@@ -358,12 +360,12 @@ to take from it, with the same locks and requirements as any element; when it op
 (what does not fit falls at their feet) and the frame is emptied. A frame has one block and waits to be touched even
 when everything it waits for is done. A **punch**, which the game answers by popping the item out, can be seen but not
 stopped, so it is undone a moment later: the item that appeared is taken away, the frame is put back, and the punch
-counts as an attempt to take it. (`/rae:config_set_bool robbery.guardFramePunches false` turns that off.) When the site
+counts as an attempt to take it. (`/rae:config set robbery.guardFramePunches off` turns that off.) When the site
 is put back, **every** frame of the robbery is cleared and placed again from its saved copy as a new block (placed over the
 frame standing there, the first version filled it where nobody could see the item: the owner's report of 2026-10-08), taken
 from or not: a script cannot read
 what a frame shows, so it cannot know that one was emptied behind its back (a punch the game never reported), and
-re-placing the small saved copy is cheaper and safer than trusting a guess. `/rae:robbery_reset` does the same by hand,
+re-placing the small saved copy is cheaper and safer than trusting a guess. `/rae:robbery reset` does the same by hand,
 so it is the fix for a frame that ever looks wrong. For the same reason "Save what the frame shows now" is refused while a
 frame is waiting to be put back (it might be empty): save it once the site has been put back. A frame whose copy is
 missing is reported in the log and does not hold the robbery up. Breaking the block a frame hangs on drops the frame; that
@@ -379,14 +381,14 @@ crash or a reload is removed when its chunk loads, because a reload ends a robbe
 site that is not being robbed. Killing a guard gives nothing yet. `docs/test-cards/ROBBERY-GUARDS.md` is the run sheet.
 
 **Tellers.** To stick up a bank, a robbery can have a **teller**: an NPC or villager that a gun can hold up. Look at it (an NPC
-is best: it stands still and cannot be hurt; a villager wanders and can be shot) and run `/rae:robbery_teller Cashier`. That makes
+is best: it stands still and cannot be hurt; a villager wanders and can be shot) and run `/rae:robbery teller Cashier`. That makes
 a teller element where it stands, tags the entity, and opens its screen. From then on it is an element like any other: what it
 waits for, its locks, and what happens when it is done (a line of text, a payout, mobs that appear), and other elements can wait
 for it ("the vault door waits for the teller" opens the vault by itself once the teller is held up). A player holds it up by
 **aiming** a gun at it (the right-click aim that zooms) and keeping it in the crosshair for its hold-up time, 2 seconds unless the
 builder changes it: a bar fills on the action bar and the teller turns to face them. That counts as touching the element, so with
-nothing to wait for it **starts the robbery**, and an outlaws-only robbery turns a law player away. `/rae:config_set_bool
-robbery.holdUpNeedsAim false` lets holding any gun do instead of aiming it. `/rae:robbery_teller <name of a teller>`, run while
+nothing to wait for it **starts the robbery**, and an outlaws-only robbery turns a law player away. `/rae:config set
+robbery.holdUpNeedsAim false` lets holding any gun do instead of aiming it. `/rae:robbery teller <name of a teller>`, run while
 looking at another entity, moves that teller to it. Nobody can trade with or talk to a teller (the click is cancelled); the wand
 opens its screen; an operator who sneaks gets the game's own screen (where an NPC's skin is changed). The hold-up checks nothing
 in the way, so it works through a window, and a short reach keeps it from working across the map.
@@ -416,11 +418,11 @@ Setting up an NPC shop by hand means typing a chain of commands into each button
 
 **Who can take a deal.** Any deal can be for law players only, outlaws only, a least bounty, or both. A customer who may not take a deal (or cannot right now, like an enchantment with an empty hand) sees it greyed and is told why when they press it, with nothing taken.
 
-**Building one.** `/rae:shop_new Habiti` puts an NPC in front of you. Hold an item and `/rae:shop_sell 60` (the NPC sells it, the whole stack, for 60 coins), `/rae:shop_buy 8` (the NPC buys it from players for 8) or `/rae:shop_trade` (a small form: players hand over an item from your bag, maybe with coins, for what you hold), and `/rae:shop_service` opens the form for a service (an effect with its level and seconds, an enchantment, a tame animal, or a teleport). The same from screens: click the NPC with the robbery wand, or `/rae:shop_edit`; an operator who sneaks and clicks gets the game's own NPC screen, where its skin is changed. A shop can be copied to a new NPC (`/rae:shop_copy`), renamed, given a greeting, and deleted and undone (`/rae:shop_delete <shop> true`, `/rae:shop_undo`). The wand clicked on a plain NPC offers to make it a shop. A command means the shop you name, else the NPC you are looking at, else the last one you worked on, and a shop is named by its id or by the name you gave it, in any case ("Mule Dealer", `mule_dealer` and `mule-dealer` are one shop; a start of a name works when it fits only one; delete wants the whole name or the id). All fifteen `rae:shop_*` commands are operator-only.
+**Building one.** `/rae:shop new Habiti` puts an NPC in front of you. Hold an item and `/rae:shop sell 60` (the NPC sells it, the whole stack, for 60 coins), `/rae:shop buy 8` (the NPC buys it from players for 8) or `/rae:shop trade` (a small form: players hand over an item from your bag, maybe with coins, for what you hold), and `/rae:shop service` opens the form for a service (an effect with its level and seconds, an enchantment, a tame animal, or a teleport). The same from screens: click the NPC with the robbery wand, or `/rae:shop edit`; an operator who sneaks and clicks gets the game's own NPC screen, where its skin is changed. A shop can be copied to a new NPC (`/rae:shop copy`), renamed, given a greeting, and deleted and undone (`/rae:shop delete <shop> yes`, `/rae:shop undo`). The wand clicked on a plain NPC offers to make it a shop. A command means the shop you name, else the NPC you are looking at, else the last one you worked on, and a shop is named by its id or by the name you gave it, in any case ("Mule Dealer", `mule_dealer` and `mule-dealer` are one shop; a start of a name works when it fits only one; delete wants the whole name or the id). `/rae:shop` is ONE operator-only command whose first word picks the action (`list`, `info`, `new`, `sell`, `buy`, `trade`, `service`, `edit`, `open`, `select`, `copy`, `place`, `move`, `delete`, `undo`; `help` lists them), and typed alone it opens the list of shops.
 
-**Moving an NPC.** `/rae:shop_move Habiti` brings that shop's NPC to stand in front of you from wherever it is, even far across the map. The world remembers where each shop's NPC was last put or seen (a click, `/rae:shop_list` and every move keep it fresh), so when the NPC is in an area nobody is near, which a script cannot see, the area is loaded for a moment with a temporary ticking area, the NPC is moved to you and the area is let go. It never makes a second NPC, and with no name it lists the shops to pick from. `/rae:shop_place` is the same but makes a new NPC when the old one is truly gone (the remembered place loaded and held none); if it cannot tell, because the area will not load, it makes nothing and says so, and `/rae:shop_place <shop> true` makes one anyway. `/rae:shop_list` shows where each NPC stands (or was last seen). A shop's editor screen has "Bring its NPC here" for the same. A deal's own screen has "Who can take it". Coins are the `coins` scoreboard objective the rest of the game uses; a deal says so if it is missing.
+**Moving an NPC.** `/rae:shop move Habiti` brings that shop's NPC to stand in front of you from wherever it is, even far across the map. The world remembers where each shop's NPC was last put or seen (a click, `/rae:shop list` and every move keep it fresh), so when the NPC is in an area nobody is near, which a script cannot see, the area is loaded for a moment with a temporary ticking area, the NPC is moved to you and the area is let go. It never makes a second NPC, and with no name it lists the shops to pick from. `/rae:shop place` is the same but makes a new NPC when the old one is truly gone (the remembered place loaded and held none); if it cannot tell, because the area will not load, it makes nothing and says so, and `/rae:shop place <shop> new` makes one anyway. `/rae:shop list` shows where each NPC stands (or was last seen). A shop's editor screen has "Bring its NPC here" for the same. A deal's own screen has "Who can take it". Coins are the `coins` scoreboard objective the rest of the game uses; a deal says so if it is missing.
 
-**Reaching the shop.** A click on a shop NPC cancels the game's own dialogue and opens the shop (one screen), or, with `shop.interceptClicks` off, the NPC shows its dialogue with one button that runs `/scriptevent rae:npc shop`. The probe (`/scriptevent rae:npc_probe`, `docs/test-cards/NPC-PROBE.md`) was run in the real game on 2026-10-07 and the first way works: the cancel stops the game's own NPC screen, so the shop opens in one screen and `shop.interceptClicks` stays on. The dialogue button remains as the fallback (`/rae:config_set_bool shop.interceptClicks false` switches to it with no redeploy), and it is what an operator who sneaks and clicks lands on after the game's own NPC screen.
+**Reaching the shop.** A click on a shop NPC cancels the game's own dialogue and opens the shop (one screen), or, with `shop.interceptClicks` off, the NPC shows its dialogue with one button that runs `/scriptevent rae:npc shop`. The probe (`/scriptevent rae:npc_probe`, `docs/test-cards/NPC-PROBE.md`) was run in the real game on 2026-10-07 and the first way works: the cancel stops the game's own NPC screen, so the shop opens in one screen and `shop.interceptClicks` stays on. The dialogue button remains as the fallback (`/rae:config set shop.interceptClicks off` switches to it with no redeploy), and it is what an operator who sneaks and clicks lands on after the game's own NPC screen.
 
 **Status.** Built and covered by the tests. The NPC probe has been run in the real game (above); the shop itself, its services and its conditions were then run by the owner and worked (apart from a name above an NPC's head sometimes not showing correctly, not yet understood); typed teleport coordinates and moving an NPC from an unloaded area (the ticking-area fetch) are built and tested against the fake world only, and `docs/test-cards/NPC-SHOP.md` steps 29 to 36 are what measure them. Later phases: dialogue pages (a guidebook as data on one NPC instead of dozens), then quests that connect NPCs and robberies. The plan is in the owner's plans folder (`npc-shops-and-quests.md`).
 

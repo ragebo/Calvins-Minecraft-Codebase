@@ -16,7 +16,7 @@ import { format, tell } from "../core/ui.js";
  *
  *   1. Interception. The "before" event for a click on an entity fires before the game opens the NPC's own dialogue. Cancelling
  *      it stops that dialogue, and the shop opens in its place: one screen. (Were the game ever to ignore the cancel the player
- *      would get both screens: SHOP.interceptClicks can be turned off live, `/rae:config_set_bool shop.interceptClicks false`.)
+ *      would get both screens: SHOP.interceptClicks can be turned off live, `/rae:config set shop.interceptClicks off`.)
  *   2. The dialogue scene. A shop NPC is pointed at one static scene (dialogue/rae_npc.json) whose button runs
  *      `/scriptevent rae:npc shop`. An NPC's button runs a command as the NPC with the player who pressed it as the initiator,
  *      so this finds the shop from the NPC and the customer from the initiator. Two screens, but a documented mechanism.
@@ -114,7 +114,7 @@ onScriptEvent("rae:npc", (player, message, origin) => {
     const action = message.trim().split(/\s+/)[0] ?? "";
 
     if (!origin.fromNpc) {
-        if (player) tell(player, format("info", "rae:npc is what a shop NPC's dialogue button runs. To try a shop yourself, use /rae:shop_open <shop>."));
+        if (player) tell(player, format("info", "rae:npc is what a shop NPC's dialogue button runs. To try a shop yourself, use /rae:shop open <shop>."));
         return;
     }
 

@@ -29,8 +29,8 @@ The area is what "inside" means, so it has to cover everything a robber can stan
 | `Gold` (chest) | `Vault door` | a **price** of 25 | items `minecraft:diamond 2` | |
 | `Deposit` (chest) | `Gold` | none | items `minecraft:emerald 3` | |
 
-Then `/rae:robbery_set outlawsOnly off`, `/rae:robbery_set resetAfterSeconds 30`, and make sure the time limit and the empty-area
-fail are 0 (`/rae:robbery_set timeLimitSeconds 0`, `/rae:robbery_set failWhenEmptySeconds 0`). `/scoreboard players set @s coins 100`.
+Then `/rae:robbery set outlawsOnly off`, `/rae:robbery set resetAfterSeconds 30`, and make sure the time limit and the empty-area
+fail are 0 (`/rae:robbery set timeLimitSeconds 0`, `/rae:robbery set failWhenEmptySeconds 0`). `/scoreboard players set @s coins 100`.
 
 ## The success
 
@@ -56,7 +56,7 @@ fail are 0 (`/rae:robbery_set timeLimitSeconds 0`, `/rae:robbery_set failWhenEmp
 | # | Do | Expect |
 |---|---|---|
 | 10 | Add an **Alarm** button with no requirement: **When it is done**, **Add: win or fail the robbery**, **Failed**. Press the alarm, then the keypad. | Nothing opens: **"It is over for now."** The chests stay as they were. |
-| 11 | Put the robbery back (`/rae:robbery_reset`), then **move the Won effect from the Vault door to the Deposit chest** (so the run stays under way after the keypad), set `timeLimitSeconds 20`, press the keypad, and wait 20 seconds **without opening Gold**. | "Time is up." The run is failed: Gold can no longer be opened ("It is over for now"). The Cash chest, which was already open, still lets you take from it until the site goes back. |
+| 11 | Put the robbery back (`/rae:robbery reset`), then **move the Won effect from the Vault door to the Deposit chest** (so the run stays under way after the keypad), set `timeLimitSeconds 20`, press the keypad, and wait 20 seconds **without opening Gold**. | "Time is up." The run is failed: Gold can no longer be opened ("It is over for now"). The Cash chest, which was already open, still lets you take from it until the site goes back. |
 | 12 | Win it (keypad), then press the alarm. | **Still a success.** Nothing changes, the chests stay open to loot: the first outcome is the only one. |
 
 ## What only the real game can answer (tell me what you SEE)
@@ -69,7 +69,7 @@ fail are 0 (`/rae:robbery_set timeLimitSeconds 0`, `/rae:robbery_set failWhenEmp
    bank from resetting for everyone: `Put the site back now` is the way out)?
 4. **The chest screen:** the loot you did not take is emptied when the site goes back. Anyone with the chest open at that moment is
    inside the area, so they hold it; tell me if you ever see a chest emptied while you are looking at it.
-5. **No area set:** `/rae:robbery_info` on a robbery with no area now says "No area is set, so the site is put back on time even with
+5. **No area set:** `/rae:robbery info` on a robbery with no area now says "No area is set, so the site is put back on time even with
    people inside it". That is the old behavior; tell me if you would rather it refused to run without an area.
 
 ## Notes

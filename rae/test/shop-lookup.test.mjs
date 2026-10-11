@@ -76,7 +76,7 @@ test("nothing, blank and unknown text each get a sentence, never a guess", () =>
     check("empty", L.findShop(shops, "", true).reason === "name a shop");
     check("blank", L.findShop(shops, "   ", true).reason === "name a shop");
     const unknown = L.findShop(shops, "Nobody Here", true);
-    check("unknown says what was typed and where to look", !unknown.ok && /there is no shop "Nobody Here"/.test(unknown.reason) && /shop_list/.test(unknown.reason), unknown.reason);
+    check("unknown says what was typed and where to look", !unknown.ok && /there is no shop "Nobody Here"/.test(unknown.reason) && /shop list/.test(unknown.reason), unknown.reason);
     check("no shops at all", !L.findShop([], "habiti", true).ok);
     done();
 });

@@ -360,7 +360,7 @@ test("deleting a shop removes the NPC this addon made, lets go of one a builder 
     check("the shop is gone", store.getShop("habiti") === undefined);
     check("the NPC made here was removed", made.isValid === false);
     check("the hand-placed one stands, released", byHand.isValid === true && npcs.shopOf(byHand) === undefined);
-    check("the builder is told how to undo", /shop_undo habiti/.test(chatOf(ada)), chatOf(ada));
+    check("the builder is told how to undo", /shop undo habiti/.test(chatOf(ada)), chatOf(ada));
     check("the selection was cleared", ada.getDynamicProperty("rae:shop:selected") === undefined);
 
     check("undo brings the shop back", store.undoLast("habiti").ok && store.getShop("habiti") !== undefined);

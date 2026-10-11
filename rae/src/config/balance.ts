@@ -617,7 +617,7 @@ export const SHOP = {
     dialogueScene: "rae_npc",
     /**
      * Right-clicking a shop NPC cancels the game's own dialogue and opens the shop at once. If the game ignores the cancel the
-     * player gets both screens: switch this off (/rae:config_set_bool shop.interceptClicks false) and the dialogue scene's
+     * player gets both screens: switch this off (/rae:config set shop.interceptClicks off) and the dialogue scene's
      * button carries the click instead. Which one works is what systems/npcprobe.ts measures.
      */
     interceptClicks: true,

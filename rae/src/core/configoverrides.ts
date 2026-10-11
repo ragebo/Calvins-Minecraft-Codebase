@@ -214,6 +214,102 @@ export function hasOverride(id: string): boolean {
     return overrides.has(id);
 }
 
+/** The fields whose value differs from the compiled-in default right now. */
+export function changedFields(): EditableField[] {
+    return listFields().filter((field) => overrides.has(field.id));
+}
+
+const textOf = (value: number | boolean | Vector3): string =>
+    typeof value === "object" ? `${value.x}, ${value.y}, ${value.z}` : String(value);
+
+/** A field's current value as text: "12", "true", "120.5, 64, -33.5". */
+export function valueText(field: EditableField): string {
+    return textOf(field.get());
+}
+
+/** What a field goes back to when it is reset, as text. */
+export function defaultText(id: string): string {
+    const fallback = defaults.get(id);
+    return fallback === undefined ? "?" : textOf(fallback);
+}
+
+/** What a field accepts, in a few words, for a form's label or a refusal: "a whole number, at least 1". */
+export function rangeText(field: EditableField): string {
+
+    if (field.kind === "boolean") return "on or off";
+    if (field.kind === "vector3") return "x, y, z (or ~ ~ ~ for where you stand)";
+
+    const kind = field.kind === "integer" ? "a whole number" : "a number";
+    const low = field.min;
+    const high = field.max;
+
+    if (low !== undefined && high !== undefined) return `${kind}, ${low} to ${high}`;
+    if (low !== undefined) return `${kind}, at least ${low}`;
+    if (high !== undefined) return `${kind}, at most ${high}`;
+
+    return kind;
+}
+
+const ON_WORDS = new Map<string, boolean>([["on", true], ["off", false], ["true", true], ["false", false], ["yes", true], ["no", false], ["1", true], ["0", false]]);
+
+/** One coordinate as typed: a number, or ~ (where `base` is), or ~5 (5 from there). */
+function coordinate(text: string, base: number | undefined): number | undefined {
+
+    if (text.startsWith("~")) {
+        if (base === undefined) return undefined;
+        const rest = text.slice(1);
+        if (rest.length === 0) return base;
+        const offset = Number(rest);
+        return Number.isFinite(offset) ? base + offset : undefined;
+    }
+
+    const value = Number(text);
+
+    return text.length > 0 && Number.isFinite(value) ? value : undefined;
+}
+
+/** Where a person means when they say "here": the middle of the block their feet are in. */
+export function standingPoint(at: Vector3): Vector3 {
+    return { x: Math.floor(at.x) + 0.5, y: Math.floor(at.y), z: Math.floor(at.z) + 0.5 };
+}
+
+export type ParsedValue = { readonly ok: true; readonly value: number | boolean | Vector3 } | { readonly ok: false; readonly reason: string };
+
+/**
+ * What typed text means for this field: a number, on/off, or a position ("here" or "~ ~ ~" for where `here` is, else
+ * "x y z" or "x,y,z"). Whether it is ALLOWED (a range, the world's bounds) is setOverride's rule, not this one's.
+ */
+export function parseFieldValue(field: EditableField, text: string, here?: Vector3): ParsedValue {
+
+    const typed = text.trim();
+
+    if (field.kind === "boolean") {
+        const on = ON_WORDS.get(typed.toLowerCase());
+        return on === undefined ? { ok: false, reason: "type on or off" } : { ok: true, value: on };
+    }
+
+    if (field.kind === "vector3") {
+
+        if (typed.toLowerCase() === "here") {
+            if (!here) return { ok: false, reason: "\"here\" needs a player to stand somewhere" };
+            return { ok: true, value: { x: here.x, y: here.y, z: here.z } };
+        }
+
+        const parts = typed.split(/[\s,]+/).filter((part) => part.length > 0);
+        const values = [coordinate(parts[0] ?? "", here?.x), coordinate(parts[1] ?? "", here?.y), coordinate(parts[2] ?? "", here?.z)];
+
+        if (parts.length !== 3 || values.some((value) => value === undefined)) return { ok: false, reason: `type ${rangeText(field)}` };
+
+        return { ok: true, value: { x: values[0] as number, y: values[1] as number, z: values[2] as number } };
+    }
+
+    const value = Number(typed);
+
+    if (typed.length === 0 || !Number.isFinite(value)) return { ok: false, reason: `type ${rangeText(field)}` };
+
+    return { ok: true, value };
+}
+
 // ---------------------------------------------------------------------------
 // GUNS — every numeric/boolean balance field on every gun
 // ---------------------------------------------------------------------------

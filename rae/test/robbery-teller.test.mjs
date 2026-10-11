@@ -178,7 +178,7 @@ test("a teller is described to the builder, and a block is told it cannot be one
     check("where it stands and how it is held up", /At: 100, 65, 172/.test(lines) && /Held up by: keeping a gun aimed at it for 1 second$/m.test(lines), lines);
     check("in the plural for more", M.describeElement(ok(L.updateElement(r, teller.id, { holdSeconds: 3 })), { ...teller, holdSeconds: 3 }).map(strip).join("\n").includes("for 3 seconds"));
     check("its noun", M.nounOf("teller") === "teller");
-    check("a block cannot be one, and the message says what to do instead", /is an NPC or a villager, not stone: look at it and use \/rae:robbery_teller/.test(M.whyBlockCannotBe("teller", "minecraft:stone") ?? ""), M.whyBlockCannotBe("teller", "minecraft:stone"));
+    check("a block cannot be one, and the message says what to do instead", /is an NPC or a villager, not stone: look at it and use \/rae:robbery teller/.test(M.whyBlockCannotBe("teller", "minecraft:stone") ?? ""), M.whyBlockCannotBe("teller", "minecraft:stone"));
     done();
 });
 
@@ -773,6 +773,6 @@ test("giving a teller to another entity is done with the command, and the screen
     script(press("Use another NPC or villager"));
     await F.openElementMenu(op, "bank", built.teller.id);
 
-    check("told what to do, with the teller's own name", said(op).some((m) => /Look at the NPC or villager that should be Teller, then run \/rae:robbery_teller Teller/.test(m)), said(op).join(" | "));
+    check("told what to do, with the teller's own name", said(op).some((m) => /Look at the NPC or villager that should be Teller, then run \/rae:robbery teller "Teller"/.test(m)), said(op).join(" | "));
     done();
 });

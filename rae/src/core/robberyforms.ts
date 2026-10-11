@@ -439,7 +439,7 @@ async function elementScreen(player: Player, robberyId: string, elementId: strin
             ...(element.kind === "teller"
                 ? [
                     { label: `Hold-up time (${element.holdSeconds} s)`, run: () => holdTimeForm(player, robberyId, elementId) },
-                    { label: "Use another NPC or villager", run: () => { tell(player, ok(`Look at the NPC or villager that should be ${element.name}, then run /rae:robbery_teller ${element.name}`)); closeAllMenus(player); } }
+                    { label: "Use another NPC or villager", run: () => { tell(player, ok(`Look at the NPC or villager that should be ${element.name}, then run /rae:robbery teller "${element.name}"`)); closeAllMenus(player); } }
                 ]
                 : [{ label: "Change its blocks", run: () => blocksScreen(player, robberyId, elementId) }]),
             { label: "Delete it", run: async () => { if (await deleteElementConfirmed(player, robberyId, elementId)) return "back"; } },

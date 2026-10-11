@@ -349,10 +349,10 @@ async function swapForm(player: Player, shopId: string): Promise<void> {
     report(player, outcome, outcome.ok && outcome.trade ? `Added: ${describeTrade(outcome.trade)}.` : "Added.");
 }
 
-/** The trade form on its own (the /rae:shop_trade command). */
+/** The trade form on its own (the /rae:shop trade command). */
 export const openSwapDeal = (player: Player, shopId: string): Promise<void> => screens.menuFor(player, () => swapForm(player, shopId));
 
-/** The service screen on its own (the /rae:shop_service command). */
+/** The service screen on its own (the /rae:shop service command). */
 export const openServiceScreen = (player: Player, shopId: string): Promise<void> => screens.menuFor(player, () => serviceScreen(player, shopId));
 
 async function serviceScreen(player: Player, shopId: string): Promise<void> {
@@ -570,7 +570,7 @@ async function copyForm(player: Player, shopId: string): Promise<void> {
     }
 
     spawnShopNpc(player, copy.shop);
-    tell(player, ok(`Made ${copy.shop.name} (${copy.shop.id}) with the same deals, and put its NPC in front of you. To stand it somewhere else, go there and run /rae:shop_move ${copy.shop.id}. /rae:shop_edit opens it.`));
+    tell(player, ok(`Made ${copy.shop.name} (${copy.shop.id}) with the same deals, and put its NPC in front of you. To stand it somewhere else, go there and run /rae:shop move ${copy.shop.id}. /rae:shop edit ${copy.shop.id} opens it.`));
 }
 
 /**
@@ -637,7 +637,7 @@ async function deleteConfirmed(player: Player, shopId: string): Promise<boolean>
     const shop = getShop(shopId);
     if (!shop) return false;
 
-    if (!(await confirmForm(player, shop.name, `Delete ${shop.name} and ${shop.trades.length} deal${shop.trades.length === 1 ? "" : "s"}? Its NPC goes too. /rae:shop_undo brings the shop back.`, "Delete"))) return false;
+    if (!(await confirmForm(player, shop.name, `Delete ${shop.name} and ${shop.trades.length} deal${shop.trades.length === 1 ? "" : "s"}? Its NPC goes too. /rae:shop undo brings the shop back.`, "Delete"))) return false;
 
     const gone = deleteShop(shopId);
 
@@ -650,7 +650,7 @@ async function deleteConfirmed(player: Player, shopId: string): Promise<boolean>
 
     if (selectedId(player) === shopId) select(player, undefined);
 
-    tell(player, ok(`Deleted ${shop.name}${removed > 0 ? " and its NPC" : ""}. /rae:shop_undo ${shopId} brings the shop back (/rae:shop_place puts its NPC out again).`));
+    tell(player, ok(`Deleted ${shop.name}${removed > 0 ? " and its NPC" : ""}. /rae:shop undo ${shopId} brings the shop back (/rae:shop place puts its NPC out again).`));
 
     return true;
 }
@@ -668,7 +668,7 @@ export function openShopPicker(player: Player): Promise<void> {
                 ...stored.map((entry): Action => ({
                     label: entry.ok ? `${entry.value.name} (${entry.id})` : `${entry.id} (cannot be read)`,
                     run: async () => {
-                        if (!entry.ok) { tell(player, warn(`${entry.id} cannot be read: ${entry.problem}. /rae:shop_delete ${entry.id} true clears it, and /rae:shop_undo brings it back.`)); return undefined; }
+                        if (!entry.ok) { tell(player, warn(`${entry.id} cannot be read: ${entry.problem}. /rae:shop delete ${entry.id} yes clears it, and /rae:shop undo brings it back.`)); return undefined; }
                         select(player, entry.id);
                         await screens.run(player, () => editorScreen(player, entry.id, BACK));
                         return undefined;
@@ -697,7 +697,7 @@ async function newShopForm(player: Player): Promise<void> {
     }
 
     spawnShopNpc(player, made.shop);
-    tell(player, ok(`Made ${made.shop.name} (${made.shop.id}) and put its NPC in front of you. Hold an item and use /rae:shop_sell <coins> to stock it.`));
+    tell(player, ok(`Made ${made.shop.name} (${made.shop.id}) and put its NPC in front of you. Hold an item and use /rae:shop sell <coins> to stock it.`));
 }
 
 /** The wand clicked on an NPC that is not a shop yet: offers to make it one. */

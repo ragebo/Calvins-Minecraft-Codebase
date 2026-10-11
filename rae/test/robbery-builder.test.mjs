@@ -3,7 +3,7 @@ import { fake, fakeApi, world, load, checks, strip, useBlock } from "./helpers.m
 import { L, SITE, at, bank, buildSite, ok } from "./robbery-fixtures.mjs";
 import { buttonsOf, close, fill, press, problems, script, titleOf, ui } from "./robbery-ui.mjs";
 
-// systems/robberybuilder.ts: the wand, the commands, the builder view. The contract: every command is operator-only and
+// systems/robberybuilder.ts: the wand, the command, the builder view. The contract: the one command is operator-only and
 // registers under the real registry's rules; a command callback runs RESTRICTED, so it answers honestly from what it can read
 // (a Failure the player sees) and defers only the part that changes the world; a command block (no player) can start, stop,
 // reset and activate by id; the wand is cancelled at once and opens its screen a tick later; a click in the air is the menu but
@@ -61,57 +61,76 @@ function commands() {
 // Registration
 // ---------------------------------------------------------------------------------------------------------
 
-test("every command registers under the real registry's rules, operator-only, with the right parameters", () => {
+test("the whole robbery surface is ONE command, registered under the real registry's rules, operator-only", () => {
     setup();
     const { check, done } = checks();
     const { commands: registered, enums } = commands();
 
-    const names = [...registered.keys()].filter((n) => n.startsWith("rae:robbery_") && n !== "rae:robbery_probe_ctx").sort();
-    check("exactly these sixteen", names.join(",") === [
-        "list", "info", "new", "select", "delete", "start", "stop", "reset", "activate", "wand", "edit", "view", "undo", "area", "set", "teller"
-    ].map((n) => `rae:robbery_${n}`).sort().join(","), names.join(","));
+    const names = [...registered.keys()].filter((n) => n.startsWith("rae:robbery"));
+    check("one command, not sixteen", names.join(",") === "rae:robbery", names.join(","));
 
-    check("all operator-only", names.every((n) => registered.get(n).def.permissionLevel === CommandPermissionLevel.GameDirectors));
-    check("the setting enum is registered and namespaced, with every setting", enums.get("rae:robbery_setting")?.join() === L.SETTING_KEYS.join(), String(enums.get("rae:robbery_setting")));
+    const def = registered.get("rae:robbery").def;
+    check("operator-only", def.permissionLevel === CommandPermissionLevel.GameDirectors);
+    check("nothing is mandatory: typed alone it opens the menu", (def.mandatoryParameters ?? []).length === 0);
+    check("an action list, then two text slots", def.optionalParameters.map((p) => p.type).join() === [CustomCommandParamType.Enum, CustomCommandParamType.String, CustomCommandParamType.String].join(), JSON.stringify(def.optionalParameters));
+    check("the action list is a namespaced enum", def.optionalParameters[0].name === "rae:robbery_action" && enums.has("rae:robbery_action"));
 
-    const set = registered.get("rae:robbery_set").def;
-    check("set takes the setting enum then a value", set.mandatoryParameters[0].name === "rae:robbery_setting" && set.mandatoryParameters[0].type === CustomCommandParamType.Enum && set.mandatoryParameters[1].type === CustomCommandParamType.String);
-    check("start takes a robbery and an optional test flag", registered.get("rae:robbery_start").def.mandatoryParameters.length === 1 && registered.get("rae:robbery_start").def.optionalParameters[0].type === CustomCommandParamType.Boolean);
-    check("area takes two locations", registered.get("rae:robbery_area").def.mandatoryParameters.every((p) => p.type === CustomCommandParamType.Location));
-    check("every command has a description", names.every((n) => registered.get(n).def.description.length > 10));
+    const actions = enums.get("rae:robbery_action");
+    check("with every action, and help", ["list", "info", "new", "select", "delete", "start", "stop", "reset", "activate", "teller", "view", "undo", "set", "help"].every((a) => actions.includes(a)), String(actions));
+    check("and none of the ones the menu or the bare command replaced", !["wand", "edit", "area"].some((a) => actions.includes(a)), String(actions));
+    check("it has a description", def.description.length > 10);
     done();
 });
 
-test("one command that fails to register does not take the others down", () => {
+test("a registration mistake is reported to the log and does not throw out of the startup callback", () => {
     setup();
     const { check, done } = checks();
-    const seen = new Set();
     const registry = {
         registerEnum() {},
-        registerCommand(def) {
-            if (def.name === "rae:robbery_info") throw new Error("NamespaceNameError (pretend)");
-            seen.add(def.name);
-        }
+        registerCommand() { throw new Error("NamespaceNameError (pretend)"); }
     };
 
-    fake.reset();
-    const { system } = fakeApi;
-    system.beforeEvents.startup.emit({ customCommandRegistry: registry });
+    const logged = [];
+    const warn = console.warn;
+    console.warn = (...args) => logged.push(args.join(" "));
 
-    check("info failed, and every other one still registered", !seen.has("rae:robbery_info") && seen.has("rae:robbery_list") && seen.has("rae:robbery_set"), [...seen].join());
+    let threw = false;
+
+    try {
+        fake.reset();
+        fakeApi.system.beforeEvents.startup.emit({ customCommandRegistry: registry });
+    } catch {
+        threw = true;
+    } finally {
+        console.warn = warn;
+    }
+
+    check("it did not throw", !threw);
+    check("the log heard of it", logged.some((l) => /registering rae:robbery failed: NamespaceNameError/.test(l)), logged.join("|"));
     done();
 });
 
-test("a member is turned away from every command by the engine, before any callback runs", () => {
+test("a member is turned away from the command by the engine, before any callback runs", () => {
     setup();
     const { check, done } = checks();
-    const { as, commands: registered } = commands();
+    const { as } = commands();
     const mem = member();
 
-    const refused = [...registered.keys()].filter((n) => n.startsWith("rae:robbery_") && n !== "rae:robbery_probe_ctx")
-        .map((n) => as(fromPlayer(mem), n, ...Array(registered.get(n).def.mandatoryParameters?.length ?? 0).fill("x")).refused);
+    check("refused for permission, bare and with an action", as(fromPlayer(mem), "rae:robbery").refused === "permission" && as(fromPlayer(mem), "rae:robbery", "list").refused === "permission");
+    done();
+});
 
-    check("all refused for permission", refused.every((r) => r === "permission"), refused.join());
+test("an action the list does not hold is refused by the engine, and help lists every action with what follows it", () => {
+    setup();
+    const { check, done } = checks();
+    const { as } = commands();
+    const op = operator();
+
+    check("an action that is not one is a syntax error", as(fromPlayer(op), "rae:robbery", "explode").refused === "syntax");
+
+    const help = as(fromPlayer(op), "rae:robbery", "help").message;
+    check("the bare command is described", /\/rae:robbery {2}gives you the wand/.test(help), help);
+    check("each action with its words", /\/rae:robbery start \[robbery\] \[test\]/.test(help) && /\/rae:robbery set <setting> <value>/.test(help) && /\/rae:robbery activate <robbery> <element>/.test(help), help);
     done();
 });
 
@@ -125,20 +144,20 @@ test("list tells empty from ready from not ready from running from unreadable", 
     const { as } = commands();
     const op = operator();
 
-    check("nothing yet: how to start", /No robberies yet/.test(as(fromPlayer(op), "rae:robbery_list").message));
+    check("nothing yet: how to start", /No robberies yet/.test(as(fromPlayer(op), "rae:robbery", "list").message));
 
     save(bank("bank").r);
     save(ok(L.newRobbery("empty", "Empty", "overworld")));
     world.setDynamicProperty("rae:robbery:def:broken", "{ no");
     S.forgetLoaded();
 
-    const text = strip(as(fromPlayer(op), "rae:robbery_list").message);
+    const text = strip(as(fromPlayer(op), "rae:robbery", "list").message);
     check("a ready one", /bank: Saint Diego Bank, 3 elements, ready/.test(text), text);
     check("a not-ready one says how much is missing", /empty: Empty, 0 elements, not ready \(\d things? missing\)/.test(text), text);
     check("an unreadable one says why, in red", /broken: cannot be read/.test(text), text);
 
     Run.startRobbery("bank", { test: true });
-    check("a running one", /bank: .*running/.test(strip(as(fromPlayer(op), "rae:robbery_list").message)));
+    check("a running one", /bank: .*running/.test(strip(as(fromPlayer(op), "rae:robbery", "list").message)));
     done();
 });
 
@@ -154,7 +173,7 @@ test("list says a robbery that was won is still open to loot, and one that faile
     fake.advance(80);
 
     check("it is won", Run.viewOf("bank")?.result === "win", JSON.stringify(Run.viewOf("bank")));
-    const won = strip(as(fromPlayer(op), "rae:robbery_list").message);
+    const won = strip(as(fromPlayer(op), "rae:robbery", "list").message);
     check("the list says won and open, not 'ending'", /bank: .*won, still open to loot/.test(won) && !/ending/.test(won), won);
     done();
 });
@@ -166,15 +185,15 @@ test("info shows the robbery and its elements; raw writes a backup to the log", 
     const op = operator();
     save(bank("bank").r);
 
-    const info = strip(as(fromPlayer(op), "rae:robbery_info", "bank").message);
+    const info = strip(as(fromPlayer(op), "rae:robbery", "info", "bank").message);
     check("the robbery and each element", /Saint Diego Bank \(bank, overworld\)/.test(info) && /Keypad \(switch, e1\)/.test(info) && /Vault door \(door, e2\)/.test(info) && /Lockbox \(chest, e3\)/.test(info), info);
-    check("an unknown id", as(fromPlayer(op), "rae:robbery_info", "ghost").status === CustomCommandStatus.Failure);
+    check("an unknown id", as(fromPlayer(op), "rae:robbery", "info", "ghost").status === CustomCommandStatus.Failure);
 
     const logged = [];
     const warn = console.warn;
     console.warn = (...args) => logged.push(args.join(" "));
     let raw;
-    try { raw = as(fromPlayer(op), "rae:robbery_info", "bank", true); } finally { console.warn = warn; }
+    try { raw = as(fromPlayer(op), "rae:robbery", "info", "bank", "raw"); } finally { console.warn = warn; }
     check("raw says how much it wrote", /Written to the content log \(\d+ characters\)/.test(raw.message), raw.message);
     check("and the log holds the saved text exactly", logged.some((l) => l.includes(`bank saved as: ${S.rawText("bank")}`)));
     done();
@@ -186,11 +205,11 @@ test("new makes a robbery where the player stands and selects it; from a command
     const { as } = commands();
     const op = operator();
 
-    const made = as(fromPlayer(op), "rae:robbery_new", "bank", "Saint Diego Bank");
+    const made = as(fromPlayer(op), "rae:robbery", "new", "Saint Diego Bank", "bank");
     check("made", made.status === CustomCommandStatus.Success && S.getRobbery("bank")?.name === "Saint Diego Bank", JSON.stringify(made));
     check("and selected for her", E.selectedRobbery(op)?.id === "bank");
-    check("a clash is refused with the reason", as(fromPlayer(op), "rae:robbery_new", "bank", "Again").status === CustomCommandStatus.Failure);
-    check("a command block cannot, because there is no dimension to take", /run this as a player/.test(as(fromCommandBlock(), "rae:robbery_new", "x1", "X").message));
+    check("a clash is refused with the reason", as(fromPlayer(op), "rae:robbery", "new", "Again", "bank").status === CustomCommandStatus.Failure);
+    check("a command block cannot, because there is no dimension to take", /run this as a player/.test(as(fromCommandBlock(), "rae:robbery", "new", "X", "x1").message));
     done();
 });
 
@@ -202,22 +221,22 @@ test("select chooses what the builder works on; delete needs the confirmation, s
     save(bank("bank").r);
     save(ok(L.newRobbery("mine", "The Mine", "overworld")));
 
-    check("select works", as(fromPlayer(op), "rae:robbery_select", "mine").status === CustomCommandStatus.Success && E.selectedRobbery(op).id === "mine");
-    check("an unknown one does not", as(fromPlayer(op), "rae:robbery_select", "ghost").status === CustomCommandStatus.Failure);
+    check("select works", as(fromPlayer(op), "rae:robbery", "select", "mine").status === CustomCommandStatus.Success && E.selectedRobbery(op).id === "mine");
+    check("an unknown one does not", as(fromPlayer(op), "rae:robbery", "select", "ghost").status === CustomCommandStatus.Failure);
 
     Run.activateElement("bank", "Keypad");
     check("the keypad's door is open", openBit(SITE.doorLow) === true);
 
-    check("delete without true is refused", as(fromPlayer(op), "rae:robbery_delete", "bank", false).status === CustomCommandStatus.Failure && S.getRobbery("bank") !== undefined);
-    check("delete of an unknown one is refused", as(fromPlayer(op), "rae:robbery_delete", "ghost", true).status === CustomCommandStatus.Failure);
+    check("delete without true is refused", as(fromPlayer(op), "rae:robbery", "delete", "bank", "no").status === CustomCommandStatus.Failure && S.getRobbery("bank") !== undefined);
+    check("delete of an unknown one is refused", as(fromPlayer(op), "rae:robbery", "delete", "ghost", "yes").status === CustomCommandStatus.Failure);
 
-    const gone = as(fromPlayer(op), "rae:robbery_delete", "bank", true);
+    const gone = as(fromPlayer(op), "rae:robbery", "delete", "bank", "yes");
     check("delete with true works and says the site is put back", gone.status === CustomCommandStatus.Success && /put back|shut/.test(gone.message) && S.getRobbery("bank") === undefined, JSON.stringify(gone));
 
     fake.advance(R.janitorEvery + R.tickEvery + R.tickEvery);
     check("the janitor shut the open door of the deleted robbery", openBit(SITE.doorLow) === false && S.dirtyCount() === 0);
 
-    check("undo brings it back", as(fromPlayer(op), "rae:robbery_undo", "bank").status === CustomCommandStatus.Success && S.getRobbery("bank") !== undefined);
+    check("undo brings it back", as(fromPlayer(op), "rae:robbery", "undo", "bank").status === CustomCommandStatus.Success && S.getRobbery("bank") !== undefined);
     done();
 });
 
@@ -234,9 +253,9 @@ test("start answers honestly at once and does its work a tick later, outside res
     state.update(robber, { role: "outlaw" });
     save(bank("bank").r);
 
-    check("an unknown robbery fails now", /there is no robbery ghost/.test(as(fromPlayer(op), "rae:robbery_start", "ghost").message));
+    check("an unknown robbery fails now", /there is no robbery ghost/.test(as(fromPlayer(op), "rae:robbery", "start", "ghost").message));
 
-    const started = as(fromPlayer(op), "rae:robbery_start", "bank");
+    const started = as(fromPlayer(op), "rae:robbery", "start", "bank");
     check("it answers success now", started.status === CustomCommandStatus.Success && /Starting bank/.test(started.message), JSON.stringify(started));
     check("but nothing has happened yet: a callback may not change the world", Run.runningIds().length === 0);
 
@@ -244,7 +263,7 @@ test("start answers honestly at once and does its work a tick later, outside res
     check("a tick later it is running", Run.runningIds().join() === "bank");
     check("and the engine's restricted mode was never tripped", !said(op).some((m) => /cannot be used in restricted execution/.test(m)));
 
-    const again = as(fromPlayer(op), "rae:robbery_start", "bank");
+    const again = as(fromPlayer(op), "rae:robbery", "start", "bank");
     check("starting a robbery that is under way fails now, with the reason", again.status === CustomCommandStatus.Failure && /already under way/.test(again.message), JSON.stringify(again));
     done();
 });
@@ -256,14 +275,14 @@ test("a test run starts for anyone; a refusal in the deferred part (the robbery 
     const op = operator();
     save(bank("bank").r);
 
-    as(fromPlayer(op), "rae:robbery_start", "bank", true);
+    as(fromPlayer(op), "rae:robbery", "start", "bank", "test");
     fake.advance(1);
     check("a test run: marked as one", Run.viewOf("bank")?.test === true && said(op).some((m) => /Test run/.test(m)));
 
     Run.stopRobbery("bank");
     Run.resetSiteNow("bank");
 
-    as(fromPlayer(op), "rae:robbery_start", "bank");
+    as(fromPlayer(op), "rae:robbery", "start", "bank");
     S.deleteRobbery("bank");
     fake.advance(1);
     check("it did not start, and she was told why", Run.runningIds().length === 0 && said(op).some((m) => /bank did not start: there is no robbery bank/.test(m)), said(op).join("|"));
@@ -276,29 +295,29 @@ test("a command block (no player) can start, activate, stop and reset by id, and
     const { as } = commands();
     save(bank("bank").r);
 
-    const start = as(fromCommandBlock(), "rae:robbery_start", "bank", true);
+    const start = as(fromCommandBlock(), "rae:robbery", "start", "bank", "test");
     check("start from a command block works", start.status === CustomCommandStatus.Success, JSON.stringify(start));
     fake.advance(1);
     check("it is running", Run.runningIds().join() === "bank");
 
-    check("activating an element that waits on another fails now, naming what it waits on", /Vault door waits on Keypad/.test(as(fromCommandBlock(), "rae:robbery_activate", "bank", "Vault door").message));
-    check("activate by name", as(fromCommandBlock(), "rae:robbery_activate", "bank", "Keypad").status === CustomCommandStatus.Success);
+    check("activating an element that waits on another fails now, naming what it waits on", /Vault door waits on Keypad/.test(as(fromCommandBlock(), "rae:robbery", "activate", "bank", "Vault door").message));
+    check("activate by name", as(fromCommandBlock(), "rae:robbery", "activate", "bank", "Keypad").status === CustomCommandStatus.Success);
     fake.advance(1);
     check("the keypad's door opened", openBit(SITE.doorLow) === true);
 
-    check("activating one that is done fails now", /already done/.test(as(fromCommandBlock(), "rae:robbery_activate", "bank", "Keypad").message));
+    check("activating one that is done fails now", /already done/.test(as(fromCommandBlock(), "rae:robbery", "activate", "bank", "Keypad").message));
 
-    check("stop works", as(fromCommandBlock(), "rae:robbery_stop", "bank").status === CustomCommandStatus.Success);
+    check("stop works", as(fromCommandBlock(), "rae:robbery", "stop", "bank").status === CustomCommandStatus.Success);
     fake.advance(1);
     check("it stopped", Run.runningIds().length === 0);
-    check("stopping what is not running fails now", /not under way/.test(as(fromCommandBlock(), "rae:robbery_stop", "bank").message));
+    check("stopping what is not running fails now", /not under way/.test(as(fromCommandBlock(), "rae:robbery", "stop", "bank").message));
 
-    check("reset works", as(fromCommandBlock(), "rae:robbery_reset", "bank").status === CustomCommandStatus.Success);
+    check("reset works", as(fromCommandBlock(), "rae:robbery", "reset", "bank").status === CustomCommandStatus.Success);
     fake.advance(1);
     check("the door is shut", openBit(SITE.doorLow) === false && S.dirtyCount() === 0);
-    check("reset of an unknown robbery fails", as(fromCommandBlock(), "rae:robbery_reset", "ghost").status === CustomCommandStatus.Failure);
+    check("reset of an unknown robbery fails", as(fromCommandBlock(), "rae:robbery", "reset", "ghost").status === CustomCommandStatus.Failure);
 
-    check("with no player and no id, a command that needs one says so", /name the robbery/.test(as(fromCommandBlock(), "rae:robbery_undo").message));
+    check("with no player and no id, a command that needs one says so", /name the robbery/.test(as(fromCommandBlock(), "rae:robbery", "undo").message));
     done();
 });
 
@@ -309,7 +328,7 @@ test("from an NPC's dialogue button, the player who pressed it is the actor", ()
     const op = operator();
     save(bank("bank").r);
 
-    as(fromNpc(op), "rae:robbery_start", "bank", true);
+    as(fromNpc(op), "rae:robbery", "start", "bank", "test");
     fake.advance(1);
 
     check("it started with her as the one who started it (the test-run line went to her)", Run.runningIds().join() === "bank" && said(op).some((m) => /Test run/.test(m)));
@@ -329,7 +348,7 @@ test("reset reports how many blocks it put back, and how many wait for their chu
     fake.setUnloaded("overworld", []);
     fake.setUnloaded("overworld", [{ from: { x: 107, y: 0, z: 175 }, to: { x: 107, y: 100, z: 175 } }]);
 
-    as(fromPlayer(op), "rae:robbery_reset", "bank");
+    as(fromPlayer(op), "rae:robbery", "reset", "bank");
     fake.advance(1);
 
     check("she was told both counts", said(op).some((m) => /bank: put back 2 blocks; 1 more wait for their chunk to load/.test(m)), said(op).join("|"));
@@ -337,7 +356,7 @@ test("reset reports how many blocks it put back, and how many wait for their chu
 });
 
 // ---------------------------------------------------------------------------------------------------------
-// Settings and area by command
+// Settings by command
 // ---------------------------------------------------------------------------------------------------------
 
 test("set changes a setting of the selected robbery: a switch by on/off, a time by seconds, and a wrong value says why", () => {
@@ -348,31 +367,19 @@ test("set changes a setting of the selected robbery: a switch by on/off, a time 
     save(bank("bank").r);
     E.select(op, "bank");
 
-    check("a time", as(fromPlayer(op), "rae:robbery_set", "cooldownSeconds", "120").status === CustomCommandStatus.Success && S.getRobbery("bank").settings.cooldownSeconds === 120);
-    check("a switch", as(fromPlayer(op), "rae:robbery_set", "protect", "off").status === CustomCommandStatus.Success && S.getRobbery("bank").settings.protect === false);
-    check("a switch given a number says so", /protect is on or off/.test(as(fromPlayer(op), "rae:robbery_set", "protect", "30").message));
-    check("a time given a word says so", /cooldownSeconds must be a whole number/.test(as(fromPlayer(op), "rae:robbery_set", "cooldownSeconds", "soon").message));
-    check("a setting that is not one is refused by the engine's own enum", as(fromPlayer(op), "rae:robbery_set", "colour", "red").refused === "syntax");
+    check("a time", as(fromPlayer(op), "rae:robbery", "set", "cooldownSeconds", "120").status === CustomCommandStatus.Success && S.getRobbery("bank").settings.cooldownSeconds === 120);
+    check("a switch", as(fromPlayer(op), "rae:robbery", "set", "protect", "off").status === CustomCommandStatus.Success && S.getRobbery("bank").settings.protect === false);
+    check("a switch given a number says so", /protect is on or off/.test(as(fromPlayer(op), "rae:robbery", "set", "protect", "30").message));
+    check("a time given a word says so", /cooldownSeconds must be a whole number/.test(as(fromPlayer(op), "rae:robbery", "set", "cooldownSeconds", "soon").message));
+    const unknown = as(fromPlayer(op), "rae:robbery", "set", "colour", "red");
+    check("a setting that is not one is refused, and every setting is named", unknown.status === CustomCommandStatus.Failure && /there is no setting colour/.test(unknown.message) && L.SETTING_KEYS.every((key) => unknown.message.includes(key)), unknown.message);
+    check("a setting typed in another case is still found", as(fromPlayer(op), "rae:robbery", "set", "COOLDOWNSECONDS", "60").status === CustomCommandStatus.Success && S.getRobbery("bank").settings.cooldownSeconds === 60);
+    check("a setting with no value says what it takes", /needs a value/.test(as(fromPlayer(op), "rae:robbery", "set", "protect").message));
 
     save(ok(L.newRobbery("mine", "The Mine", "overworld")));
     const newcomer = operator("Newcomer");
-    check("with several robberies and none selected, it says to select one", /select a robbery first/.test(as(fromPlayer(newcomer), "rae:robbery_set", "protect", "on").message));
-    check("from a command block there is no selection to fall back on", /name the robbery/.test(as(fromCommandBlock(), "rae:robbery_set", "protect", "on").message));
-    done();
-});
-
-test("area takes two corners in any order and normalises them", () => {
-    setup();
-    const { check, done } = checks();
-    const { as } = commands();
-    const op = operator();
-    save(ok(L.newRobbery("bank", "Bank", "overworld")));
-    E.select(op, "bank");
-
-    const result = as(fromPlayer(op), "rae:robbery_area", { x: 50.9, y: 80, z: 10 }, { x: 10, y: 60.2, z: 30 });
-    check("set", result.status === CustomCommandStatus.Success, JSON.stringify(result));
-    check("floored and normalised", JSON.stringify(S.getRobbery("bank").area) === JSON.stringify({ min: [10, 60, 10], max: [50, 80, 30] }), JSON.stringify(S.getRobbery("bank").area));
-    check("not a location is refused by the engine", as(fromPlayer(op), "rae:robbery_area", "here", "there").refused === "syntax");
+    check("with several robberies and none selected, it says to select one", /select a robbery first/.test(as(fromPlayer(newcomer), "rae:robbery", "set", "protect", "on").message));
+    check("from a command block there is no selection to fall back on", /name the robbery/.test(as(fromCommandBlock(), "rae:robbery", "set", "protect", "on").message));
     done();
 });
 
@@ -384,10 +391,10 @@ test("undo goes back one change and, run again, forward", () => {
     save(ok(L.newRobbery("bank", "Bank", "overworld")));
     E.select(op, "bank");
 
-    as(fromPlayer(op), "rae:robbery_set", "cooldownSeconds", "99");
+    as(fromPlayer(op), "rae:robbery", "set", "cooldownSeconds", "99");
     check("changed", S.getRobbery("bank").settings.cooldownSeconds === 99);
-    check("undone", as(fromPlayer(op), "rae:robbery_undo").status === CustomCommandStatus.Success && S.getRobbery("bank").settings.cooldownSeconds === R.defaultCooldownSeconds);
-    check("redone", as(fromPlayer(op), "rae:robbery_undo").status === CustomCommandStatus.Success && S.getRobbery("bank").settings.cooldownSeconds === 99);
+    check("undone", as(fromPlayer(op), "rae:robbery", "undo").status === CustomCommandStatus.Success && S.getRobbery("bank").settings.cooldownSeconds === R.defaultCooldownSeconds);
+    check("redone", as(fromPlayer(op), "rae:robbery", "undo").status === CustomCommandStatus.Success && S.getRobbery("bank").settings.cooldownSeconds === 99);
     done();
 });
 
@@ -395,7 +402,7 @@ test("undo goes back one change and, run again, forward", () => {
 // The wand
 // ---------------------------------------------------------------------------------------------------------
 
-test("wand and edit hand a tick later to the player: the item, and the menu", async () => {
+test("typed alone, the command gives the wand once and opens the menu a tick later", async () => {
     setup();
     const { check, done } = checks();
     const { as } = commands();
@@ -403,22 +410,28 @@ test("wand and edit hand a tick later to the player: the item, and the menu", as
     save(ok(L.newRobbery("bank", "Bank", "overworld")));
     E.select(op, "bank");
 
-    check("the wand command answers now", as(fromPlayer(op), "rae:robbery_wand").status === CustomCommandStatus.Success);
-    check("the item is not in her bag until the next tick", op.container.getItem(0) === undefined);
-    fake.advance(1);
-    check("then it is", op.container.getItem(0)?.typeId === R.wandItemId);
-
-    as(fromPlayer(op), "rae:robbery_wand");
-    fake.advance(1);
-    check("a second time she is told she has it", said(op).some((m) => /You already have the wand/.test(m)));
-
     script(close);
-    as(fromPlayer(op), "rae:robbery_edit");
-    check("the menu is not open yet", ui.shown.length === 0);
+    const first = as(fromPlayer(op), "rae:robbery");
+    check("it answers now", first.status === CustomCommandStatus.Success && /Opening the menu/.test(first.message), JSON.stringify(first));
+    check("nothing is in her bag and no menu is open until the next tick: a callback may not change anything", op.container.getItem(0) === undefined && ui.shown.length === 0);
+
     fake.advance(1);
     await new Promise((resolve) => setImmediate(resolve));
-    check("it opens a tick later", ui.shown.length === 1 && strip(titleOf(ui.shown[0])) === "Bank");
-    check("from a command block, edit says why not", /run this as a player/.test(as(fromCommandBlock(), "rae:robbery_edit").message));
+    check("then she has the wand", op.container.getItem(0)?.typeId === R.wandItemId);
+    check("and was told how to use it", said(op).some((m) => /You have the wand/.test(m)), said(op).join("|"));
+    check("and the menu is open", ui.shown.length === 1 && strip(titleOf(ui.shown[0])) === "Bank");
+
+    // The second time she has the wand already: no second one, no telling her again, but the menu still opens.
+    ui.shown.length = 0;
+    script(close);
+    const before = said(op).filter((m) => /You have the wand/.test(m)).length;
+    as(fromPlayer(op), "rae:robbery");
+    fake.advance(1);
+    await new Promise((resolve) => setImmediate(resolve));
+    check("the menu opens again", ui.shown.length === 1);
+    check("without another wand or another telling", said(op).filter((m) => /You have the wand/.test(m)).length === before && [0, 1, 2, 3].filter((slot) => op.container.getItem(slot)?.typeId === R.wandItemId).length === 1);
+
+    check("from a command block there is nobody to give it to, and it says what a command block can do", /run this as a player/.test(as(fromCommandBlock(), "rae:robbery").message) && /start, stop, reset or activate/.test(as(fromCommandBlock(), "rae:robbery").message));
     done();
 });
 
@@ -773,7 +786,7 @@ test("the view draws the selected robbery near the builder, and reads out what t
     fake.advance(R.viewEvery * 3);
     check("off: nothing is drawn", op.privateParticles.length === 0);
 
-    check("on", /view is on/.test(as(fromPlayer(op), "rae:robbery_view", true).message));
+    check("on", /view is on/.test(as(fromPlayer(op), "rae:robbery", "view", "on").message));
     fake.advance(R.viewEvery);
     check("it drew particles for the bound blocks and the area's edges", op.privateParticles.length > 4 && op.privateParticles.every((p) => p.id === R.viewParticle), String(op.privateParticles.length));
     const near = (a, b) => Math.abs(a - b) < 1e-9;
@@ -796,7 +809,7 @@ test("the view draws the selected robbery near the builder, and reads out what t
     check("pointing at an unbound block invites binding it", bar(op).some((m) => /iron door - right-click it with the wand to bind it/.test(m)), bar(op).join("|"));
 
     const drawn = op.privateParticles.length;
-    as(fromPlayer(op), "rae:robbery_view");
+    as(fromPlayer(op), "rae:robbery", "view");
     fake.advance(R.viewEvery * 3);
     check("run again it toggles off, and drawing stops", op.privateParticles.length === drawn);
     done();
@@ -810,13 +823,13 @@ test("the view marks nothing beyond its range, and nothing in another dimension"
     save(bank("bank").r);
     E.select(far, "bank");
 
-    as(fromPlayer(far), "rae:robbery_view", true);
+    as(fromPlayer(far), "rae:robbery", "view", "on");
     fake.advance(R.viewEvery);
     check("too far away: nothing drawn", far.privateParticles.length === 0, String(far.privateParticles.length));
 
     const nether = fake.makePlayer("Nina", { location: { x: 100, y: 65, z: 170 }, dimension: fake.dimension("nether"), permission: PlayerPermissionLevel.Operator });
     E.select(nether, "bank");
-    as(fromPlayer(nether), "rae:robbery_view", true);
+    as(fromPlayer(nether), "rae:robbery", "view", "on");
     fake.advance(R.viewEvery);
     check("in another dimension: nothing drawn", nether.privateParticles.length === 0);
     done();
@@ -832,7 +845,7 @@ test("a viewer who loses operator or leaves is dropped; a particle the game reje
     save(bank("bank").r);
     E.select(op, "bank");
 
-    as(fromPlayer(op), "rae:robbery_view", true);
+    as(fromPlayer(op), "rae:robbery", "view", "on");
     let tries = 0;
     op.spawnParticle = () => { tries++; throw new Error("unknown particle"); };
     console.warn = (...args) => logged.push(args.join(" "));
@@ -843,7 +856,7 @@ test("a viewer who loses operator or leaves is dropped; a particle the game reje
 
     const op2 = operator("Op2");
     E.select(op2, "bank");
-    as(fromPlayer(op2), "rae:robbery_view", true);
+    as(fromPlayer(op2), "rae:robbery", "view", "on");
     op2.permission = PlayerPermissionLevel.Member;
     const before = op2.privateParticles.length;
     fake.advance(R.viewEvery * 3);
@@ -926,7 +939,7 @@ test("the builder view names a frame the game's ray looks through, and invites b
     ok(E.addElementAt("bank", { kind: "frame", name: "Necklace", pos: FRAME, withNeighbour: false }));
     fake.placeBlock("overworld", { x: 202, y: 65, z: 200 }, "minecraft:glow_frame", { facing_direction: 2 });
 
-    as(fromPlayer(op), "rae:robbery_view", true);
+    as(fromPlayer(op), "rae:robbery", "view", "on");
     op.holding = R.wandItemId;
 
     op.aimAt = at(FRAME);
@@ -945,13 +958,13 @@ test("the builder view names a frame the game's ray looks through, and invites b
 });
 
 // ---------------------------------------------------------------------------------------------------------
-// Tellers: /rae:robbery_teller
+// Tellers: /rae:robbery teller
 // ---------------------------------------------------------------------------------------------------------
 
 const npcAt = (where = { x: 112.5, y: 65, z: 170.5 }, typeId = "minecraft:npc") => fake.makeEntity({ typeId, location: where, dimension: fake.dimension("overworld") });
 const flushScreens = async () => { for (let i = 0; i < 6; i++) await new Promise((resolve) => setImmediate(resolve)); };
 
-test("/rae:robbery_teller makes the NPC you look at a teller, a tick later, and opens its screen", async () => {
+test("/rae:robbery teller makes the NPC you look at a teller, a tick later, and opens its screen", async () => {
     setup();
     const { check, done } = checks();
     const { as } = commands();
@@ -962,7 +975,7 @@ test("/rae:robbery_teller makes the NPC you look at a teller, a tick later, and 
     op.aimEntities = [npc];
     script(close);
 
-    const result = as(fromPlayer(op), "rae:robbery_teller", "Cashier");
+    const result = as(fromPlayer(op), "rae:robbery", "teller", "Cashier");
     check("it answers success at once", result.status === CustomCommandStatus.Success && /Making it a teller/.test(result.message), JSON.stringify(result));
     check("but nothing has changed yet: a callback may not tag an entity", T.isTeller(npc) === false && S.getRobbery("bank").elements.length === 0);
 
@@ -977,7 +990,7 @@ test("/rae:robbery_teller makes the NPC you look at a teller, a tick later, and 
     done();
 });
 
-test("/rae:robbery_teller with a teller's name moves that teller to the entity you look at", async () => {
+test("/rae:robbery teller with a teller's name moves that teller to the entity you look at", async () => {
     setup();
     const { check, done } = checks();
     const { as } = commands();
@@ -989,14 +1002,14 @@ test("/rae:robbery_teller with a teller's name moves that teller to the entity y
 
     op.aimEntities = [first];
     script(close);
-    as(fromPlayer(op), "rae:robbery_teller", "Cashier");
+    as(fromPlayer(op), "rae:robbery", "teller", "Cashier");
     fake.advance(1);
     await flushScreens();
 
     ui.shown.length = 0;
     op.messages.length = 0;
     op.aimEntities = [second];
-    as(fromPlayer(op), "rae:robbery_teller", "cashier");
+    as(fromPlayer(op), "rae:robbery", "teller", "cashier");
     fake.advance(1);
     await flushScreens();
 
@@ -1006,7 +1019,7 @@ test("/rae:robbery_teller with a teller's name moves that teller to the entity y
     done();
 });
 
-test("/rae:robbery_teller says what is wrong: nobody in view, no robbery, no player, or an entity that is already a teller", async () => {
+test("/rae:robbery teller says what is wrong: nobody in view, no robbery, no player, or an entity that is already a teller", async () => {
     setup();
     const { check, done } = checks();
     const { as } = commands();
@@ -1014,24 +1027,24 @@ test("/rae:robbery_teller says what is wrong: nobody in view, no robbery, no pla
     const npc = npcAt();
 
     op.aimEntities = [npc];
-    check("no robbery chosen", /select a robbery first/.test(as(fromPlayer(op), "rae:robbery_teller").message));
+    check("no robbery chosen", /select a robbery first/.test(as(fromPlayer(op), "rae:robbery", "teller").message));
 
     save(ok(L.newRobbery("bank", "Bank", "overworld")));
     E.select(op, "bank");
     op.aimEntities = [];
-    const nothing = as(fromPlayer(op), "rae:robbery_teller");
+    const nothing = as(fromPlayer(op), "rae:robbery", "teller");
     check("nothing in view", nothing.status === CustomCommandStatus.Failure && /look at the NPC or villager that should be the teller, within \d+ blocks/.test(nothing.message), JSON.stringify(nothing));
 
-    check("from a command block, with nobody to look", /run this as a player/.test(as(fromCommandBlock(), "rae:robbery_teller").message));
+    check("from a command block, with nobody to look", /run this as a player/.test(as(fromCommandBlock(), "rae:robbery", "teller").message));
 
     op.aimEntities = [npc];
     script(close);
-    as(fromPlayer(op), "rae:robbery_teller", "Cashier");
+    as(fromPlayer(op), "rae:robbery", "teller", "Cashier");
     fake.advance(1);
     await flushScreens();
 
     op.messages.length = 0;
-    as(fromPlayer(op), "rae:robbery_teller", "Manager");
+    as(fromPlayer(op), "rae:robbery", "teller", "Manager");
     fake.advance(1);
     await flushScreens();
     check("an entity that already is a teller is refused in the deferred part, with the sentence whole", said(op).some((m) => /^Not changed: it is already the teller Cashier of Bank\.$/.test(m)), said(op).join(" | "));
@@ -1048,7 +1061,7 @@ test("a reason for a refusal keeps its last letter", async () => {
     E.select(op, "bank");
     op.aimEntities = [fake.makeEntity({ typeId: "minecraft:npc", location: { x: 1.5, y: 70, z: 1.5 }, dimension: fake.dimension("nether") })];
 
-    as(fromPlayer(op), "rae:robbery_teller", "Guard");
+    as(fromPlayer(op), "rae:robbery", "teller", "Guard");
     fake.advance(1);
     await flushScreens();
 
