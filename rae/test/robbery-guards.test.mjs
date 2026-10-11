@@ -529,6 +529,8 @@ test("a mob the game will not make does not stop the robbery", () => {
 
 const builder = (where = { x: 120.7, y: 64, z: -33.2 }) => fake.makePlayer("Builder", { location: where, permission: PlayerPermissionLevel.Operator });
 const said = (player) => player.messages.map(strip);
+/** Everything the builder was told: chat lines, plus what the screens said at their top (a refusal is shown there, not in chat behind the form). */
+const heard = (player) => [...said(player), ...ui.shown.flatMap((form) => strip(String(form.calls.find((c) => c[0] === "body")?.[1] ?? "")).split("\n"))];
 const alarmElement = () => S.getRobbery("bank").elements.find((e) => e.name === "Alarm");
 const spawnEffects = () => alarmElement().onDone.filter((e) => e.kind === "spawn");
 
@@ -589,7 +591,7 @@ test("a mob the game does not know is refused, with what to try", async () => {
     await openAlarm(op, press("Add: spawn mobs"), fill({ "The mob": "minecraft:dragonn" }), close, close);
 
     check("nothing was saved", spawnEffects().length === 0);
-    check("the builder is told the name and what works", said(op).some((m) => /The game has no mob called minecraft:dragonn\. Try minecraft:pillager/.test(m)), said(op).join(" | "));
+    check("the builder is told the name and what works", heard(op).some((m) => /The game has no mob called minecraft:dragonn\. Try minecraft:pillager/.test(m)), heard(op).join(" | "));
     done();
 });
 
@@ -601,7 +603,7 @@ test("a count that is too big is refused by the form, and the robbery is left as
     await openAlarm(op, press("Add: spawn mobs"), fill({ "How many": "99" }), close, close);
 
     check("nothing was saved", spawnEffects().length === 0);
-    check("the builder is told the range", said(op).some((m) => /how many must be a whole number from 1 to 10/i.test(m)), said(op).join(" | "));
+    check("the builder is told the range", heard(op).some((m) => /how many must be a whole number from 1 to 10/i.test(m)), heard(op).join(" | "));
     done();
 });
 
@@ -612,7 +614,7 @@ test("an effect more than the robbery may spawn is refused up front", async () =
 
     await openAlarm(op, press("Add: spawn mobs"), fill({ "How many": "1" }), close, close);
 
-    check("refused, saying why", said(op).some((m) => /Not changed: .*at most 30 mobs in all \(this one would spawn 31\)/.test(m)), said(op).join(" | "));
+    check("refused, saying why", heard(op).some((m) => /Not changed: .*at most 30 mobs in all \(this one would spawn 31\)/.test(m)), heard(op).join(" | "));
     check("and the three that were there are", spawnEffects().length === 2);
     done();
 });

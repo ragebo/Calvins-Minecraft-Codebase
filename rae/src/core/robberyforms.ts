@@ -17,8 +17,8 @@ import {
     addElementAt, applyEdit, createRobbery, recaptureFrame, removeElementFrom, select, selectedRobbery, setPending, suggestedKind,
     type Pending
 } from "./robberyedit.js";
-import { clock, cooldownLeftSeconds, resetSiteNow, runStateText, startRobbery, stopRobbery, viewOf } from "./robberyrun.js";
-import { deleteRobbery, getRobbery, listStored, undoAvailable, undoLast } from "./robberystore.js";
+import { clock, cooldownLeftSeconds, resetSiteNow, runStateText, startRobbery, viewOf, whyCannotStart } from "./robberyrun.js";
+import { deleteRobbery, getRobbery, listStored, robberyIsDirty, undoAvailable, undoLast } from "./robberystore.js";
 import { frameIsCaptured, lootTableExists, mobKnown, neighbourChest } from "./robberyworld.js";
 import { format, tell } from "./ui.js";
 
@@ -63,6 +63,23 @@ function closeAllMenus(player: Player): void {
     closing.add(player.id);
 }
 
+/**
+ * What went wrong with the last step, to be shown at the top of the next screen (once). A refusal told in chat sits behind the
+ * form that is drawn over it, so a button that did nothing looked like a button that was broken. Outside a menu there is no
+ * screen to show it on, so it goes to chat at once; and one no screen got to show goes to chat when the menu closes.
+ */
+const notices = new Map<string, string>();
+
+function notify(player: Player, text: string): void {
+
+    if (!open.has(player.id)) {
+        tell(player, text);
+        return;
+    }
+
+    notices.set(player.id, text);
+}
+
 /** Runs a menu for a player unless one is already open, and always leaves them with none open. */
 async function menuFor(player: Player, body: () => Promise<void>): Promise<void> {
 
@@ -81,6 +98,10 @@ async function menuFor(player: Player, body: () => Promise<void>): Promise<void>
     } finally {
         open.delete(player.id);
         closing.delete(player.id);
+
+        const unseen = notices.get(player.id);
+        notices.delete(player.id);
+        if (unseen !== undefined && player.isValid) tell(player, unseen);
     }
 }
 
@@ -94,7 +115,10 @@ async function runScreen(player: Player, build: () => Screen | undefined): Promi
         const screen = build();
         if (!screen) return;
 
-        const form = new ActionFormData().title(screen.title).body(screen.body);
+        const notice = notices.get(player.id);
+        notices.delete(player.id);
+
+        const form = new ActionFormData().title(screen.title).body(notice !== undefined ? `${notice}\n\n${screen.body}` : screen.body);
         for (const action of screen.actions) form.button(action.label);
 
         const response = await showForm(player, form);
@@ -130,7 +154,7 @@ async function ask(player: Player, title: string, fields: readonly Field[]): Pro
     const read = readAnswers(fields, response.formValues);
 
     if (!read.ok) {
-        tell(player, warn(sentence(read.reason)));
+        notify(player, warn(sentence(read.reason)));
         return undefined;
     }
 
@@ -145,7 +169,7 @@ function report(player: Player, outcome: { readonly ok: boolean; readonly reason
         return true;
     }
 
-    tell(player, warn(`Not changed: ${(outcome.reason ?? "it did not work").replace(/\.$/, "")}.`));
+    notify(player, warn(`Not changed: ${(outcome.reason ?? "it did not work").replace(/\.$/, "")}.`));
 
     return false;
 }
@@ -354,6 +378,20 @@ async function hooksScreen(player: Player, id: string): Promise<Step> {
     });
 }
 
+/** Starts a run for a builder who pressed a button: closes the menus on success, so the first thing they do is go and try it. */
+function startFromMenu(player: Player, id: string, test: boolean): void {
+
+    const result = startRobbery(id, { by: player, test });
+
+    if (!result.ok) {
+        notify(player, warn(`Could not start: ${result.reason.replace(/\.$/, "")}.`));
+        return;
+    }
+
+    tell(player, ok(test ? "Test run started. The menu is closed: go and try it." : "Started. The menu is closed: go and try it."));
+    closeAllMenus(player);
+}
+
 async function runControls(player: Player, id: string): Promise<Step> {
 
     await runScreen(player, () => {
@@ -361,23 +399,36 @@ async function runControls(player: Player, id: string): Promise<Step> {
         const robbery = getRobbery(id);
         if (!robbery) return undefined;
 
-        const running = viewOf(id)?.phase === "running";
+        const view = viewOf(id);
+        const running = view?.phase === "running";
+
+        // Why it will not start is where the builder is looking, not a line in chat once the menu is closed.
+        const real = whyCannotStart(id);
+        const test = whyCannotStart(id, { test: true });
+        const why = real === undefined ? "" : `\n${test === undefined ? "§7A real start is refused: §f" : "§7Cannot start: §f"}${sentence(real)}${test === undefined ? " §7A test run can start." : ""}`;
 
         const actions: Action[] = [
-            { label: "Start it now", run: () => { report(player, startRobbery(id, { by: player }), "Started."); } },
-            { label: "Start a test run (anyone can take part, no cooldown)", run: () => { report(player, startRobbery(id, { by: player, test: true }), "Test run started."); } },
-            ...(running ? [{ label: "Stop it", run: (): void => { report(player, stopRobbery(id), "Stopped. The site is put back."); } }] : []),
             {
-                label: "Put the site back now",
+                label: "Test it (anyone can take part, no cooldown; payouts are real)",
+                run: () => {
+                    // The last run is still open or waiting to be put back: a test should not have to begin by clearing it. A run
+                    // that is genuinely under way is left alone (and the start says so).
+                    if ((view !== undefined && !running) || (view === undefined && robberyIsDirty(id))) resetSiteNow(id);
+                    startFromMenu(player, id, true);
+                }
+            },
+            { label: "Start it for real (needs an outlaw; payouts and cooldown are real)", run: () => { startFromMenu(player, id, false); } },
+            {
+                label: running ? "Stop it and put the site back" : "Put the site back now",
                 run: () => {
                     const result = resetSiteNow(id);
-                    tell(player, ok(`Put back ${result.cleaned} block${result.cleaned === 1 ? "" : "s"}${result.left > 0 ? `; ${result.left} more wait for their chunk to load` : ""}.`));
+                    notify(player, ok(`Put back ${result.cleaned} block${result.cleaned === 1 ? "" : "s"}${result.left > 0 ? `; ${result.left} more wait for their chunk to load` : ""}.`));
                 }
             },
             BACK
         ];
 
-        return { title: heading(robbery.name, "run it"), body: statusLine(id), actions };
+        return { title: heading(robbery.name, "run it"), body: `${statusLine(id)}${why}`, actions };
     });
 }
 
@@ -562,7 +613,7 @@ async function requirementsForm(player: Player, robberyId: string, elementId: st
     const others = robbery.elements.filter((e) => e.id !== elementId);
 
     if (others.length === 0) {
-        tell(player, warn("There is nothing else for it to wait for yet. Bind another element first."));
+        notify(player, warn("There is nothing else for it to wait for yet. Bind another element first."));
         return;
     }
 
@@ -655,7 +706,7 @@ async function effectForm(player: Player, robberyId: string, target: Target, ind
 
     // The game is asked whether it knows the mob, so a typo is refused now and not found out by a player in the bank.
     if (kind === "spawn" && typeof written === "object" && written !== null && !mobKnown(String((written as { entity?: unknown }).entity))) {
-        tell(player, warn(`The game has no mob called ${String((written as { entity?: unknown }).entity)}. Try minecraft:pillager, minecraft:vindicator or minecraft:zombie.`));
+        notify(player, warn(`The game has no mob called ${String((written as { entity?: unknown }).entity)}. Try minecraft:pillager, minecraft:vindicator or minecraft:zombie.`));
         return;
     }
     const next = existing && index !== undefined ? effects.map((effect, i): unknown => (i === index ? written : effect)) : [...effects, written];
@@ -690,7 +741,7 @@ async function lootForm(player: Player, robberyId: string, elementId: string): P
     const items = parseItemList(String(answers["items"]));
 
     if (!items.ok) {
-        tell(player, warn(sentence(items.reason)));
+        notify(player, warn(sentence(items.reason)));
         return;
     }
 

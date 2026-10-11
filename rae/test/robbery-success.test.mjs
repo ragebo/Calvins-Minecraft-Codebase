@@ -580,7 +580,7 @@ test("the run screen tells a builder what a robbery is doing: open to loot, how 
     ui.shown.length = 0;
     script(press("Run it"), press("Back"), close);
     await F.openMainMenu(ann);
-    check("with a robber inside it says it is waiting for them, and gives no time", /Right now: won, still open to loot, waiting for everyone to leave$/.test(body()), body());
+    check("with a robber inside it says it is waiting for them, and gives no time", /Right now: won, still open to loot, waiting for everyone to leave$/.test(body().split("\n")[0]), body());
     check("nothing went wrong in the stand-in", problems.length === 0, problems.join("\n"));
 
     ada.teleport({ ...OUTSIDE });               // leave the world clean for whatever test comes next

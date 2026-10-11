@@ -38,6 +38,8 @@ function setup() {
 
 const builder = (name = "Builder") => fake.makePlayer(name, { location: { x: 201, y: 65, z: 197 }, permission: PlayerPermissionLevel.Operator });
 const said = (player) => player.messages.map(strip);
+/** Everything the builder was told: chat lines, plus what the screens said at their top (a refusal is shown there, not in chat behind the form). */
+const heard = (player) => [...said(player), ...ui.shown.flatMap((form) => strip(String(form.calls.find((c) => c[0] === "body")?.[1] ?? "")).split("\n"))];
 const bodyOf = (form) => strip(String(form.calls.find((c) => c[0] === "body")?.[1] ?? ""));
 const robbery = () => S.getRobbery("jewels");
 const frameElement = (name) => robbery()?.elements.find((e) => e.name === name);
@@ -210,7 +212,7 @@ test("saving a frame that has been taken down says so instead of pretending", as
     script(press("Save what the frame shows now"), close);
     await F.openElementMenu(ann, "jewels", bound.element.id);
 
-    check("refused, with where", said(ann).some((m) => /Not changed: the frame could not be saved: there is no item frame at 200, 65, 200/.test(m)), said(ann).join(" | "));
+    check("refused, with where", heard(ann).some((m) => /Not changed: the frame could not be saved: there is no item frame at 200, 65, 200/.test(m)), heard(ann).join(" | "));
     done();
 });
 
@@ -228,8 +230,8 @@ test("saving a frame the site is waiting to put back is refused in a sentence, a
     script(press("Save what the frame shows now"), close);
     await F.openElementMenu(ann, "jewels", bound.element.id);
 
-    check("told why, by name", said(ann).some((m) => /^Not changed: Necklace is waiting to be put back after a robbery, so saving it now could save it empty\./.test(m)), said(ann).join(" | "));
-    check("not told it was saved", !said(ann).some((m) => /^Saved\./.test(m)));
+    check("told why, by name", heard(ann).some((m) => /^Not changed: Necklace is waiting to be put back after a robbery, so saving it now could save it empty\./.test(m)), heard(ann).join(" | "));
+    check("not told it was saved", !heard(ann).some((m) => /^Saved\./.test(m)));
 
     World.restoreFrame("overworld", "jewels", FRAME);
     check("the diamond comes back", fake.frameItemAt("overworld", at(FRAME))?.typeId === "minecraft:diamond");

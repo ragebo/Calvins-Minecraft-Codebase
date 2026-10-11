@@ -547,6 +547,13 @@ export function whyCannotStart(id: string, options: { readonly test?: boolean } 
 
     const existing = runs.get(id);
     if (existing && !existing.ended) return "it is already under way";
+
+    // Past its countdown but with someone in the area: it is not "being put back", it is waiting for them (a builder testing it
+    // stands in the area they drew, so this is the reason they meet most).
+    if (existing && system.currentTick >= existing.resetAt && heldBack(id, existing)) {
+        return "it is waiting for everyone to leave its area before it is put back (put the site back by hand to skip that)";
+    }
+
     if (existing || robberyIsDirty(id)) return "it is still being put back";
 
     if (options.test !== true) {

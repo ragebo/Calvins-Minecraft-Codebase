@@ -92,6 +92,8 @@ function aimAt(player, entity) {
 
 const elementState = (name) => Run.viewOf("bank")?.elements.find((e) => e.name === name)?.state;
 const said = (player) => player.messages.map(strip);
+/** Everything the builder was told: chat lines, plus what the screens said at their top (a refusal is shown there, not in chat behind the form). */
+const heard = (player) => [...said(player), ...ui.shown.flatMap((form) => strip(String(form.calls.find((c) => c[0] === "body")?.[1] ?? "")).split("\n"))];
 const bar = (player) => player.actionBar.map(strip);
 const denials = (player) => player.privateSounds.filter((s) => s.id === R.cues.denied.id).length;
 const openBit = (pos) => fake.blockAt("overworld", at(pos)).permutation.getState("open_bit");
@@ -759,7 +761,7 @@ test("the hold-up time is changed in a form, and a time that makes no sense is r
     ui.shown.length = 0;
     script(press("Hold-up time"), fill({ "Seconds a gun": "0" }), close, close);
     await F.openElementMenu(op, "bank", built.teller.id);
-    check("0 is refused by the form itself, in words and before any edit is tried", said(op).some((m) => /^The hold-up time must be a whole number from 1 to \d+\.$/.test(m)) && !said(op).some((m) => /^Not changed:/.test(m)), said(op).join(" | "));
+    check("0 is refused by the form itself, in words and before any edit is tried", heard(op).some((m) => /^The hold-up time must be a whole number from 1 to \d+\.$/.test(m)) && !heard(op).some((m) => /^Not changed:/.test(m)), heard(op).join(" | "));
     check("and the time is as it was", S.getRobbery("bank").elements[0].holdSeconds === 6);
     check("the stand-in never lost its way", problems.length === 0, problems.join("\n"));
     done();

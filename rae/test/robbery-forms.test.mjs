@@ -39,6 +39,8 @@ function setup() {
 
 const builder = (name = "Builder", where = { x: 100, y: 65, z: 170 }) => fake.makePlayer(name, { location: { ...where }, permission: 2 });
 const said = (player) => player.messages.map(strip);
+/** Everything the builder was told: chat lines, plus what the screens said at their top (a refusal is shown there, not in chat behind the form). */
+const heard = (player) => [...said(player), ...ui.shown.flatMap((form) => strip(String(form.calls.find((c) => c[0] === "body")?.[1] ?? "")).split("\n"))];
 const robbery = (id = "bank") => S.getRobbery(id);
 const element = (name, id = "bank") => robbery(id)?.elements.find((e) => e.name === name);
 const titles = () => ui.shown.map((s) => strip(titleOf(s)));
@@ -225,7 +227,7 @@ test("the element screen shows what is there, renames it, and refuses a name tha
     check("the jam button only comes with a pick lock", !buttonsOf(first).map(strip).some((l) => /lock jams/.test(l)));
 
     check("renamed", element("Front keypad") !== undefined);
-    check("a name that clashes was refused with the reason, and nothing changed", said(ann).some((m) => /Not changed: .*already an element called vault door/i.test(m)) && element("Front keypad") !== undefined, said(ann).join("|"));
+    check("a name that clashes was refused with the reason, and nothing changed", heard(ann).some((m) => /Not changed: .*already an element called vault door/i.test(m)) && element("Front keypad") !== undefined, heard(ann).join("|"));
     check("the stand-in did not stumble", problems.length === 0, problems.join("\n"));
     done();
 });
@@ -325,7 +327,7 @@ test("a key lock with no item typed is refused by the validator, with a sentence
     await F.openElementMenu(ann, "bank", "e1");
 
     check("no lock was added", element("Keypad").locks.length === 0);
-    check("she was told what an item id looks like", said(ann).some((m) => /Not changed: .*item id looks like/.test(m)), said(ann).join("|"));
+    check("she was told what an item id looks like", heard(ann).some((m) => /Not changed: .*item id looks like/.test(m)), heard(ann).join("|"));
     done();
 });
 
@@ -339,7 +341,7 @@ test("a price that is not a whole number is refused where it is typed", async ()
     await F.openElementMenu(ann, "bank", "e1");
 
     check("not added", element("Keypad").locks.length === 0);
-    check("told what is wanted", said(ann).some((m) => /the price must be a whole number from 1 to/i.test(m)), said(ann).join("|"));
+    check("told what is wanted", heard(ann).some((m) => /the price must be a whole number from 1 to/i.test(m)), heard(ann).join("|"));
     done();
 });
 
@@ -356,7 +358,7 @@ test("requirements: toggles for every other element; a loop is refused naming it
     ui.responses.length = 0;
     script(press("Waits for"), fill({ "Waits for Keypad": true }), press("Back"));
     await F.openElementMenu(ann, "bank", "e2");
-    check("making the door wait for the keypad too is a loop, and it is refused", element("Vault door").req.length === 0 && said(ann).some((m) => /go in a loop: Vault door -> Keypad -> Vault door|go in a loop/.test(m)), said(ann).join("|"));
+    check("making the door wait for the keypad too is a loop, and it is refused", element("Vault door").req.length === 0 && heard(ann).some((m) => /go in a loop: Vault door -> Keypad -> Vault door|go in a loop/.test(m)), heard(ann).join("|"));
 
     ui.responses.length = 0;
     E.createRobbery(ann, "solo", "Solo");
@@ -365,7 +367,7 @@ test("requirements: toggles for every other element; a loop is refused naming it
     E.addElementAt("solo", { kind: "switch", name: "Only", pos: [1, 70, 1], withNeighbour: false });
     script(press("Waits for"), press("Back"));
     await F.openElementMenu(ann, "solo", "e1");
-    check("an only element has nothing to wait for, and says so", said(ann).some((m) => /nothing else for it to wait for/.test(m)), said(ann).join("|"));
+    check("an only element has nothing to wait for, and says so", heard(ann).some((m) => /nothing else for it to wait for/.test(m)), heard(ann).join("|"));
     done();
 });
 
@@ -390,7 +392,7 @@ test("effects: add, change, delete through the toggle, in order, and an empty me
 
     let list = element("Keypad").onDone;
     check("two effects, in order", list.length === 2 && list[0].text === "First" && list[0].to === "all" && list[1].kind === "reward" && list[1].coins === 5, JSON.stringify(list));
-    check("the empty message was refused and said so", said(ann).some((m) => /Not changed: .*a message is 1 to 120 characters/.test(m)), said(ann).join("|"));
+    check("the empty message was refused and said so", heard(ann).some((m) => /Not changed: .*a message is 1 to 120 characters/.test(m)), heard(ann).join("|"));
 
     ui.responses.length = 0;
     script(press("When it is done"), press("Say \"First\""), fill({ "What it says": "Changed" }), press("Pay 5 coins"), fill({ "Delete this effect": true }), press("Back"), press("Back"));
@@ -455,7 +457,7 @@ test("loot: a table and items are saved; bad item text is refused; a table the g
     ui.responses.length = 0;
     script(press("Loot"), fill({ "Items to add": "minecraft:diamond lots" }), press("Back"));
     await F.openElementMenu(ann, "bank", "e3");
-    check("bad item text: told, and the loot is unchanged", said(ann).some((m) => /amount for minecraft:diamond/.test(m)) && element("Lockbox").items.length === 2);
+    check("bad item text: told, and the loot is unchanged", heard(ann).some((m) => /amount for minecraft:diamond/.test(m)) && element("Lockbox").items.length === 2);
 
     ui.responses.length = 0;
     script(press("Loot"), fill({ "A loot table": "chests/not_a_table" }), press("Back"));
@@ -484,7 +486,7 @@ test("settings: changed through the form; a bad number is refused where it is ty
     ui.responses.length = 0;
     script(press("Settings"), fill({ "Time limit in seconds": "soon" }), press("Close"));
     await F.openMainMenu(ann);
-    check("a bad number is refused and nothing changed", said(ann).some((m) => /the time limit must be a whole number/i.test(m)) && robbery().settings.timeLimitSeconds === R.defaultTimeLimitSeconds);
+    check("a bad number is refused and nothing changed", heard(ann).some((m) => /the time limit must be a whole number/i.test(m)) && robbery().settings.timeLimitSeconds === R.defaultTimeLimitSeconds);
     done();
 });
 
@@ -543,29 +545,115 @@ test("changing an element's blocks: a click is asked for and the menus close; a 
 // Running it, undo, delete, and what happens around a menu
 // ---------------------------------------------------------------------------------------------------------
 
-test("run controls: it will not start until it is finished, then starts, stops, and puts the site back", async () => {
+const bodyOf = (form) => strip(String(form?.calls.find((c) => c[0] === "body")?.[1] ?? ""));
+const buttonLabels = (form) => buttonsOf(form).map(strip);
+
+/** A bank that can be won at once: opening the lockbox wins it. */
+function winnable(ann) {
+    bare(ann);
+    E.applyEdit("bank", (r) => L.setArea(r, [82, 60, 159], [108, 80, 179]));
+    E.applyEdit("bank", (r) => L.updateElement(r, "e3", { table: "chests/gold_2", onDone: [{ kind: "end", result: "win" }] }));
+}
+
+test("run controls: a start that cannot happen says why ON the screen, and a good one closes the menu so the builder can go and try it", async () => {
     setup();
     const { check, done } = checks();
     const ann = builder("Ann");
     bare(ann);
 
-    script(press("Run it"), press("Start it now"), press("Back"), press("Close"));
+    script(press("Run it"), press("Test it"), press("Back"), close);
     await F.openMainMenu(ann);
-    check("not finished: refused with why", said(ann).some((m) => /Not changed: it is not finished: .*nothing makes it a success/.test(m)), said(ann).join("|"));
-    check("nothing running", Run.runningIds().length === 0);
 
-    E.applyEdit("bank", (r) => L.setHook(r, "win", [{ kind: "end", result: "win" }]));
-    E.applyEdit("bank", (r) => L.setArea(r, [82, 60, 159], [108, 80, 179]));
-    E.applyEdit("bank", (r) => L.updateElement(r, "e3", { table: "chests/gold_2" }));
-    script(press("Run it"), press("Start a test run"), press("Back"), press("Close"));
+    const run = ui.shown[1];
+    check("the Run screen already says it cannot start, and why", /Cannot start: It is not finished: .*nothing makes it a success/.test(bodyOf(run)), bodyOf(run));
+    check("pressing Test it was refused, and the reason is at the top of the screen that came back", /^Could not start: it is not finished: .*nothing makes it a success/.test(bodyOf(ui.shown[2])), bodyOf(ui.shown[2]));
+    check("not in chat behind the form", !said(ann).some((m) => /Could not start/.test(m)), said(ann).join("|"));
+    check("nothing is running", Run.runningIds().length === 0);
+
+    winnable(ann);
+    ui.responses.length = 0;
+    ui.shown.length = 0;
+    script(press("Run it"), press("Test it"), press("Back"), close);
     await F.openMainMenu(ann);
-    check("a test run started", Run.runningIds().join() === "bank" && said(ann).some((m) => /Test run started/.test(m)), said(ann).join("|"));
+
+    check("a test run started", Run.runningIds().join() === "bank" && Run.viewOf("bank")?.test === true);
+    check("she was told, and told the menu is closed", said(ann).some((m) => /Test run started\. The menu is closed/.test(m)), said(ann).join("|"));
+    check("and it IS closed: no further screen was shown", ui.shown.length === 2, String(ui.shown.length));
+    done();
+});
+
+test("run controls: Test it puts the last run back by itself, but never touches one that is under way", async () => {
+    setup();
+    const { check, done } = checks();
+    const ann = builder("Ann");
+    winnable(ann);
+
+    Run.activateElement("bank", "Keypad");
+    Run.activateElement("bank", "Lockbox");
+    check("the last run is over and its site is still open", Run.viewOf("bank")?.phase === "ended" && Run.viewOf("bank")?.result === "win");
+
+    script(press("Run it"), press("Test it"));
+    await F.openMainMenu(ann);
+    check("one press started a new test run, with no 'put the site back' first", Run.viewOf("bank")?.phase === "running" && Run.viewOf("bank")?.test === true, JSON.stringify(Run.viewOf("bank")));
+
+    // A run that is genuinely under way: the button must not wipe it.
+    Run.activateElement("bank", "Keypad");
+    const doneBefore = Run.viewOf("bank").elements.filter((e) => e.state === "done").length;
+    ui.responses.length = 0;
+    ui.shown.length = 0;
+    script(press("Run it"), press("Test it"), close);
+    await F.openMainMenu(ann);
+
+    check("it is still the same run, with what it had done", Run.viewOf("bank")?.phase === "running" && Run.viewOf("bank").elements.filter((e) => e.state === "done").length === doneBefore, JSON.stringify(Run.viewOf("bank")));
+    check("and the screen says it is already under way", /Could not start: it is already under way/.test(bodyOf(ui.shown[2])), bodyOf(ui.shown[2]));
+    done();
+});
+
+test("run controls: one button stops a run and puts the site back, and the answer is on the screen", async () => {
+    setup();
+    const { check, done } = checks();
+    const ann = builder("Ann");
+    winnable(ann);
+    Run.startRobbery("bank", { by: ann, test: true });
+
+    script(press("Run it"), press("Stop it and put the site back"), close);
+    await F.openMainMenu(ann);
+
+    check("while it ran, the button said stop", buttonLabels(ui.shown[1]).some((b) => b === "Stop it and put the site back"), buttonLabels(ui.shown[1]).join(" | "));
+    check("the run is gone", Run.viewOf("bank") === undefined && Run.runningIds().length === 0);
+    check("the answer is at the top of the next screen", /^Put back \d+ blocks?\./.test(bodyOf(ui.shown[2])), bodyOf(ui.shown[2]));
 
     ui.responses.length = 0;
-    script(press("Run it"), press("Stop it"), press("Put the site back now"), press("Back"), press("Close"));
+    ui.shown.length = 0;
+    script(press("Run it"), close);
     await F.openMainMenu(ann);
-    check("stopped", Run.runningIds().length === 0 && said(ann).some((m) => /Stopped/.test(m)));
-    check("and the site was put back", said(ann).some((m) => /Put back \d+ blocks?/.test(m)), said(ann).join("|"));
+    check("and there is no stop button when nothing is running", buttonLabels(ui.shown[1]).some((b) => b === "Put the site back now") && !buttonLabels(ui.shown[1]).some((b) => /Stop it/.test(b)), buttonLabels(ui.shown[1]).join(" | "));
+    done();
+});
+
+test("run controls: standing in the area after a win, the Run screen says the robbery is waiting for the builder to leave", async () => {
+    setup();
+    const { check, done } = checks();
+    const ann = builder("Ann");          // she stands inside the area she drew
+    winnable(ann);
+
+    Run.activateElement("bank", "Keypad");
+    Run.activateElement("bank", "Lockbox");
+    fake.advance(61 * 20 + R.janitorEvery * 2);
+
+    script(press("Run it"), close);
+    await F.openMainMenu(ann);
+
+    const run = ui.shown[1];
+    check("the status says it is waiting, and gives no countdown", /won, still open to loot, waiting for everyone to leave$/m.test(bodyOf(run).split("\n")[0]), bodyOf(run));
+    check("a real start is refused with that reason, not 'still being put back'", /waiting for everyone to leave its area before it is put back/.test(bodyOf(run)) && !/still being put back/.test(bodyOf(run)), bodyOf(run));
+    check("a test run is refused the same way, and the screen says how to skip the wait", /put the site back by hand/.test(bodyOf(run)), bodyOf(run));
+
+    ui.responses.length = 0;
+    ui.shown.length = 0;
+    script(press("Run it"), press("Test it"));
+    await F.openMainMenu(ann);
+    check("but Test it clears it and starts: the builder never has to leave the area to test again", Run.viewOf("bank")?.phase === "running" && Run.viewOf("bank")?.test === true, JSON.stringify(Run.viewOf("bank")));
     done();
 });
 

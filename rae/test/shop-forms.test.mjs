@@ -40,7 +40,8 @@ const countIn = (player, type) => {
     for (let i = 0; i < 36; i++) { const s = player.container.getItem(i); if (s?.typeId === type) total += s.amount; }
     return total;
 };
-const chatOf = (player) => player.messages.map(strip).join(" | ");
+/** Everything the builder was told: chat lines, plus what the screens said at their top (a refusal is shown there, not in chat behind the form). */
+const chatOf = (player) => [...player.messages.map(strip), ...ui.shown.map((form) => strip(String(form.calls.find((c) => c[0] === "body")?.[1] ?? "")))].join(" | ");
 const settle = async () => { for (let i = 0; i < 5; i++) await Promise.resolve(); };
 
 // ---------------------------------------------------------------------------------------------------------

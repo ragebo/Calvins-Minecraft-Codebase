@@ -38,7 +38,8 @@ export interface Screens {
     closeAll(player: Player): void;
     /**
      * Says how the last step went at the top of the next screen they see (once), instead of in chat, where the screen being drawn
-     * over it hides it until the menu is closed. A step that was refused uses it too, so a button that did nothing says why.
+     * over it hides it until the menu is closed. A step that was refused uses it too, so a button that did nothing says why. Outside
+     * a menu it goes to chat at once, and one no screen showed goes to chat when the menu closes: it is never lost.
      */
     notify(player: Player, text: string): void;
     /** Runs a menu for a player unless one is already open, and always leaves them with none open. */
@@ -62,6 +63,12 @@ export function createScreens(source: string): Screens {
         },
 
         notify(player, text) {
+            // Outside a menu there is no screen to show it on, and it would turn up at the top of the next menu opened.
+            if (!open.has(player.id)) {
+                tell(player, text);
+                return;
+            }
+
             notices.set(player.id, text);
         },
 
@@ -83,8 +90,12 @@ export function createScreens(source: string): Screens {
             } finally {
                 open.delete(player.id);
                 closing.delete(player.id);
-                // A notice nobody got to see (the menu closed first) must not turn up at the top of the next menu.
+
+                // A notice no screen showed (the menu closed first) is not lost and must not turn up at the top of the NEXT menu:
+                // it goes to chat now, where the menu no longer covers it.
+                const unseen = notices.get(player.id);
                 notices.delete(player.id);
+                if (unseen !== undefined && player.isValid) tell(player, unseen);
             }
         },
 

@@ -35,7 +35,8 @@ function setup({ deals = [] } = {}) {
     return ada;
 }
 
-const chatOf = (player) => player.messages.map(strip).join(" | ");
+/** Everything the builder was told: chat lines, plus what the screens said at their top (a refusal is shown there, not in chat behind the form). */
+const chatOf = (player) => [...player.messages.map(strip), ...ui.shown.map((form) => strip(String(form.calls.find((c) => c[0] === "body")?.[1] ?? "")))].join(" | ");
 const deals = () => store.getShop("habiti").trades.map(L.describeTrade);
 const teleportOfFirst = () => L.teleportOf(store.getShop("habiti").trades[0]);
 const bodyOf = (form) => strip(String(form.calls.find((c) => c[0] === "body")?.[1] ?? ""));

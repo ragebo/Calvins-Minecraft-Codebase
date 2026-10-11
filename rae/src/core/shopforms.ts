@@ -144,7 +144,10 @@ const screens = createScreens(SOURCE);
 /** Whether this builder has a shop menu open. */
 export const hasBuilderMenuOpen = screens.hasMenuOpen;
 
-/** Tells the builder how an edit went. True when it worked. */
+/**
+ * Tells the builder how an edit went. True when it worked. A refusal is shown at the top of the next screen, not in chat behind
+ * the form that is drawn over it (a button that seems to do nothing needs its reason where the builder is looking).
+ */
 function report(player: Player, outcome: Outcome, success: string): boolean {
 
     if (outcome.ok) {
@@ -152,7 +155,7 @@ function report(player: Player, outcome: Outcome, success: string): boolean {
         return true;
     }
 
-    tell(player, warn(`Not changed: ${outcome.reason.replace(/\.$/, "")}.`));
+    screens.notify(player, warn(`Not changed: ${outcome.reason.replace(/\.$/, "")}.`));
 
     return false;
 }
@@ -177,7 +180,7 @@ async function askCoins(player: Player, title: string, label: string, value: num
     const coins = Number(text);
 
     if (text.length === 0 || !Number.isInteger(coins)) {
-        tell(player, warn("A price is a whole number of coins."));
+        screens.notify(player, warn("A price is a whole number of coins."));
         return undefined;
     }
 
@@ -318,7 +321,7 @@ async function swapForm(player: Player, shopId: string): Promise<void> {
     const choices = bagChoices(player);
 
     if (choices.length === 0) {
-        tell(player, warn("Put the item players should hand over in your bag first (not in the hand you are holding)."));
+        screens.notify(player, warn("Put the item players should hand over in your bag first (not in the hand you are holding)."));
         return;
     }
 
@@ -340,7 +343,7 @@ async function swapForm(player: Player, shopId: string): Promise<void> {
     if (!choice) return;
 
     if (!Number.isInteger(amount) || !Number.isInteger(coins)) {
-        tell(player, warn("How many, and the extra coins, are whole numbers."));
+        screens.notify(player, warn("How many, and the extra coins, are whole numbers."));
         return;
     }
 
@@ -417,7 +420,7 @@ async function serviceForm(player: Player, shopId: string, kind: Exclude<Service
     const seconds = kind === "effect" ? wholeNumber(values[2]) : 0;
 
     if (coins === undefined || level === undefined || seconds === undefined) {
-        tell(player, warn("The level, the seconds and the coins are whole numbers."));
+        screens.notify(player, warn("The level, the seconds and the coins are whole numbers."));
         return;
     }
 
@@ -470,7 +473,7 @@ async function teleportForm(player: Player, shopId: string, tradeId?: string): P
         );
 
     if (!where.ok) {
-        tell(player, warn(`Not changed: ${where.reason}.`));
+        screens.notify(player, warn(`Not changed: ${where.reason}.`));
         return;
     }
 
@@ -484,7 +487,7 @@ async function teleportForm(player: Player, shopId: string, tradeId?: string): P
     const coins = wholeNumber(values[first + 5]);
 
     if (coins === undefined) {
-        tell(player, warn("Not changed: the coins are a whole number."));
+        screens.notify(player, warn("Not changed: the coins are a whole number."));
         return;
     }
 
@@ -516,7 +519,7 @@ async function requirementForm(player: Player, shopId: string, tradeId: string):
     const bounty = wholeNumber(bountyText);
 
     if (bounty === undefined || bounty < 0) {
-        tell(player, warn("The least bounty is a whole number, 0 for none."));
+        screens.notify(player, warn("The least bounty is a whole number, 0 for none."));
         return;
     }
 
@@ -642,7 +645,7 @@ async function deleteConfirmed(player: Player, shopId: string): Promise<boolean>
     const gone = deleteShop(shopId);
 
     if (!gone.ok) {
-        tell(player, warn(`Not deleted: ${gone.reason}.`));
+        screens.notify(player, warn(`Not deleted: ${gone.reason}.`));
         return false;
     }
 
@@ -668,7 +671,7 @@ export function openShopPicker(player: Player): Promise<void> {
                 ...stored.map((entry): Action => ({
                     label: entry.ok ? `${entry.value.name} (${entry.id})` : `${entry.id} (cannot be read)`,
                     run: async () => {
-                        if (!entry.ok) { tell(player, warn(`${entry.id} cannot be read: ${entry.problem}. /rae:shop delete ${entry.id} yes clears it, and /rae:shop undo brings it back.`)); return undefined; }
+                        if (!entry.ok) { screens.notify(player, warn(`${entry.id} cannot be read: ${entry.problem}. /rae:shop delete ${entry.id} yes clears it, and /rae:shop undo brings it back.`)); return undefined; }
                         select(player, entry.id);
                         await screens.run(player, () => editorScreen(player, entry.id, BACK));
                         return undefined;
