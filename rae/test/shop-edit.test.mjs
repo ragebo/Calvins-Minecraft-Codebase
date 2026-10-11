@@ -116,14 +116,41 @@ test("a deal from the hand: the NPC sells the whole stack, or buys it, and an em
     done();
 });
 
-test("what the bag offers for a trade: every occupied slot except the one in hand", () => {
+test("what the bag offers to deal in: every occupied slot, the one in hand first, and never the robbery wand", () => {
     const p = setup();
     hold(p, stack("minecraft:diamond"));
     p.container.setItem(3, stack("minecraft:gold_ingot", 9));
     p.container.setItem(7, stack("minecraft:emerald", 2));
+    p.container.setItem(8, stack("bountysys:robbery_wand"));
 
-    const choices = edit.bagChoices(p);
-    assert.deepEqual(choices.map((c) => [c.slot, c.spec.type, c.spec.amount]), [[3, "minecraft:gold_ingot", 9], [7, "minecraft:emerald", 2]]);
+    const choices = edit.itemChoices(p);
+    assert.deepEqual(choices.map((c) => [c.slot, c.spec.type, c.spec.amount]), [[p.selectedSlotIndex, "minecraft:diamond", 1], [3, "minecraft:gold_ingot", 9], [7, "minecraft:emerald", 2]]);
+});
+
+test("a deal from a bag slot uses that item, not the hand, and the wand is refused wherever it is", () => {
+    const p = setup();
+    const { check, done } = checks();
+    edit.createShop(p, "Habiti");
+
+    hold(p, stack("bountysys:robbery_wand"));
+    p.container.setItem(3, stack("minecraft:gold_ingot", 9));
+    p.container.setItem(4, stack("minecraft:emerald", 2));
+
+    const fromHand = edit.addHeldDeal(p, "habiti", "sells", 10);
+    check("the wand in the hand is refused with a sentence", !fromHand.ok && /robbery wand/.test(fromHand.reason), JSON.stringify(fromHand));
+
+    const fromSlot = edit.addHeldDeal(p, "habiti", "sells", 10, 3);
+    check("slot 3 is stocked, whole stack", fromSlot.ok && L.describeTrade(fromSlot.trade) === "Gold Ingot x9 for 10 coins", JSON.stringify(fromSlot));
+
+    check("the wand in a slot is refused too", !edit.addHeldDeal(p, "habiti", "buys", 10, p.selectedSlotIndex).ok);
+    check("an empty slot is refused", /slot is empty/.test(edit.addHeldDeal(p, "habiti", "sells", 10, 20).reason ?? ""));
+
+    const swap = edit.addSwapDeal(p, "habiti", 4, 2, 0, 3);
+    check("a trade between two bag slots", swap.ok && L.describeTrade(swap.trade) === "Gold Ingot x9 for Emerald x2", JSON.stringify(swap));
+    check("asking for what it gives is refused", !edit.addSwapDeal(p, "habiti", 3, 1, 0, 3).ok);
+    check("the wand as the thing handed over is refused", !edit.addSwapDeal(p, "habiti", p.selectedSlotIndex, 1, 0, 3).ok);
+    check("two good deals were saved, nothing else", store.getShop("habiti").trades.length === 2, String(store.getShop("habiti").trades.length));
+    done();
 });
 
 test("a trade: players hand over an item from the bag (and coins) for the held one, and it cannot ask for what it gives", () => {

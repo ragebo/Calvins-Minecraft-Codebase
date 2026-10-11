@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { fake, load, checks } from "./helpers.mjs";
+import { fake, load, checks, world } from "./helpers.mjs";
 
 // core/preflight.ts: the real preflight system. It replaces core/economy.ts's old lone
 // verifyScoreboards() call at load with checks for the two scoreboards, the train structure,
@@ -60,16 +60,37 @@ test("everything present: ok, no problems, and nothing logged (this also proves 
     done();
 });
 
-test("a missing scoreboard objective is the only problem reported", () => {
+test("a missing scoreboard objective is made, not reported: the world is fine afterwards", () => {
     const { check, done } = checks();
     fresh({ scoreboards: ["coins"] }); // bounty missing
 
     const result = runPreflightChecks();
 
-    check("not ok", result.ok === false);
-    check("exactly one problem", result.problems.length === 1, JSON.stringify(result.problems));
-    check("names the missing objective", result.problems[0]?.includes("bounty"), result.problems[0]);
-    check("logs exactly once", errors.length === 1, JSON.stringify(errors));
+    check("ok", result.ok === true, JSON.stringify(result));
+    check("no problems", result.problems.length === 0, JSON.stringify(result.problems));
+    check("the missing objective now exists", world.scoreboard.getObjective("bounty") !== undefined);
+    check("the one that was there was left alone", world.scoreboard.getObjective("coins") !== undefined);
+    check("nothing logged as an error", errors.length === 0, JSON.stringify(errors));
+    done();
+});
+
+test("a scoreboard the game refuses to make is still reported, once, and nothing else is", () => {
+    const { check, done } = checks();
+    fresh({ scoreboards: ["coins"] }); // bounty missing
+
+    const realAdd = world.scoreboard.addObjective;
+    world.scoreboard.addObjective = () => { throw new Error("the game said no"); };
+
+    try {
+        const result = runPreflightChecks();
+
+        check("not ok", result.ok === false);
+        check("exactly one problem", result.problems.length === 1, JSON.stringify(result.problems));
+        check("names the missing objective", result.problems[0]?.includes("bounty"), result.problems[0]);
+        check("the refusal and the preflight line are both there", errors.length === 2 && errors.some((e) => /Could not make the bounty scoreboard: the game said no/.test(e)), JSON.stringify(errors));
+    } finally {
+        world.scoreboard.addObjective = realAdd;
+    }
     done();
 });
 
@@ -108,10 +129,9 @@ test("several simultaneous problems are still reported through exactly ONE error
     const result = runPreflightChecks();
 
     check("not ok", result.ok === false);
-    // Three problems, one per category: both missing objectives are named in a single combined
-    // scoreboard problem, alongside the structure problem and the item problem.
-    check("every category's problem is present", result.problems.length === 3, JSON.stringify(result.problems));
-    check("names coins and bounty", result.problems.some((p) => p.includes("coins") && p.includes("bounty")), JSON.stringify(result.problems));
+    // Two problems: the structure and the item. Both missing scoreboards were simply made.
+    check("every remaining category's problem is present", result.problems.length === 2, JSON.stringify(result.problems));
+    check("the scoreboards are not among them, because they were made", !result.problems.some((p) => p.includes("scoreboard")) && world.scoreboard.getObjective("coins") !== undefined && world.scoreboard.getObjective("bounty") !== undefined, JSON.stringify(result.problems));
     check("names the structure", result.problems.some((p) => p.includes(TRAIN_STRUCTURE)), JSON.stringify(result.problems));
     check("names the item", result.problems.some((p) => p.includes(missingId)), JSON.stringify(result.problems));
     check("exactly one console.error call, not one per problem", errors.length === 1, JSON.stringify(errors));

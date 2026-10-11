@@ -5,7 +5,7 @@ import {
     JAIL_SITES, LAW_SPAWNS, OUTLAW_SPAWNS, OVERWORLD_Y_BOUNDS, RANCH_AREA, RANCH_LOWER_SPAWNS,
     RANCH_SAFE_TRIGGER, RANCH_UPPER_SPAWNS, TRAIN_END, TRAIN_START, TRAIN_STRUCTURE, TRAIN_VAULT_CHEST
 } from "../config/world.js";
-import { missingScoreboards } from "./economy.js";
+import { ensureScoreboards, missingScoreboards } from "./economy.js";
 import { error } from "./log.js";
 
 /**
@@ -141,6 +141,9 @@ function missingItems(): string[] {
 export function runPreflightChecks(): { readonly ok: boolean; readonly problems: readonly string[] } {
 
     const problems: string[] = [];
+
+    // A scoreboard that is not there is made (and logged); only one the game refuses to make is still a problem.
+    ensureScoreboards();
 
     const missingBoards = missingScoreboards();
     if (missingBoards.length > 0) {

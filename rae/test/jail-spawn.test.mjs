@@ -81,3 +81,54 @@ test("law respawns at a law spawn", () => {
     check("to a law spawn", last !== undefined && LAW_SPAWNS.some((s) => sameSpot(s, last)), JSON.stringify(last));
     done();
 });
+
+const gamemodeCommands = () => fake.dimension("overworld").commands.filter((command) => command.startsWith("gamemode "));
+
+test("an eliminated player gets their game mode back when the next round resets, and is not left a spectator", () => {
+    const { check, done } = checks();
+    const { law, outlaw } = scene();
+    outlaw.getGameMode = () => "Adventure";
+
+    kill(outlaw, law); respawn(outlaw);
+    kill(outlaw, law); respawn(outlaw);
+
+    check("they were put in spectator", gamemodeCommands().at(-1) === "gamemode spectator @s", gamemodeCommands().join(" | "));
+    check("what they were before is remembered", outlaw.getDynamicProperty("rae:gamemode_before_spectator") === "adventure");
+
+    fake.dimension("overworld").commands.length = 0;
+    resetAllSystems();
+
+    check("the reset gave them adventure back", gamemodeCommands().join() === "gamemode adventure @s", gamemodeCommands().join(" | "));
+    check("and forgot it", outlaw.getDynamicProperty("rae:gamemode_before_spectator") === undefined);
+
+    fake.dimension("overworld").commands.length = 0;
+    resetAllSystems();
+    check("a second reset does nothing to them", gamemodeCommands().length === 0, gamemodeCommands().join(" | "));
+    done();
+});
+
+test("a reset leaves alone a player the round never made a spectator (an operator testing in spectator keeps it)", () => {
+    const { check, done } = checks();
+    const { other } = scene();
+    other.getGameMode = () => "Spectator";
+
+    fake.dimension("overworld").commands.length = 0;
+    resetAllSystems();
+
+    check("no game mode command at all", gamemodeCommands().length === 0, gamemodeCommands().join(" | "));
+    done();
+});
+
+test("a player who was offline when the round reset is let out of spectator when they next spawn", () => {
+    const { check, done } = checks();
+    const { outlaw } = scene();
+
+    outlaw.setDynamicProperty("rae:gamemode_before_spectator", "survival");   // left while eliminated; the reset could not reach them
+    fake.dimension("overworld").commands.length = 0;
+
+    respawn(outlaw);
+
+    check("they are given survival back", gamemodeCommands().join() === "gamemode survival @s", gamemodeCommands().join(" | "));
+    check("and it is forgotten", outlaw.getDynamicProperty("rae:gamemode_before_spectator") === undefined);
+    done();
+});

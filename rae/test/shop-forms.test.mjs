@@ -208,7 +208,7 @@ test("the builder's screen adds a deal from the held item: the NPC sells it, and
     const { check, done } = checks();
 
     hold(ada, new ItemStack("minecraft:iron_sword", 1));
-    script(press("Add a deal"), press("SELLS what I am holding"), fill({ "Coins players pay": "75" }), press("Back"), press("Close"));
+    script(press("Add a deal"), press("SELLS an item from my bag"), fill({ "Coins players pay": "75" }), press("Back"), press("Close"));
     await forms.openShopEditor(ada, "habiti");
 
     const shop = store.getShop("habiti");
@@ -220,26 +220,56 @@ test("the builder's screen adds a deal from the held item: the NPC sells it, and
     done();
 });
 
-test("the NPC buys the held stack from players, and an empty hand is refused with a sentence", async () => {
+test("the NPC buys a stack from players, and an empty bag is refused with a sentence", async () => {
     const ada = setup({ deals: [] });
     const { check, done } = checks();
 
-    script(press("Add a deal"), press("BUYS what I am holding"), fill({ "Coins players are paid": "8" }), press("Back"), press("Close"));
+    script(press("Add a deal"), press("BUYS an item from my bag"), fill({ "Coins players are paid": "8" }), press("Back"), press("Close"));
     await forms.openShopEditor(ada, "habiti");
-    check("with an empty hand nothing was added", store.getShop("habiti").trades.length === 0 && /hold the item first/.test(chatOf(ada)), chatOf(ada));
+    check("with an empty bag nothing was added", store.getShop("habiti").trades.length === 0 && /Put the item in your bag first/.test(chatOf(ada)), chatOf(ada));
 
     ada.messages.length = 0;
     hold(ada, new ItemStack("minecraft:feather", 3));
-    script(press("Add a deal"), press("BUYS what I am holding"), fill({ "Coins players are paid": "8" }), press("Back"), press("Close"));
+    script(press("Add a deal"), press("BUYS an item from my bag"), fill({ "Coins players are paid": "8" }), press("Back"), press("Close"));
     await forms.openShopEditor(ada, "habiti");
-    check("holding feathers it is a sale", L.describeTrade(store.getShop("habiti").trades[0]) === "Sell Feather x3 for 8 coins");
+    check("with feathers in the bag it is a sale", L.describeTrade(store.getShop("habiti").trades[0]) === "Sell Feather x3 for 8 coins");
     done();
+});
+
+test("the wand in the hand is never the item: the form offers the bag, and the item picked is the one that is stocked", async () => {
+    const ada = setup({ deals: [] });
+    const { check, done } = checks();
+
+    hold(ada, new ItemStack("bountysys:robbery_wand", 1));
+    ada.container.setItem(2, new ItemStack("minecraft:iron_sword", 1));
+    ada.container.setItem(5, new ItemStack("minecraft:feather", 3));
+
+    script(press("Add a deal"), press("SELLS an item from my bag"), fill({ "Which item": "Feather", "Coins players pay": "9" }), press("Back"), press("Close"));
+    await forms.openShopEditor(ada, "habiti");
+
+    const form = ui.shown.find((f) => strip(String(titleOf(f))) === "The NPC sells");
+    const offered = form ? form.calls.find((c) => c[0] === "dropdown")?.[2].map(strip) : [];
+    check("the wand is not among the choices", offered.length === 2 && !offered.some((o) => /wand/i.test(o)), JSON.stringify(offered));
+    check("the feathers were stocked, not the wand", store.getShop("habiti").trades.length === 1 && L.describeTrade(store.getShop("habiti").trades[0]) === "Feather x3 for 9 coins", JSON.stringify(store.getShop("habiti").trades.map(L.describeTrade)));
+    check("the form had no problems", problems.length === 0, problems.join("; "));
+    done();
+});
+
+test("with only the wand in the bag, the screens say to put the item in the bag", async () => {
+    const ada = setup({ deals: [] });
+    hold(ada, new ItemStack("bountysys:robbery_wand", 1));
+
+    script(press("Add a deal"), press("SELLS an item from my bag"), press("Back"), press("Close"));
+    await forms.openShopEditor(ada, "habiti");
+
+    assert.equal(store.getShop("habiti").trades.length, 0);
+    assert.match(chatOf(ada), /Put the item in your bag first/);
 });
 
 test("a price that is not a number is refused and changes nothing", async () => {
     const ada = setup({ deals: [] });
     hold(ada, new ItemStack("minecraft:iron_sword", 1));
-    script(press("Add a deal"), press("SELLS what I am holding"), fill({ "Coins players pay": "lots" }), press("Back"), press("Close"));
+    script(press("Add a deal"), press("SELLS an item from my bag"), fill({ "Coins players pay": "lots" }), press("Back"), press("Close"));
     await forms.openShopEditor(ada, "habiti");
     assert.equal(store.getShop("habiti").trades.length, 0);
     assert.match(chatOf(ada), /whole number of coins/);

@@ -10,11 +10,11 @@ step 1 here needs nothing. Most of this card is "does the real game agree with w
 
 - Behavior pack **0.2.1**, resource pack unchanged (1.0.27). BP only; a fresh launch is the safest way to be sure the new scripts
   are what you are running.
-- Run it as an operator in your test world (RAE2), on flat ground. `/scoreboard objectives add coins dummy` first if the world
-  has no `coins` objective: a deal that uses coins says so and refuses until it exists. Step 27 also needs `/scoreboard objectives add bounty dummy` if the world has none.
-- The commands are all `/rae:shop_*`; type `/rae:shop_` and the game completes them: `list`, `info`, `new`, `sell`, `buy`, `trade`,
-  `service`, `edit`, `open`, `select`, `copy`, `place`, `move`, `delete`, `undo`. Operators only. A shop is named by its id or by the
-  name you gave it (any case, spaces or underscores).
+- Run it as an operator in your test world (RAE2), on flat ground. Nothing to set up for coins: the game makes the `coins` and
+  `bounty` scoreboards itself when the world has none (step 27 uses the bounty one).
+- The command is `/rae:shop`; its first word is the action and the game completes it: `list`, `info`, `new`, `sell`, `buy`, `trade`,
+  `service`, `edit`, `open`, `select`, `copy`, `place`, `move`, `delete`, `undo` (`help` lists them; typed alone it opens the list
+  of shops). Operators only. A shop is named by its id or by the name you gave it (any case, spaces or underscores).
 - Problems go to the content log as `[shop]` lines and, if they are real failures, to every operator in chat.
 
 `npm test` covers (the model, the store, every deal against a fake bag, every screen driven by a stand-in player, the commands under

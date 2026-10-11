@@ -271,7 +271,8 @@ function tryFire(player: Player, gun: GunConfig): void {
 
     playCues(player, gun, gun.sounds.fire);
 
-    if (gun.primeTicks !== undefined) needsPrimeKeys.add(key);
+    // The shot that empties the gun leaves nothing to chamber: the next click reloads, with no cycle click in front of it.
+    if (gun.primeTicks !== undefined && loaded > 1) needsPrimeKeys.add(key);
 }
 
 /**

@@ -40,7 +40,7 @@ const heardShot = (gun) => overworld().played.some((pl) => pl.id === gun.sounds.
 const emptyMagazine = (p, gun) => {
     for (let i = 0; i < gun.magazineSize; i++) {
         leftClick(p); fake.advance(gun.fireRateTicks);
-        if (gun.primeTicks !== undefined) { leftClick(p); fake.advance(gun.primeTicks); }   // the prime click between shots, so this really does fire magazineSize times
+        if (gun.primeTicks !== undefined && i < gun.magazineSize - 1) { leftClick(p); fake.advance(gun.primeTicks); }   // the prime click between shots, so this really does fire magazineSize times (the last shot leaves nothing to cycle)
     }
     fake.advance(gun.reloadTicks + 60);
     overworld().played.length = 0; p.messages.length = 0;
@@ -256,6 +256,42 @@ test("an empty gun with no ammo says so and does not start a reload; clicks duri
     check("one reload, however many clicks", (text(p).match(/Reloading/g) ?? []).length === 1, text(p));
     fake.advance(gun.reloadTicks + 2);
     check("and it completes once", (text(p).match(/reloaded/g) ?? []).length === 1, text(p));
+    done();
+});
+
+test("the shot that empties a revolver or repeater needs no cycle click: the very next click reloads, while a shot with rounds left still does", () => {
+    const { check, done } = checks();
+
+    for (const gun of primingGuns) {
+        const p = armed(gun, `last-${gun.id}`);
+
+        // Mid-magazine: the click after a shot cycles the action, and does not fire.
+        leftClick(p); fake.advance(gun.fireRateTicks);
+        overworld().played.length = 0;
+        leftClick(p); fake.advance(gun.primeTicks);
+        check(`${gun.id}: with rounds left, the click after a shot only cycles`, !heardShot(gun) && heardPrime(gun), JSON.stringify(overworld().played.map((x) => x.id)));
+        leftClick(p); fake.advance(gun.fireRateTicks);
+
+        // Shots 1 and 2 are done; fire shots 3 up to the one before last, cycling before each, then cycle once more and take the last.
+        for (let shot = 3; shot < gun.magazineSize; shot++) {
+            leftClick(p); fake.advance(gun.primeTicks);
+            leftClick(p); fake.advance(gun.fireRateTicks);
+        }
+        leftClick(p); fake.advance(gun.primeTicks);
+        p.messages.length = 0;
+        overworld().played.length = 0;
+        leftClick(p); fake.advance(gun.fireRateTicks);
+        check(`${gun.id}: the last round is fired`, heardShot(gun), JSON.stringify(overworld().played.map((x) => x.id)));
+
+        overworld().played.length = 0;
+        leftClick(p);
+        check(`${gun.id}: the next click is the dry click that starts the reload, with no cycle in between`, p.privateSounds.some((s) => s.id === "random.click") && text(p).includes("Reloading"), text(p));
+        fake.advance(gun.reloadTicks + 2);
+        check(`${gun.id}: and it is ready to fire the moment it is reloaded`, text(p).includes(`${gun.magazineSize}/${gun.magazineSize}`), text(p));
+        overworld().played.length = 0;
+        leftClick(p);
+        check(`${gun.id}: a click after the reload fires, not cycles`, heardShot(gun), JSON.stringify(overworld().played.map((x) => x.id)));
+    }
     done();
 });
 

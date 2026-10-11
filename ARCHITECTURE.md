@@ -226,7 +226,7 @@ core/shopservices.ts   what a deal does to a customer         core/shopedit.ts  
 core/shopforms.ts      every screen
         |
 systems/shoptalk.ts      a click on a shop NPC, and the dialogue scene's button
-systems/shopbuilder.ts   the /rae:shop_* commands
+systems/shopbuilder.ts   the /rae:shop command
 systems/npcprobe.ts      the measurement of how the game treats an NPC
 ```
 

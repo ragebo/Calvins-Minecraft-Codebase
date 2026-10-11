@@ -41,7 +41,7 @@ export function whyNotAllowed(player: Player, requires: Requirement | undefined)
 
     if (requires.bounty !== undefined) {
 
-        if (missingScoreboards().includes("bounty")) return "the bounty scoreboard has not been made yet (/scoreboard objectives add bounty dummy)";
+        if (missingScoreboards().includes("bounty")) return "bounties are not being kept in this world right now (tell an operator)";
 
         const have = getBounty(player);
 
@@ -61,7 +61,7 @@ export function whyCannotTrade(player: Player, trade: Trade): string | undefined
     if (barred) return barred;
 
     if (usesCoins(trade) && missingScoreboards().includes("coins")) {
-        return "the coins scoreboard has not been made yet (/scoreboard objectives add coins dummy)";
+        return "coins are not being kept in this world right now (tell an operator)";
     }
 
     const have = getCoins(player);

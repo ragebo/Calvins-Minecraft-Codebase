@@ -11,9 +11,9 @@ import { confirmForm, showForm } from "./forms.js";
 import { error } from "./log.js";
 import { BACK, createScreens, type Action, type Screen } from "./screens.js";
 import {
-    addHeldDeal, addServiceDeal, addSwapDeal, applyEdit, bagChoices, copyShopAs, createShop, select, selectedId, setRequirement, setTeleport,
+    addHeldDeal, addServiceDeal, addSwapDeal, applyEdit, copyShopAs, createShop, itemChoices, select, selectedId, setRequirement, setTeleport,
     whereIStand,
-    type HeldKind, type Outcome, type ServiceKind
+    type BagChoice, type HeldKind, type Outcome, type ServiceKind
 } from "./shopedit.js";
 import { bindNpc, bringShopNpc, broughtText, needsFetch, npcsByShop, npcsOf, recallSpot, retireNpcs, spawnShopNpc, whereIsNpc } from "./shopnpc.js";
 import { allShops, deleteShop, getShop, listStored, undoAvailable, undoLast } from "./shopstore.js";
@@ -292,42 +292,72 @@ async function addDealScreen(player: Player, shopId: string): Promise<void> {
         if (!shop) return undefined;
 
         const actions: Action[] = [
-            { label: "The NPC SELLS what I am holding", run: () => heldDealForm(player, shopId, "sells") },
-            { label: "The NPC BUYS what I am holding", run: () => heldDealForm(player, shopId, "buys") },
-            { label: "TRADE: players hand over an item for what I hold", run: () => swapForm(player, shopId) },
+            { label: "The NPC SELLS an item from my bag", run: () => heldDealForm(player, shopId, "sells") },
+            { label: "The NPC BUYS an item from my bag", run: () => heldDealForm(player, shopId, "buys") },
+            { label: "TRADE: players hand over one item for another", run: () => swapForm(player, shopId) },
             { label: "A SERVICE: effect, enchantment, tame animal, teleport", run: () => serviceScreen(player, shopId) },
             BACK
         ];
 
-        const body = "Hold the item in your hand first.\n§7SELLS: players pay coins and get what you hold (all of the stack).\nBUYS: players hand over what you hold and get coins.\nTRADE: players hand over another item from your bag, maybe with coins, for what you hold.\nSERVICE: players pay coins for something done to them, no item needed.";
+        const body = "You pick the item from your bag in the next form (the robbery wand cannot be sold).\n§7SELLS: players pay coins and get the item (all of the stack).\nBUYS: players hand over the item and get coins.\nTRADE: players hand over one item from your bag, maybe with coins, for another.\nSERVICE: players pay coins for something done to them, no item needed.";
 
         return { title: heading(shop.name, "add a deal"), body, actions };
     });
 }
 
+const choiceLabel = (choice: BagChoice): string => `${describeItem(choice.spec)} (slot ${choice.slot + 1})`;
+
+/** A sale or a purchase of one item from the builder's bag. (The screens are opened with the wand in hand, so the hand is no use.) */
 async function heldDealForm(player: Player, shopId: string, kind: HeldKind): Promise<void> {
 
-    const coins = await askCoins(player, kind === "sells" ? "The NPC sells" : "The NPC buys", kind === "sells" ? "Coins players pay" : "Coins players are paid", 10);
+    const choices = itemChoices(player);
 
-    if (coins === undefined) return;
+    if (choices.length === 0) {
+        screens.notify(player, warn("Put the item in your bag first (the robbery wand cannot be sold)."));
+        return;
+    }
 
-    const outcome = addHeldDeal(player, shopId, kind, coins);
+    const form = new ModalFormData()
+        .title(kind === "sells" ? "The NPC sells" : "The NPC buys")
+        .dropdown("Which item", choices.map(choiceLabel), { defaultValueIndex: 0 })
+        .textField(kind === "sells" ? "Coins players pay" : "Coins players are paid", "10", { defaultValue: "10" });
+
+    const response = await showForm(player, form);
+
+    if (!response || response.canceled) return;
+
+    const [picked, coinsText] = response.formValues ?? [];
+    const choice = choices[typeof picked === "number" ? picked : 0];
+    const text = String(coinsText ?? "").trim();
+    const coins = Number(text);
+
+    if (!choice) return;
+
+    if (text.length === 0 || !Number.isInteger(coins)) {
+        screens.notify(player, warn("A price is a whole number of coins."));
+        return;
+    }
+
+    const outcome = addHeldDeal(player, shopId, kind, coins, choice.slot);
 
     report(player, outcome, outcome.ok && outcome.trade ? `Added: ${describeTrade(outcome.trade)}.` : "Added.");
 }
 
 async function swapForm(player: Player, shopId: string): Promise<void> {
 
-    const choices = bagChoices(player);
+    const choices = itemChoices(player);
 
-    if (choices.length === 0) {
-        screens.notify(player, warn("Put the item players should hand over in your bag first (not in the hand you are holding)."));
+    if (choices.length < 2) {
+        screens.notify(player, warn("Put the item players should hand over in your bag first (a trade needs two different items there: the one they get, and the one they hand over)."));
         return;
     }
 
+    const labels = choices.map(choiceLabel);
+
     const form = new ModalFormData()
         .title("Trade")
-        .dropdown("Players hand over", choices.map((choice) => `${describeItem(choice.spec)} (slot ${choice.slot + 1})`), { defaultValueIndex: 0 })
+        .dropdown("Players get", labels, { defaultValueIndex: 0 })
+        .dropdown("Players hand over", labels, { defaultValueIndex: 1 })
         .textField("How many", "1", { defaultValue: "1" })
         .textField("Extra coins they also pay (0 for none)", "0", { defaultValue: "0" });
 
@@ -335,19 +365,20 @@ async function swapForm(player: Player, shopId: string): Promise<void> {
 
     if (!response || response.canceled) return;
 
-    const [picked, amountText, coinsText] = response.formValues ?? [];
-    const choice = choices[typeof picked === "number" ? picked : 0];
+    const [gotPicked, givenPicked, amountText, coinsText] = response.formValues ?? [];
+    const got = choices[typeof gotPicked === "number" ? gotPicked : 0];
+    const choice = choices[typeof givenPicked === "number" ? givenPicked : 1];
     const amount = Number(String(amountText ?? "").trim());
     const coins = Number(String(coinsText ?? "").trim());
 
-    if (!choice) return;
+    if (!got || !choice) return;
 
     if (!Number.isInteger(amount) || !Number.isInteger(coins)) {
         screens.notify(player, warn("How many, and the extra coins, are whole numbers."));
         return;
     }
 
-    const outcome = addSwapDeal(player, shopId, choice.slot, amount, coins);
+    const outcome = addSwapDeal(player, shopId, choice.slot, amount, coins, got.slot);
 
     report(player, outcome, outcome.ok && outcome.trade ? `Added: ${describeTrade(outcome.trade)}.` : "Added.");
 }

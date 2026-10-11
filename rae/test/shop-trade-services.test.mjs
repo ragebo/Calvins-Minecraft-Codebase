@@ -428,7 +428,7 @@ test("a missing bounty scoreboard stops a bounty requirement rather than failing
     fake.addObjective("coins");
     const p = fake.makePlayer("Ada", { inventory: true });
     const wanted = deal({ ...L.buyDeal({ type: "minecraft:stick", amount: 1 }, 1), requires: { bounty: 5 } });
-    assert.match(trade.whyCannotTrade(p, wanted), /bounty scoreboard has not been made yet/);
+    assert.match(trade.whyCannotTrade(p, wanted), /bounties are not being kept in this world right now \(tell an operator\)/);
 });
 
 // ---------------------------------------------------------------------------------------------------------

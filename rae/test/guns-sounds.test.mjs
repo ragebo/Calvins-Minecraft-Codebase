@@ -26,7 +26,7 @@ function armed(gun, name = "Deputy") {
 function emptyMagazine(p, gun) {
     for (let i = 0; i < gun.magazineSize; i++) {
         use(p); fake.advance(gun.fireRateTicks);
-        if (gun.primeTicks !== undefined) { use(p); fake.advance(gun.primeTicks); }   // the prime click between shots, so this really does fire magazineSize times
+        if (gun.primeTicks !== undefined && i < gun.magazineSize - 1) { use(p); fake.advance(gun.primeTicks); }   // the prime click between shots, so this really does fire magazineSize times (the last shot leaves nothing to cycle)
     }
     fake.advance(80);
     overworld().played.length = 0; p.messages.length = 0; p.privateSounds.length = 0;

@@ -104,18 +104,29 @@ test("rae:debug lists the registered systems", () => {
     assert.match(chat, /Systems:.*compass/);
 });
 
-test("missing scoreboards are reported by name", () => {
+test("missing scoreboards are made, and a game that refuses to make one is reported by name", () => {
     fake.reset();
 
-    // verifyScoreboards() now reports through core/log's error() (console, plus an operator), not
-    // world.sendMessage/fake.chat.
+    // verifyScoreboards() reports through core/log's error() (console, plus an operator), not
+    // world.sendMessage/fake.chat -- and only for one the game would not make.
     const errors = [];
     const originalError = console.error;
+    const originalWarn = console.warn;
+    const realAdd = world.scoreboard.addObjective;
     console.error = (...args) => errors.push(args.join(" "));
+    console.warn = () => {};
     try {
         system.afterEvents.scriptEventReceive.emit({ id: "rae:debug", sourceEntity: undefined, message: "" });
+        assert.equal(errors.length, 0, errors.join(" | "));
+        assert.ok(world.scoreboard.getObjective("coins") !== undefined && world.scoreboard.getObjective("bounty") !== undefined, "the debug check made them");
+
+        fake.reset();
+        world.scoreboard.addObjective = () => { throw new Error("the game said no"); };
+        system.afterEvents.scriptEventReceive.emit({ id: "rae:debug", sourceEntity: undefined, message: "" });
     } finally {
+        world.scoreboard.addObjective = realAdd;
         console.error = originalError;
+        console.warn = originalWarn;
     }
-    assert.ok(errors.some((m) => m.includes("Missing scoreboard objectives") && m.includes("coins")));
+    assert.ok(errors.some((m) => m.includes("Missing scoreboard objectives") && m.includes("coins")), errors.join(" | "));
 });

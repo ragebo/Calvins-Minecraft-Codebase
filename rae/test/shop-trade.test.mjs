@@ -333,7 +333,7 @@ test("a missing coins scoreboard stops a priced deal rather than charging nothin
     const buy = deal(L.buyDeal({ type: "minecraft:iron_sword", amount: 1 }, 60));
     const gift = deal({ cost: { coins: 0, items: [] }, rewards: [{ kind: "item", item: { type: "minecraft:bread", amount: 1 } }] });
 
-    assert.match(trade.whyCannotTrade(p, buy), /coins scoreboard/);
+    assert.match(trade.whyCannotTrade(p, buy), /coins are not being kept in this world right now \(tell an operator\)/);
     assert.equal(trade.carryOutTrade(p, buy).ok, false);
     assert.equal(countIn(p, "minecraft:iron_sword"), 0);
     assert.equal(trade.carryOutTrade(p, gift).ok, true, "a deal with no coins in it does not need the scoreboard");

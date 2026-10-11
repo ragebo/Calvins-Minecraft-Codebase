@@ -10,8 +10,8 @@ cannot say, because the game's scripts have no item-frame support at all and nob
   after the deploy so you are sure the new scripts are what is running.
 - Operators only. Run it in your test world, away from a finished build, or on the real jewelry store: the steps work on any
   frames.
-- RAE2's load line says a scoreboard objective may be missing. The loot needs none, but the bounty reward in step 5 does:
-  `/scoreboard objectives add bounty dummy` (and `coins`) if they are missing.
+- The bounty reward in step 5 needs the `bounty` scoreboard. Nothing to type: the game makes `coins` and `bounty` itself at load
+  when a world has none (it logs "Made the missing scoreboards" once when it does).
 - **How a frame works.** The game cannot tell a script what is inside a frame, so **the loot is set on the element** (a loot
   table, fixed items, or both), and what the frame shows is only the display. Binding a frame also saves what it shows, so it
   can be shown again after a theft. If you change the display later, press **Save what the frame shows now** in its screen.

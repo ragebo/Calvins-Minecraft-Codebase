@@ -15,8 +15,8 @@ first thing built on those answers, so most of this card is "does the real game 
   floats just over every block now); and the "vanilla screen" that opened about half the time on a button or chest was this framework's own
   main menu opening on top of the block's screen (see "What the vanilla screen turned out to be" below), fixed by looking at what the wand
   points at instead of at the clock.
-- RAE2's load line says a scoreboard objective is missing (`coins`). The price lock and the payouts need it, so create it
-  before step 13: `/scoreboard objectives add coins dummy`, and `/scoreboard objectives add bounty dummy` if that is missing too.
+- The price lock and the payouts need the `coins` scoreboard. Nothing to type: the game makes `coins` and `bounty` itself at load
+  when a world has none (an older RAE2 load line that said `coins` was missing no longer happens).
 - Operators only. Run it in your test world (RAE2) as an operator, on flat ground **away from the old Saint Diego Bank**
   (the old command-block build is untouched, and two builds in one place would fight).
 - `/rae:robbery` (or `/give @s bountysys:robbery_wand`) gives you the wand and opens the builder's menu. It is the ONE command

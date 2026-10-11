@@ -50,31 +50,33 @@ function shooters(nameA, nameB) {
  * One trigger pull, then waiting out the fire-rate window. Reports what it did: "shot", a dry "click" or
  * "nothing". The revolver needs its hammer manually cycled between shots (primeTicks): a click that lands
  * on a primed-and-ready gun fires it and leaves it needing that cycle again, so this always also spends the
- * cycling click before returning, leaving the gun ready for the next call the same way every time.
+ * cycling click before returning, leaving the gun ready for the next call the same way every time. The shot that empties
+ * the magazine needs no cycle (the next click reloads), so a pull that is known to be the last one passes `empties`.
  */
-function pull(p) {
+function pull(p, empties = false) {
     const shots = shotsHeard();
     const clicks = clicksHeard(p);
     useItem(p);
     fake.advance(gun.fireRateTicks);
-    if (gun.primeTicks !== undefined) { useItem(p); fake.advance(gun.primeTicks); }
+    if (gun.primeTicks !== undefined && !empties) { useItem(p); fake.advance(gun.primeTicks); }
     if (shotsHeard() > shots) return "shot";
     return clicksHeard(p) > clicks ? "click" : "nothing";
 }
 
-const pulls = (p, n) => Array.from({ length: n }, () => pull(p));
+/** `n` pulls in a row. With `empties`, the last of them is the one that empties the magazine. */
+const pulls = (p, n, empties = false) => Array.from({ length: n }, (_, i) => pull(p, empties && i === n - 1));
 
 for (const [label, nameA, nameB] of PAIRS) {
     test(`guns: with ${label}, emptying one magazine leaves the other full`, () => {
         const { check, done } = checks();
         const { a, b } = shooters(nameA, nameB);
 
-        check("A fires the whole magazine", pulls(a, gun.magazineSize).every((r) => r === "shot"));
+        check("A fires the whole magazine", pulls(a, gun.magazineSize, true).every((r) => r === "shot"));
         check("A's next pull is a dry click", pull(a) === "click");
 
         const before = shotsHeard();
         check("B can still fire: the shot plays to the world", pull(b) === "shot" && shotsHeard() === before + 1);
-        check("B has a magazine of their own", pulls(b, gun.magazineSize - 1).every((r) => r === "shot"));
+        check("B has a magazine of their own", pulls(b, gun.magazineSize - 1, true).every((r) => r === "shot"));
         check("B then runs dry like A", pull(b) === "click");
         done();
     });
@@ -108,9 +110,9 @@ test("guns: reset returns every player to a full magazine, an open trigger and n
     const { check, done } = checks();
     const { a } = shooters("Alice", "Bob");
 
-    check("(setup) A emptied the magazine", pulls(a, gun.magazineSize).every((r) => r === "shot") && pull(a) === "click");
+    check("(setup) A emptied the magazine", pulls(a, gun.magazineSize, true).every((r) => r === "shot") && pull(a) === "click");
     resetSystem("guns");
-    check("the magazine is full again", pulls(a, gun.magazineSize).every((r) => r === "shot"));
+    check("the magazine is full again", pulls(a, gun.magazineSize, true).every((r) => r === "shot"));
 
     resetSystem("guns");
     const before = shotsHeard();

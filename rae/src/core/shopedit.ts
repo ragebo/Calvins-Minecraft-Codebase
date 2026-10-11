@@ -1,5 +1,5 @@
-import type { Player } from "@minecraft/server";
-import { SHOP as S } from "../config/balance.js";
+import type { ItemStack, Player } from "@minecraft/server";
+import { ROBBERY, SHOP as S } from "../config/balance.js";
 import {
     addTrade, buyDeal, cleanName, copyShop, effectDeal, enchantDeal, findTrade, mountDeal, retarget, sellDeal, slugify, swapDeal, teleportDeal,
     toHundredth, uniqueId, newShop, updateTrade,
@@ -133,17 +133,33 @@ export function addDeal(shopId: string, deal: NewTrade): Outcome {
 /** What the NPC does with the item in the builder's hand: sells it to players, or buys it from them. */
 export type HeldKind = "sells" | "buys";
 
+const WAND_REFUSAL = "that is the robbery wand, not something to deal in (hold or pick a different item)";
+
 /**
- * A deal made from the item the builder holds. "sells": the NPC hands over what is held (as many as the stack) and players pay
- * `coins`. "buys": players hand over what is held and are paid `coins`.
+ * The stack a deal is made from: the one in the builder's hand, or, when a `slot` is given, the one in that slot of their bag. A
+ * builder's screens are opened with the robbery wand in hand, so they pick from the bag; a command is typed with the item in hand.
+ * The wand is never a deal.
  */
-export function addHeldDeal(player: Player, shopId: string, kind: HeldKind, coins: number): Outcome {
+function dealStack(player: Player, slot: number | undefined, whenEmpty: string): { readonly stack: ItemStack } | { readonly refusal: string } {
 
-    const held = heldStack(player);
+    const stack = slot === undefined ? heldStack(player) : bagOf(player)?.getItem(slot);
 
-    if (!held) return fail("hold the item first");
+    if (!stack) return { refusal: slot === undefined ? whenEmpty : "that slot is empty now" };
 
-    const spec = specOf(held);
+    return stack.typeId === ROBBERY.wandItemId ? { refusal: WAND_REFUSAL } : { stack };
+}
+
+/**
+ * A deal made from an item the builder has. "sells": the NPC hands over that item (as many as the stack) and players pay
+ * `coins`. "buys": players hand over that item and are paid `coins`. The item is the one in hand, or the one in bag slot `slot`.
+ */
+export function addHeldDeal(player: Player, shopId: string, kind: HeldKind, coins: number, slot?: number): Outcome {
+
+    const dealt = dealStack(player, slot, "hold the item first");
+
+    if ("refusal" in dealt) return fail(dealt.refusal);
+
+    const spec = specOf(dealt.stack);
 
     return addDeal(shopId, kind === "sells" ? buyDeal(spec, coins) : sellDeal(spec, coins));
 }
@@ -247,8 +263,8 @@ export interface BagChoice {
     readonly spec: ItemSpec;
 }
 
-/** What is in the builder's bag, a choice per occupied slot, leaving out the slot they are holding. */
-export function bagChoices(player: Player): BagChoice[] {
+/** What is in the builder's bag to deal in, a choice per occupied slot: the one in their hand first, the robbery wand never. */
+export function itemChoices(player: Player): BagChoice[] {
 
     const bag = bagOf(player);
     const choices: BagChoice[] = [];
@@ -256,29 +272,32 @@ export function bagChoices(player: Player): BagChoice[] {
     if (!bag) return choices;
 
     for (let slot = 0; slot < bag.size; slot++) {
-        if (slot === player.selectedSlotIndex) continue;
         const stack = bag.getItem(slot);
-        if (stack) choices.push({ slot, spec: specOf(stack) });
+        if (!stack || stack.typeId === ROBBERY.wandItemId) continue;
+        choices.push({ slot, spec: specOf(stack) });
     }
 
-    return choices;
+    return choices.sort((a, b) => Number(b.slot === player.selectedSlotIndex) - Number(a.slot === player.selectedSlotIndex));
 }
 
 /**
- * A trade: the NPC hands over what the builder holds, and players hand over `amount` of what is in `giveSlot` (and `coins` as
- * well, if any). The kind asked for is the item in that slot (its name and potion, never its enchantments).
+ * A trade: the NPC hands over the item in `getSlot` of the builder's bag (or the one in hand when no slot is given), and players
+ * hand over `amount` of what is in `giveSlot` (and `coins` as well, if any). The kind asked for is the item in that slot (its name
+ * and potion, never its enchantments).
  */
-export function addSwapDeal(player: Player, shopId: string, giveSlot: number, amount: number, coins: number): Outcome {
+export function addSwapDeal(player: Player, shopId: string, giveSlot: number, amount: number, coins: number, getSlot?: number): Outcome {
 
-    const held = heldStack(player);
+    const got = dealStack(player, getSlot, "hold the item players will get first");
 
-    if (!held) return fail("hold the item players will get first");
+    if ("refusal" in got) return fail(got.refusal);
 
-    if (giveSlot === player.selectedSlotIndex) return fail("the item players hand over cannot be the one they get");
+    if (giveSlot === (getSlot ?? player.selectedSlotIndex)) return fail("the item players hand over cannot be the one they get");
 
     const give = bagOf(player)?.getItem(giveSlot);
 
     if (!give) return fail("that slot is empty now");
 
-    return addDeal(shopId, swapDeal(specOf(held), [{ ...specOf(give), amount }], coins));
+    if (give.typeId === ROBBERY.wandItemId) return fail(WAND_REFUSAL);
+
+    return addDeal(shopId, swapDeal(specOf(got.stack), [{ ...specOf(give), amount }], coins));
 }
