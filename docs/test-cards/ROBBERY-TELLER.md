@@ -31,6 +31,8 @@ which is what this card is for.
 | 12 | Open Cashier's screen (wand, click it): **Hold-up time**, make it 5. Hold it up. | It now takes about 5 seconds. A time of 0 is refused. |
 | 13 | **Quit to the main menu and rejoin.** Hold up the teller again. | It still works: the tag stays on the entity. |
 | 14 | Delete the Cashier element (**Delete it**) and click the entity with an empty hand. | The entity is a plain NPC or villager again. Holding it up does nothing. |
+| 15 | With "Teller Test" being built (`/rae:robbery select tellers`), click a second plain **NPC** with the **wand**. | A screen **What is this NPC?** with **A shop**, **A teller of Teller Test** and **Nothing**. The teller button makes a new teller and opens its screen; **A shop** goes on to the shop's questions; **Nothing** changes nothing. |
+| 16 | Click a **villager** with the **wand**. Then click the same kind of villager with an empty hand, and a **cow** with the wand. | The wand on the villager asks **Make this a teller?**; yes makes one. **Tell me: does the villager's own trade screen also open over it?** The empty hand opens the trade screen as usual and the cow is not touched. |
 
 ## What only the real game can answer (tell me what you SEE)
 

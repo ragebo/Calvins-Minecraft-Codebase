@@ -734,12 +734,40 @@ async function newShopForm(player: Player): Promise<void> {
     tell(player, ok(`Made ${made.shop.name} (${made.shop.id}) and put its NPC in front of you. Hold an item and use /rae:shop sell <coins> to stock it.`));
 }
 
-/** The wand clicked on an NPC that is not a shop yet: offers to make it one. */
-export async function openAdoptNpc(player: Player, npc: Entity): Promise<void> {
+/** Another thing the wand's click on a plain NPC can make it, offered next to "a shop" (a teller of the robbery being built). */
+export interface AdoptChoice {
+    readonly label: string;
+    readonly run: () => Promise<void>;
+}
+
+/**
+ * The wand clicked on an NPC that is not a shop yet: offers to make it one. With `alsoThis` (the click is for building a robbery
+ * too) it asks what the NPC should be instead, and the other choice is run as it is.
+ */
+export async function openAdoptNpc(player: Player, npc: Entity, alsoThis?: AdoptChoice): Promise<void> {
 
     if (screens.hasMenuOpen(player)) return;
 
-    if (!(await confirmForm(player, "Make this NPC a shop?", "This NPC is not a shop. Turn it into one? Its own dialogue stays under the game's NPC screen (sneak and click it).", "Make it a shop"))) return;
+    if (alsoThis) {
+
+        const form = new ActionFormData()
+            .title("What is this NPC?")
+            .body("It is not a shop or a teller yet. Its own dialogue stays under the game's NPC screen (sneak and click it).")
+            .button("A shop")
+            .button(alsoThis.label)
+            .button("Nothing");
+
+        const response = await showForm(player, form);
+
+        if (!response || response.canceled || response.selection === undefined || response.selection === 2) return;
+
+        if (response.selection === 1) {
+            await alsoThis.run();
+            return;
+        }
+    } else if (!(await confirmForm(player, "Make this NPC a shop?", "This NPC is not a shop. Turn it into one? Its own dialogue stays under the game's NPC screen (sneak and click it).", "Make it a shop"))) {
+        return;
+    }
 
     const name = await askText(player, "A new shop", "The shop's name", "Habiti", "");
 

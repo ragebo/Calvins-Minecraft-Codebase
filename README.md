@@ -381,7 +381,9 @@ crash or a reload is removed when its chunk loads, because a reload ends a robbe
 site that is not being robbed. Killing a guard gives nothing yet. `docs/test-cards/ROBBERY-GUARDS.md` is the run sheet.
 
 **Tellers.** To stick up a bank, a robbery can have a **teller**: an NPC or villager that a gun can hold up. Look at it (an NPC
-is best: it stands still and cannot be hurt; a villager wanders and can be shot) and run `/rae:robbery teller Cashier`. That makes
+is best: it stands still and cannot be hurt; a villager wanders and can be shot) and run `/rae:robbery teller Cashier`, or, while
+a robbery is being built, just **click it with the wand**: a plain NPC asks "a shop, or a teller of this robbery?", and a villager
+asks "make this a teller?" (its trade screen does not open). Either way that makes
 a teller element where it stands, tags the entity, and opens its screen. From then on it is an element like any other: what it
 waits for, its locks, and what happens when it is done (a line of text, a payout, mobs that appear), and other elements can wait
 for it ("the vault door waits for the teller" opens the vault by itself once the teller is held up). A player holds it up by

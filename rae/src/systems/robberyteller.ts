@@ -1,11 +1,11 @@
-import { system, world, type ItemStack, type Player } from "@minecraft/server";
+import { system, world, type Entity, type ItemStack, type Player } from "@minecraft/server";
 import { ROBBERY as R } from "../config/balance.js";
 import { debug, error, warn } from "../core/log.js";
 import { isOperator } from "../core/players.js";
 import { registerSystem } from "../core/registry.js";
 import "../core/robberyholdup.js";
-import { select } from "../core/robberyedit.js";
-import { openElementMenu } from "../core/robberyforms.js";
+import { select, selectedRobbery } from "../core/robberyedit.js";
+import { offerTeller, openElementMenu } from "../core/robberyforms.js";
 import { tellerOf } from "../core/robberyteller.js";
 
 /**
@@ -16,6 +16,8 @@ import { tellerOf } from "../core/robberyteller.js";
  *     an NPC teller's own box never open.
  *   - "The wand EDITS; anything else PLAYS": an operator holding the wand who clicks a teller gets that element's screen.
  *   - An operator who sneaks gets the game's own screen, where an NPC's skin is changed.
+ *   - The wand on a villager that is not a teller yet, with a robbery chosen, offers to make it one (an NPC is offered the same in
+ *     systems/shoptalk.ts, next to "make it a shop").
  *
  * The "before" callback is restricted (it may read and set `cancel`, nothing that changes the world), so it decides and hands the
  * screen to the next tick. Another system (systems/shoptalk.ts) also hears this event and must leave a teller alone: it does.
@@ -40,13 +42,45 @@ function guarded(label: string, fn: () => void): void {
     }
 }
 
+const isVillager = (entity: Entity): boolean => {
+    try {
+        return entity.typeId === "minecraft:villager" || entity.typeId === "minecraft:villager_v2";
+    } catch {
+        return false;
+    }
+};
+
+/**
+ * The wand on a villager that is not a teller, while a robbery is being built: offers to make it one. (A plain NPC is dealt with by
+ * systems/shoptalk.ts, whose offer can make it a shop or a teller.) With no robbery chosen, or no wand, the villager is left alone and
+ * its own trade screen opens as it always did.
+ */
+function offerVillager(player: Player, target: Entity, wand: boolean, cancel: () => void): void {
+
+    if (!wand || !isVillager(target)) return;
+
+    const robbery = selectedRobbery(player);
+    if (!robbery) return;
+
+    cancel();
+
+    if (sameClick(player)) return;
+    lastClick.set(player.id, system.currentTick);
+
+    system.run(() => guarded("offering a villager as a teller", () => { void offerTeller(player, target, robbery.id); }));
+}
+
 try {
     world.beforeEvents.playerInteractWithEntity.subscribe((event) => {
 
         guarded("a click on a teller", () => {
 
             const key = tellerOf(event.target);
-            if (!key) return;
+
+            if (!key) {
+                offerVillager(event.player, event.target, holdsWand(event.player, event.itemStack), () => { event.cancel = true; });
+                return;
+            }
 
             const player = event.player;
             const wand = holdsWand(player, event.itemStack);

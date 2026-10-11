@@ -4,6 +4,8 @@ import { onScriptEvent } from "../core/events.js";
 import { debug, error, warn } from "../core/log.js";
 import { isOperator } from "../core/players.js";
 import { registerSystem } from "../core/registry.js";
+import { selectedRobbery } from "../core/robberyedit.js";
+import { makeTellerOf } from "../core/robberyforms.js";
 import { openAdoptNpc, openShop, openShopEditor } from "../core/shopforms.js";
 import { tellerOf } from "../core/robberyteller.js";
 import { isNpc, rememberSpot, shopOf } from "../core/shopnpc.js";
@@ -73,10 +75,13 @@ try {
                 // A teller (systems/robberyteller.ts) is an NPC that is not a shop either, and is not for making into one.
                 if (tellerOf(target) !== undefined) return;
 
-                // A vanilla NPC that is not a shop. Only the wand does anything with it: offer to make it one.
+                // A vanilla NPC that is not a shop. Only the wand does anything with it: offer to make it one, or, while a robbery is
+                // being built, a teller of it (the same wand click, so the builder never has to type a command for it).
                 if (wand) {
                     event.cancel = true;
-                    open(player, () => openAdoptNpc(player, target));
+                    const robbery = selectedRobbery(player);
+                    const teller = robbery ? { label: `A teller of ${robbery.name}`, run: () => makeTellerOf(player, target, robbery.id) } : undefined;
+                    open(player, () => openAdoptNpc(player, target, teller));
                 }
                 return;
             }

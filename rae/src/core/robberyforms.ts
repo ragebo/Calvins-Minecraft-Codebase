@@ -1,4 +1,4 @@
-import type { Player } from "@minecraft/server";
+import type { Entity, Player } from "@minecraft/server";
 import { ActionFormData, ModalFormData } from "@minecraft/server-ui";
 import { ROBBERY as R } from "../config/balance.js";
 import {
@@ -14,7 +14,7 @@ import { confirmForm, showForm } from "./forms.js";
 import { error } from "./log.js";
 import { registerSystem } from "./registry.js";
 import {
-    addElementAt, applyEdit, createRobbery, recaptureFrame, removeElementFrom, select, selectedRobbery, setPending, suggestedKind,
+    addElementAt, applyEdit, bindTeller, createRobbery, recaptureFrame, removeElementFrom, select, selectedRobbery, setPending, suggestedKind,
     type Pending
 } from "./robberyedit.js";
 import { clock, cooldownLeftSeconds, resetSiteNow, runStateText, startRobbery, viewOf, whyCannotStart } from "./robberyrun.js";
@@ -464,6 +464,39 @@ async function elementsScreen(player: Player, id: string): Promise<Step> {
 /** Opens one element's screen. The wand does this when it is used on a bound block. */
 export function openElementMenu(player: Player, robberyId: string, elementId: string): Promise<void> {
     return menuFor(player, async () => { await elementScreen(player, robberyId, elementId); });
+}
+
+/**
+ * The wand clicked an NPC or a villager that is not a teller yet: makes it a teller of the robbery being built, then opens the
+ * new teller's screen. (The typed route, `/rae:robbery teller`, still works; this is the same thing without leaving the wand.)
+ * Not to be called from a before-event: binding tags the entity.
+ */
+export async function makeTellerOf(player: Player, entity: Entity, robberyId: string): Promise<void> {
+
+    if (hasMenuOpen(player) || !entity.isValid) return;
+
+    const result = bindTeller(robberyId, entity, "");
+
+    if (!result.ok) {
+        tell(player, warn(`Not changed: ${result.reason.replace(/\.$/, "")}.`));
+        return;
+    }
+
+    tell(player, ok(`${result.element.name} is a teller. Aim a gun at it to hold it up; set what happens below.`));
+
+    await openElementMenu(player, robberyId, result.element.id);
+}
+
+/** Asks first, for the wand's click on a villager (an NPC is asked about in the shop's own offer, which can also make it a shop). */
+export async function offerTeller(player: Player, entity: Entity, robberyId: string): Promise<void> {
+
+    const robbery = getRobbery(robberyId);
+
+    if (!robbery || hasMenuOpen(player) || !entity.isValid) return;
+
+    const asked = await confirmForm(player, "Make this a teller?", `Make this villager a teller of ${robbery.name}? Keeping a gun aimed at it holds it up, and then you choose what that does.`, "Make it a teller");
+
+    if (asked) await makeTellerOf(player, entity, robberyId);
 }
 
 async function elementScreen(player: Player, robberyId: string, elementId: string): Promise<Step> {

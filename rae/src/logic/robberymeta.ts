@@ -457,7 +457,7 @@ export function whyBlockCannotBe(kind: ElementKind, typeId: string): string | un
     }
 
     // A teller is an NPC or a villager: nothing is bound to a block for it, and the add-element form never offers it. This is for the callers that ask anyway.
-    if (kind === "teller") return `a ${kindLabel("teller")} is an NPC or a villager, not ${name}: look at it and use /rae:robbery teller`;
+    if (kind === "teller") return `a ${kindLabel("teller")} is an NPC or a villager, not ${name}: click one with the wand (or look at it and use /rae:robbery teller)`;
 
     if (kind === "frame" && classOfBlockType(typeId) !== "frame") {
         return `${name} is not an item frame: a ${kindLabel("frame")} element needs an item frame or a glow item frame`;

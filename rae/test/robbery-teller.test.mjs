@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { fake, fakeApi, world, load, checks, strip } from "./helpers.mjs";
-import { buttonsOf, close, fill, press, problems, script, titleOf, ui } from "./robbery-ui.mjs";
+import { buttonsOf, close, fill, press, problems, script, titleOf, ui, yes } from "./robbery-ui.mjs";
 import { L, SITE, at, buildSite, ok, added, say } from "./robbery-fixtures.mjs";
 
 // Tellers: an NPC or villager a builder bound to a robbery, who is held up by keeping a gun AIMED at it for a few seconds. A hold-up
@@ -180,7 +180,7 @@ test("a teller is described to the builder, and a block is told it cannot be one
     check("where it stands and how it is held up", /At: 100, 65, 172/.test(lines) && /Held up by: keeping a gun aimed at it for 1 second$/m.test(lines), lines);
     check("in the plural for more", M.describeElement(ok(L.updateElement(r, teller.id, { holdSeconds: 3 })), { ...teller, holdSeconds: 3 }).map(strip).join("\n").includes("for 3 seconds"));
     check("its noun", M.nounOf("teller") === "teller");
-    check("a block cannot be one, and the message says what to do instead", /is an NPC or a villager, not stone: look at it and use \/rae:robbery teller/.test(M.whyBlockCannotBe("teller", "minecraft:stone") ?? ""), M.whyBlockCannotBe("teller", "minecraft:stone"));
+    check("a block cannot be one, and the message says what to do instead", /is an NPC or a villager, not stone: click one with the wand \(or look at it and use \/rae:robbery teller\)/.test(M.whyBlockCannotBe("teller", "minecraft:stone") ?? ""), M.whyBlockCannotBe("teller", "minecraft:stone"));
     done();
 });
 
@@ -776,5 +776,108 @@ test("giving a teller to another entity is done with the command, and the screen
     await F.openElementMenu(op, "bank", built.teller.id);
 
     check("told what to do, with the teller's own name", said(op).some((m) => /Look at the NPC or villager that should be Teller, then run \/rae:robbery teller "Teller"/.test(m)), said(op).join(" | "));
+    done();
+});
+
+// ---------------------------------------------------------------------------------------------------------
+// Making a teller with the wand's click, not a typed command
+// ---------------------------------------------------------------------------------------------------------
+
+const tellers = () => S.getRobbery("bank").elements.filter((e) => e.kind === "teller");
+const shownTitles = () => ui.shown.map((form) => strip(String(titleOf(form))));
+
+test("the wand on a plain NPC, while a robbery is being built, asks whether it is a shop or a teller, and a teller is made and its screen opened", async () => {
+    setup();
+    fake.strictBefore = true;
+    const { check, done } = checks();
+    const op = builder();
+    E.select(op, "bank");
+    const plain = fake.makeEntity({ typeId: "minecraft:npc", location: { x: 104.5, y: 65, z: 172.5 }, dimension: overworld });
+
+    script(press("A teller of The Bank"), close);
+    const event = clickOn(op, plain, R.wandItemId);
+    fake.advance(1);
+    await flush();
+
+    check("the click is cancelled, so the game's own NPC screen does not open over it", event.cancel === true);
+    check("the question was 'what is this NPC', not just 'a shop?'", shownTitles()[0] === "What is this NPC?" && buttonsOf(ui.shown[0]).map(strip).join("|") === "A shop|A teller of The Bank|Nothing", `${shownTitles()[0]} ${buttonsOf(ui.shown[0]).map(strip).join("|")}`);
+    check("a second teller was made, standing where the NPC does", tellers().length === 2 && T.isTeller(plain), String(tellers().length));
+    check("and its own screen opened", shownTitles().length === 2 && shownTitles()[1] === tellers()[1].name, shownTitles().join(" > "));
+    check("the builder was told what to do with it", said(op).some((m) => /is a teller\. Aim a gun at it to hold it up/.test(m)), said(op).join(" | "));
+    check("no form lost its way", problems.length === 0, problems.join("\n"));
+    done();
+});
+
+test("'Nothing' leaves a plain NPC alone, and 'A shop' still goes on to the shop's own questions", async () => {
+    setup();
+    fake.strictBefore = true;
+    const { check, done } = checks();
+    const op = builder();
+    E.select(op, "bank");
+    const plain = fake.makeEntity({ typeId: "minecraft:npc", location: { x: 104.5, y: 65, z: 172.5 }, dimension: overworld });
+
+    script(press("Nothing"));
+    clickOn(op, plain, R.wandItemId);
+    fake.advance(1);
+    await flush();
+    check("nothing was made", tellers().length === 1 && !T.isTeller(plain) && ui.shown.length === 1, `${tellers().length} ${ui.shown.length}`);
+
+    ui.shown.length = 0;
+    fake.advance(R.wandClickGapTicks + 5);
+    script(press("A shop"), close);
+    clickOn(op, plain, R.wandItemId);
+    fake.advance(1);
+    await flush();
+    check("the shop's questions come next (what to call it)", ui.shown.length === 2 && /shop/i.test(shownTitles()[1] ?? ""), shownTitles().join(" > "));
+    check("and still no teller", tellers().length === 1 && !T.isTeller(plain));
+    done();
+});
+
+test("the wand on a villager, while a robbery is being built, offers to make it a teller; a click without the wand or a robbery is left alone", async () => {
+    setup();
+    fake.strictBefore = true;
+    const { check, done } = checks();
+    const op = builder();
+    const ada = robber();
+    const villager = fake.makeEntity({ typeId: "minecraft:villager_v2", location: { x: 104.5, y: 65, z: 172.5 }, dimension: overworld });
+
+    check("a customer's click on a villager is left to the game", clickOn(ada, villager).cancel === false);
+    check("an operator's click without the wand too", clickOn(op, villager).cancel === false);
+
+    E.select(op, "bank");
+    script(yes, close);
+    const event = clickOn(op, villager, R.wandItemId);
+    fake.advance(1);
+    await flush();
+
+    check("with the wand it is cancelled, so the villager's trade screen does not open", event.cancel === true);
+    check("it asked first, naming the robbery", shownTitles()[0] === "Make this a teller?" && /villager a teller of The Bank/.test(strip(String(ui.shown[0].calls.find((c) => c[0] === "body")?.[1] ?? ""))), shownTitles().join(" > "));
+    check("and said yes made it a teller, with its screen", tellers().length === 2 && T.isTeller(villager) && shownTitles().length === 2, `${tellers().length} ${shownTitles().join(" > ")}`);
+
+    const cow = fake.makeEntity({ typeId: "minecraft:cow", dimension: overworld });
+    check("a cow is not a villager: the wand leaves it alone", clickOn(op, cow, R.wandItemId).cancel === false);
+    done();
+});
+
+test("a villager that is already a teller is not offered again, and a villager is left alone when no robbery exists to add it to", async () => {
+    const built = setup();
+    fake.strictBefore = true;
+    const { check, done } = checks();
+    const op = builder();
+    E.select(op, "bank");
+    const taken = fake.makeEntity({ typeId: "minecraft:villager_v2", location: { x: 100.5, y: 65, z: 172.5 }, dimension: overworld });
+    T.markTeller(taken, { robbery: "bank", element: built.teller.id });
+
+    script(close);
+    clickOn(op, taken, R.wandItemId);
+    fake.advance(1);
+    await flush();
+    check("it opens that element's screen, as before, and nothing else", shownTitles().length === 1 && shownTitles()[0] === "Teller", shownTitles().join(" > "));
+
+    S.deleteRobbery("bank");
+    E.select(op, undefined);
+    ui.shown.length = 0;
+    const loose = fake.makeEntity({ typeId: "minecraft:villager_v2", dimension: overworld });
+    check("with no robbery at all there is nothing to offer, so the click is not touched", clickOn(op, loose, R.wandItemId).cancel === false);
     done();
 });
