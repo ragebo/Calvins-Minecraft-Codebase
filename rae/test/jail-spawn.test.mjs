@@ -111,11 +111,13 @@ test("a reset leaves alone a player the round never made a spectator (an operato
     const { check, done } = checks();
     const { other } = scene();
     other.getGameMode = () => "Spectator";
+    fake.advance(1);                                     // players() is one snapshot per tick: let the reset below really see this player
 
     fake.dimension("overworld").commands.length = 0;
     resetAllSystems();
 
     check("no game mode command at all", gamemodeCommands().length === 0, gamemodeCommands().join(" | "));
+    check("(and they were in the reset's reach: a remembered mode would have been given back)", (other.setDynamicProperty("rae:gamemode_before_spectator", "survival"), resetAllSystems(), gamemodeCommands().join() === "gamemode survival @s"), gamemodeCommands().join(" | "));
     done();
 });
 
@@ -130,5 +132,34 @@ test("a player who was offline when the round reset is let out of spectator when
 
     check("they are given survival back", gamemodeCommands().join() === "gamemode survival @s", gamemodeCommands().join(" | "));
     check("and it is forgotten", outlaw.getDynamicProperty("rae:gamemode_before_spectator") === undefined);
+    done();
+});
+
+test("when the game refuses the command, the remembered mode is kept and the next reset tries again", () => {
+    const { check, done } = checks();
+    const { outlaw } = scene();
+    outlaw.setDynamicProperty("rae:gamemode_before_spectator", "adventure");
+    fake.advance(1);                                     // players() is one snapshot per tick, and scene() reset before these players existed
+
+    const overworldDim = fake.dimension("overworld");
+    const realRun = overworldDim.runCommand;
+    const realError = console.error;
+    const failures = [];
+    console.error = (...args) => failures.push(args.join(" "));
+    overworldDim.runCommand = () => { throw new Error("the game said no"); };
+
+    try {
+        resetAllSystems();
+    } finally {
+        overworldDim.runCommand = realRun;
+        console.error = realError;
+    }
+
+    check("the failure was reported, not thrown out of the reset", failures.some((m) => /could not give a player their game mode back: the game said no/.test(m)), failures.join(" | "));
+    check("what was remembered is still there", outlaw.getDynamicProperty("rae:gamemode_before_spectator") === "adventure");
+
+    overworldDim.commands.length = 0;
+    resetAllSystems();
+    check("the next reset gives it back and forgets it", gamemodeCommands().join() === "gamemode adventure @s" && outlaw.getDynamicProperty("rae:gamemode_before_spectator") === undefined, gamemodeCommands().join(" | "));
     done();
 });

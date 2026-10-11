@@ -81,8 +81,15 @@ function leaveSpectator(player: Player): void {
 
     if (typeof before !== "string") return;
 
+    try {
+        player.runCommand(`gamemode ${before === "spectator" ? "survival" : before} @s`);
+    } catch (err) {
+        // What was remembered is kept, so the next reset or spawn tries again instead of leaving them a spectator with no memory of why.
+        error("jail", `could not give a player their game mode back: ${err instanceof Error ? err.message : String(err)}`);
+        return;
+    }
+
     player.setDynamicProperty(BEFORE_SPECTATOR, undefined);
-    player.runCommand(`gamemode ${before === "spectator" ? "survival" : before} @s`);
 }
 
 onDeath("jail:capture", 100, (ctx) => {
