@@ -9,7 +9,8 @@
             "minecraft:icon": "sledgehammer",
             "minecraft:display_name": { "value": "Sledgehammer" },
             "minecraft:max_stack_size": 1,
-            "minecraft:hand_equipped": true
+            "minecraft:hand_equipped": true,
+            "minecraft:damage": { "value": 8 }
         }
     }
 }

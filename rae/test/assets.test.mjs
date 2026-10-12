@@ -582,6 +582,21 @@ test("every melee weapon is a plain item: one at a time, held like a tool, not h
     done();
 });
 
+test("each melee item carries minecraft:damage equal to its number in MELEE, so the two paths to the damage cannot drift apart", async () => {
+    const { check, done } = checks();
+    const { MELEE } = await load("config/balance.js");
+
+    for (const [key, weapon] of Object.entries(MELEE.weapons)) {
+        const item = items.find((candidate) => candidate.id === weapon.id);
+        if (!item) { check(`${key}: the item exists`, false); continue; }
+
+        // The game's own items write it as {"value": N} (read out of the installed vanilla spears, 2026-10-12).
+        const damage = readJson(item.file)["minecraft:item"].components["minecraft:damage"];
+        check(`${key}: minecraft:damage is {"value": ${weapon.damage}}`, damage?.value === weapon.damage, JSON.stringify(damage));
+    }
+    done();
+});
+
 test("the melee sprites are exactly the ones supplied in weapons11.mcpack, 16x16 with transparency", () => {
     const { check, done } = checks();
 

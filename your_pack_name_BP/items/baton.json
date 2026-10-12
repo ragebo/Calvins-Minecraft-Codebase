@@ -9,7 +9,8 @@
             "minecraft:icon": "baton",
             "minecraft:display_name": { "value": "Baton" },
             "minecraft:max_stack_size": 1,
-            "minecraft:hand_equipped": true
+            "minecraft:hand_equipped": true,
+            "minecraft:damage": { "value": 3 }
         }
     }
 }

@@ -24,21 +24,22 @@ the game shows (no spike): every engine behavior that is not measured has a fall
 
 ## Phase 1: The weapons
 
-- [ ] **Task 2: The core, the hurt hook, the diagnostic log and the base damage of all five** (L)
+- [x] **Task 2: The core, the hurt hook, the diagnostic log and the base damage of all five** (L) - done
   `logic/melee.ts` (the first pure rules: a cooldown as a step function, the threshold and cone tests as plain functions), `core/melee.ts` (which weapon a
   player holds, by the item in the main hand; per-attacker cooldowns; per-target records cleared on a round reset; the diagnostic log), `systems/melee.ts`
   (the one `beforeEvents.entityHurt` hook, plus the `rae:melee_debug` script event), the `MELEE` numbers (knife 2, machete 4, baton 3, axe 6, sledgehammer 8),
   and `minecraft:damage` on each item with the same number, so base damage is right if either path works. The hook sets `event.damage` for a player's melee
   hit with one of the five; the after-hurt event's `damage` is compared with the number and a warning is logged once if the game did not honor it.
   - Acceptance:
-    - [ ] a hit with each weapon deals exactly its number (the hook sets `damage`), on a mob and on a player, in the fake's restricted before-event mode
-    - [ ] a hit with anything else (a fist, a gun, a vanilla sword) is left exactly as it was; a hit by a non-player is left alone
-    - [ ] the held weapon is read from the main hand at the moment of the hit, not remembered; a player who swaps item mid-swing gets the item they hold
-    - [ ] each item file carries `minecraft:damage` equal to its number in `MELEE` (an asset test), so the two paths cannot drift apart
-    - [ ] with `rae:melee_debug on` the pipeline is logged (the event, the weapon, the number set, the number dealt); off, nothing is logged and nothing runs
-    - [ ] when the number dealt differs from the number set, one `[melee]` warning says the game ignored the hurt event's damage, once per script load
-    - [ ] a round reset clears the per-attacker and per-target records; nothing restricted is called inside the before-event handler
+    - [x] a hit with each weapon deals exactly its number (the hook sets `damage`), on a mob and on a player, in the fake's restricted before-event mode
+    - [x] a hit with anything else (a fist, a gun, a vanilla sword) is left exactly as it was; a hit by a non-player is left alone
+    - [x] the held weapon is read from the main hand at the moment of the hit, not remembered; a player who swaps item mid-swing gets the item they hold
+    - [x] each item file carries `minecraft:damage` equal to its number in `MELEE` (an asset test), so the two paths cannot drift apart
+    - [x] with `rae:melee_debug on` the pipeline is logged (the event, the weapon, the number set, the number dealt); off, nothing is logged and nothing runs
+    - [x] when the number dealt differs from the number set, one `[melee]` warning says the game ignored the hurt event's damage, once per script load
+    - [x] a round reset clears the per-attacker and per-target records; nothing restricted is called inside the before-event handler
   - Verification: check, test, check:legacy; deliberate breaks on every number, every pass-through and the warning
+  - Result: the hurt hook sets each weapon's number (knife 2, machete 4, baton 3, axe 6, sledgehammer 8) on a player's melee hit; pass-throughs for fists, guns, vanilla swords, mobs, projectiles and the script's own override damage; the held item is read at hit time; minecraft:damage on all five items equal to MELEE; rae:melee_debug logs the pipeline; one [melee] warning if the game dealt another number; reset clears the records. 1577 tests (+18), 58-break mutation run all caught.
   - Dependencies: Task 1
   - Files: `rae/src/logic/melee.ts`, `rae/src/core/melee.ts`, `rae/src/systems/melee.ts`, `rae/src/config/balance.ts`, `your_pack_name_BP/items/*.json`, `rae/src/main.ts`, `rae/test/melee-core.test.mjs`
 

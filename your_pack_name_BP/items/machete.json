@@ -9,7 +9,8 @@
             "minecraft:icon": "machete",
             "minecraft:display_name": { "value": "Machete" },
             "minecraft:max_stack_size": 1,
-            "minecraft:hand_equipped": true
+            "minecraft:hand_equipped": true,
+            "minecraft:damage": { "value": 4 }
         }
     }
 }

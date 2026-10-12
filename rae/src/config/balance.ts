@@ -448,12 +448,17 @@ export const START = {
  * owner's weapons11.mcpack, a createtextures.com texture pack whose licence is unstated.
  */
 export const MELEE = {
+    /**
+     * `damage` is what one hit deals, in vanilla health points (2 = one heart). It is written to the game's "about to hurt" event,
+     * and each item file also carries it as `minecraft:damage`, so it is right if either path works (test/assets.test.mjs checks
+     * that the two agree). Whether the game honors either is measured by docs/test-cards/MELEE.md; `rae:melee_debug on` logs it.
+     */
     weapons: {
-        knife: { id: "bountysys:knife", name: "Knife" },
-        machete: { id: "bountysys:machete", name: "Machete" },
-        baton: { id: "bountysys:baton", name: "Baton" },
-        axe: { id: "bountysys:axe", name: "Axe" },
-        sledgehammer: { id: "bountysys:sledgehammer", name: "Sledgehammer" }
+        knife: { id: "bountysys:knife", name: "Knife", damage: 2 },
+        machete: { id: "bountysys:machete", name: "Machete", damage: 4 },
+        baton: { id: "bountysys:baton", name: "Baton", damage: 3 },
+        axe: { id: "bountysys:axe", name: "Axe", damage: 6 },
+        sledgehammer: { id: "bountysys:sledgehammer", name: "Sledgehammer", damage: 8 }
     }
 };
 

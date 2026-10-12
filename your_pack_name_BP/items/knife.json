@@ -9,7 +9,8 @@
             "minecraft:icon": "knife",
             "minecraft:display_name": { "value": "Knife" },
             "minecraft:max_stack_size": 1,
-            "minecraft:hand_equipped": true
+            "minecraft:hand_equipped": true,
+            "minecraft:damage": { "value": 2 }
         }
     }
 }
