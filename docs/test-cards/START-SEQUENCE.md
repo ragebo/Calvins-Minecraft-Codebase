@@ -8,7 +8,7 @@ spawn while **law choose their spawn** from a screen, and **play begins** when e
 tests (`test/start-*.test.mjs` and `test/cinematic.test.mjs`: about 130 tests, and about 250 deliberate breaks of the rules, each caught). What they cannot say is
 how the camera moves, whether a screen opens after a camera, and what a player sees: that is this card.
 
-- Not deployed yet: it ships in the next behavior pack after 0.2.6 (0.2.7). RP unchanged. Operators only for the editing; every player sees the result.
+- Deployed as behavior pack 0.2.7 (2026-10-12): quit the game completely and launch it fresh. RP unchanged (1.0.27). Operators only for the editing; every player sees the result.
 - **Two players are best** (one law, one outlaw: a second account, or a friend). Alone you can run steps 1 to 8 and 20 to 22.
 - You edit it all from the RAE menu (`/give @s bountysys:game_menu`, right-click, **Start sequence**, which only operators see) and from the
   config editor (`/rae:config`, the group **Start sequence**). There is no new command.

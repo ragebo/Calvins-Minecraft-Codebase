@@ -164,8 +164,9 @@ Status source of truth for `plan.md` in this folder. Every task: RED first (a fa
 - [x] every acceptance box above is ticked (Tasks 1 to 9)
 - [ ] the owner has run `docs/test-cards/START-SEQUENCE.md` in the real game
 
-- [ ] **Task 10: Release** (S; only when the owner asks)
+- [x] **Task 10: Release** (S; only when the owner asks) - done
   Bump the BP to 0.2.7 in four places (manifest header and two modules, `config/build.ts`), gate, clean build, `deploy.ps1` dry run
   then real, byte-verify, read the four world pins as JSON, tell the owner to fully quit and relaunch if the game is running. No push
   unless asked.
-  - Dependencies: all of the above. Not started.
+  - Result: DEPLOYED 2026-10-12 on the owner's "deploy": gate exit 0 (1555 tests) on the bumped tree, clean build 83 files (78 + the 5 new modules), dry run then real, repo build equals the game folder byte for byte (108 files), all four BP pins read as JSON at 0.2.7 (RP pins untouched at 1.0.27), game manifest 0.2.7 / 0.2.7 / 0.2.7, the rollback copy holds 0.2.6, and the only differences from it are the 5 new and 5 changed script files. All four worlds were closed but Minecraft.Windows was running at a menu (started 1:23 PM), so the owner was told to quit completely and relaunch. Not pushed: v2 is ahead of origin/v2.
+  - Dependencies: all of the above.
