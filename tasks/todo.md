@@ -78,21 +78,28 @@ Nothing is deployed or pushed unless the owner asks.
   - Dependencies: Task 1 (the format only; the tool has its own parser)
   - Files: `tools/telemetry/ingest.mjs`, `rae/test/telemetry-tool-ingest.test.mjs`
 
-- [ ] **Task 5: Tool, rounds report, CLI and launcher** (M)
+- [ ] **Task 5: Tool, rounds report, CLI and launcher** (M; built as two commits, 5a and 5b, because it came to six files)
   `aggregate.mjs` (pure: events to figures, one section per area), `report.mjs` (figures to one self-contained HTML file: tables
-  with inline bars, no external requests), `cli.mjs` (ingest then report; `--out`, `--logs`, `--include-tests`, `--open`; prints
-  a short summary), one CSV per kind next to the report, and `tools/telemetry.cmd` (double-click: runs from its own folder and
-  opens the report). Sections: Rounds (count, law and outlaw wins, average and median length, kills, deaths, coins at end) and
-  a data panel (files read, events, worlds, builds, skipped lines).
+  with inline bars, no external requests), `cli.mjs` (ingest then report; `--out`, `--logs`, `--world`, `--open`; prints a short
+  summary), one CSV per kind next to the report, and `tools/telemetry.cmd` (double-click: runs from its own folder and opens the
+  report). Sections: Rounds (count, law and outlaw wins, average and median length, kills, deaths, coins at end) and a data panel
+  (files read, events, worlds, builds, skipped lines, lines the game's rate limit dropped). Changed from the first draft:
+  `--world <id>` is new (the world id is in every line so that worlds are not mixed; this is how a report picks one), and
+  `--include-tests` waits for Task 8, where the first thing it affects (robbery test runs) arrives.
+  - 5a, done: `aggregate.mjs`, `report.mjs`, `telemetry-tool-report.test.mjs`. Colours follow the dataviz method: law is palette
+    hue 1 and outlaw hue 2 all through (checked with the palette validator in light and dark: colour-blind separation 24.7 and 26.8,
+    contrast at least 3:1), aborted is neutral gray, every bar's number is also in text. 14 tests; 58 deliberate breaks, each caught.
+  - 5b, next: `cli.mjs`, `telemetry.cmd`, a CLI test, and the contract test below.
   - Acceptance:
-    - [ ] fixture events give exact figures
-    - [ ] the HTML makes no external request, and an empty archive says "no data yet" instead of failing
-    - [ ] one CSV per kind, a header row and one row per event
+    - [x] fixture events give exact figures
+    - [x] the HTML makes no external request, and an empty archive says "no data yet" instead of failing
+    - [x] one CSV per kind, a header row and one row per event (`toCsv`; the CLI writes the files in 5b)
     - [ ] `telemetry.cmd` works when started from any folder
     - [ ] the report looks right in a browser (checked by eye)
+    - [ ] (moved here from Checkpoint 1) contract test: a round played under the fake game is written as a real line, read by the tool and shown in the report
   - Verification: `telemetry-tool-report.test.mjs`; open the generated report in the built-in browser
   - Dependencies: Task 4
-  - Files: `tools/telemetry/aggregate.mjs`, `tools/telemetry/report.mjs`, `tools/telemetry/cli.mjs`, `tools/telemetry.cmd`, `rae/test/telemetry-tool-report.test.mjs`
+  - Files: `tools/telemetry/aggregate.mjs`, `tools/telemetry/report.mjs`, `tools/telemetry/cli.mjs`, `tools/telemetry.cmd`, `rae/test/telemetry-tool-report.test.mjs`, plus in 5b `rae/test/telemetry-tool-cli.test.mjs` and `rae/test/telemetry-contract.test.mjs`
 
 ### Checkpoint 1: walking skeleton
 - [ ] check, test and check:legacy green
