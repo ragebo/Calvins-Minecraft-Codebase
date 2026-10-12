@@ -55,7 +55,7 @@ Status source of truth for `plan.md` in this folder. Every task: RED first (a fa
   - Files: `rae/src/core/cinematic.ts`, `rae/test/fake/minecraft-server.mjs`, `rae/test/cinematic.test.mjs`
 
 ### Checkpoint: Foundation
-- [ ] all green; nothing visible in game yet
+- [x] all green; nothing visible in game yet (1467 tests after Task 3)
 
 ## Phase 2: The sequence
 
@@ -113,7 +113,7 @@ Status source of truth for `plan.md` in this folder. Every task: RED first (a fa
   - Files: `rae/src/core/startsequence.ts`, `rae/src/core/game.ts`, `rae/test/start-reveal.test.mjs`, `rae/test/round-flow.test.mjs`, `rae/test/ui.test.mjs`, `rae/test/menu.test.mjs`, `rae/test/load-smoke.test.mjs`
 
 ### Checkpoint: the sequence
-- [ ] all green; a whole Start under fake time reaches ACTIVE every way it can end
+- [x] all green; a whole Start under fake time reaches ACTIVE every way it can end (all picked, the countdown, a closed screen, no law, no outlaws, a reset, a second Start, a player leaving; 1507 tests after Task 6)
 
 ## Phase 3: Customizing it
 
@@ -145,22 +145,23 @@ Status source of truth for `plan.md` in this folder. Every task: RED first (a fa
   - Dependencies: Tasks 3, 7
   - Files: `rae/src/core/startforms.ts`, `rae/test/start-shots-forms.test.mjs`
 
-- [ ] **Task 9: Live numbers, docs and the test card** (M)
+- [x] **Task 9: Live numbers, docs and the test card** (M) - done
   `core/configoverrides.ts` registers the START numbers (`start.introEnabled`, `start.introSeconds`, `start.shotsPerStart`,
   `start.pickSeconds`, `start.flyDownSeconds`, `start.flyDownHeight`) so the config editor and `/rae:config` change them live.
   `docs/test-cards/START-SEQUENCE.md` (numbered in-game steps: marking a shot, previewing it, a Start with law and outlaw, a late
   pick, a mid-sequence reset, one failing command, the bag-clearing default; and what only the real game can answer).
   README and ARCHITECTURE.md rows (named here because the rules normally forbid editing them).
   - Acceptance:
-    - [ ] each number is a registered setting with a range, changes the next Start, and resets to its default
-    - [ ] the card has every step the owner needs, and says what is unmeasured
-    - [ ] README and ARCHITECTURE.md say where the sequence lives; `git status` is clean after the commit
+    - [x] each number is a registered setting with a range, changes the next Start, and resets to its default
+    - [x] the card has every step the owner needs, and says what is unmeasured
+    - [x] README and ARCHITECTURE.md say where the sequence lives; `git status` is clean after the commit
   - Verification: check, test, check:legacy
+  - Result: 9 new tests (start-config.test.mjs): the six settings (start.introEnabled, introSeconds, shotsPerStart, pickSeconds, flyDownSeconds, flyDownHeight) are registered in a group of their own, Start sequence, with kinds, ranges and labels that say what they do; each refuses what it cannot take and says the range (a negative or fractional intro, more shots than can be saved, no time to choose, a number for a switch, a member); each goes back to its default; typed as /rae:config set it works; and each changes the NEXT Start, checked by running one (the intro off, 4 seconds eased and over at tick 80, one shot of three, 5 seconds to choose, a 1 second fly-down from 50 blocks). 14 deliberate breaks, all caught. docs/test-cards/START-SEQUENCE.md: 22 numbered in-game steps in three parts (the editor alone, a whole Start with two players, the numbers and the safety net), ten things only the real game can answer, what must not appear. README: a Start sequence section, the layout lines, the game menu bullet, the round-lifecycle paragraph corrected (no more Rolling...). ARCHITECTURE.md: rows for cinematic, startforms, startsequence, startstore and logic/start (All nine became All ten), game.ts updated, and a The start sequence's shape section. CLAUDE.md is not touched. The card also notes that the default commands empty an operator's bag, menu item and wand in survival.
   - Dependencies: Tasks 6, 8
   - Files: `rae/src/core/configoverrides.ts`, `rae/test/start-config.test.mjs`, `docs/test-cards/START-SEQUENCE.md`, `README.md`, `ARCHITECTURE.md`
 
 ### Checkpoint: complete
-- [ ] every acceptance box above is ticked
+- [x] every acceptance box above is ticked (Tasks 1 to 9)
 - [ ] the owner has run `docs/test-cards/START-SEQUENCE.md` in the real game
 
 - [ ] **Task 10: Release** (S; only when the owner asks)

@@ -1,5 +1,5 @@
 import type { Player, Vector3 } from "@minecraft/server";
-import { AIM, BOAT, COMPASS, ECONOMY, FORT, HARMING, HORSE, JAILBREAK, RAIDS, RANCH, ROBBERY, SHOP, TELEMETRY, TRAIN, TUMBLEWEED } from "../config/balance.js";
+import { AIM, BOAT, COMPASS, ECONOMY, FORT, HARMING, HORSE, JAILBREAK, RAIDS, RANCH, ROBBERY, SHOP, START, TELEMETRY, TRAIN, TUMBLEWEED } from "../config/balance.js";
 import { GUNS } from "../config/guns.js";
 import {
     BOAT_NPC, BOAT_WIN_TELEPORT, BRIDGE_AREA, FORT_AREA, FORT_REWARD_CHEST, FORT_SPAWNS,
@@ -500,6 +500,17 @@ function registerBalanceFields(): void {
     // The telemetry lines (core/telemetryevents.ts) are read at every line, so this stops them at once with no redeploy: for a world that
     // writes too much, or one that is not to be counted. Off writes nothing and uses up no line number.
     boolean("telemetry.events", "Telemetry: write the round, robbery and shop events to the content log (off writes nothing)", "Telemetry", () => TELEMETRY.events.enabled, (v) => { TELEMETRY.events.enabled = v; });
+
+    // The start sequence's numbers (core/startsequence.ts reads each of them when a Start begins, so a change is for the NEXT Start). The start
+    // commands and the camera shots themselves are not here: they are authored in the RAE menu's Start sequence screens.
+    const GROUP = "Start sequence";
+
+    boolean("start.introEnabled", "Start: play the camera intro before the roles are revealed (off skips it, saved shots or not)", GROUP, () => START.introEnabled, (v) => { START.introEnabled = v; });
+    numeric("start.introSeconds", "Start: how long the camera intro lasts, in seconds, shared between its shots (0 skips it)", GROUP, "integer", () => START.introSeconds, (v) => { START.introSeconds = v; }, { min: 0, max: 120 });
+    numeric("start.shotsPerStart", "Start: how many of the saved camera shots a start plays, picked at random", GROUP, "integer", () => START.shotsPerStart, (v) => { START.shotsPerStart = v; }, { min: 0, max: START.maxShots });
+    numeric("start.pickSeconds", "Start: how long law players have to choose a spawn, in seconds (then they get a random one)", GROUP, "integer", () => START.pickSeconds, (v) => { START.pickSeconds = v; }, { min: 1, max: 300 });
+    numeric("start.flyDownSeconds", "Start: how long the outlaws' camera takes to fly down to their spawn, in seconds (play waits for it)", GROUP, "float", () => START.flyDownSeconds, (v) => { START.flyDownSeconds = v; }, { min: 0, max: 10 });
+    numeric("start.flyDownHeight", "Start: how many blocks above their spawn the outlaws' fly-down starts", GROUP, "integer", () => START.flyDownHeight, (v) => { START.flyDownHeight = v; }, { min: 1, max: 200 });
 }
 
 registerGunFields();

@@ -27,6 +27,7 @@ own header comment where it has one.
 |---|---|
 | `aim.ts` | Camera zoom and the scope overlay — one place so guns and the aim-measurement spike do it the same way. |
 | `ambience.ts` | The on/off toggle for cosmetic effects (tumbleweeds) — lives here because the system that acts on it and the system that lets a player flip it can't import each other. |
+| `cinematic.ts` | The one place the start sequence touches a player's camera and input: a pan is two calls on the free camera (appear at the start mark, ease to the end mark), a fly-down comes from above a spawn to the player's own eyes, a lock switches off movement. Every call is wrapped (a failure is reported once per kind and never thrown), so a start cannot hang on a camera. |
 | `commands.ts` | What every system that registers custom commands needs: `ok`/`failure` answers, the player behind a command (whoever typed it, or the one who pressed an NPC's button), and the FAMILY: ONE operator-only command whose first word picks an action from a list the game's command bar completes, with two text slots after it, a built-in `help`, and a bare form that opens the area's menu. All three areas (`rae:config`, `rae:robbery`, `rae:shop`) are families, so `/rae:` offers three entries instead of the 38 it once did; `test/load-smoke.test.mjs` fails if another is added. A registration mistake is reported to the log and takes nothing else down. |
 | `configoverrides.ts` | The curated registry of `config/guns.ts`/`balance.ts`/`world.ts` leaf fields that `systems/liveconfig.ts`'s command and `configforms.ts`'s editor can change live, mutating the real object in place and persisting the change; also what typed text means for each kind of field (`parseFieldValue`) and what a field takes (`rangeText`) — see `CLAUDE.md`'s custom-command-ids entry. |
 | `configforms.ts` | The live config editor as screens (typed alone, `/rae:config` opens it): groups (a long one split by what its labels start with), a search by any words of a name, the list of what is changed, and the right control for each kind of setting; a result shows at the top of the next screen, and a refused value shows the form again with what was typed. |
@@ -34,7 +35,7 @@ own header comment where it has one.
 | `economy.ts` | The only place coin/bounty scores are read or written, plus the scoreboard-existence check `preflight.ts` builds on. |
 | `events.ts` | The one ordered `entityDie` dispatcher, plus the `onScriptEvent`/`onSpawn` registries. A script-event handler also gets the event's origin as a third argument (a typed command, a command block, or an NPC's dialogue button and the player who pressed it). |
 | `forms.ts` | Shows a form to a player, retrying automatically when a right-click-opened form is refused as `UserBusy`; `confirmForm` is a yes/no where only the yes button counts. |
-| `game.ts` | Starting a round (assign roles, send everyone to a spawn) — shared by the old script events and the in-game menu, since a system can't import a system. |
+| `game.ts` | Starting a round (reset, assign roles, run the start commands, then hand over to `startsequence.ts`) and sending everyone to their spawns — shared by the old script events and the in-game menu, since a system can't import a system. |
 | `log.ts` | The one place a failure or diagnostic goes: console always, chat only for `error()`, and only to an operator. |
 | `persist.ts` | The save/restore contract and engine — one world dynamic property per registered key, survives a world reload. |
 | `players.ts` | Cached "which players are X?" queries (law, alive outlaws, spectators, ...), read from `core/state`, fetched at most once a tick. Also `isOperator(player)`, the one answer to "is this an operator?" outside `core/log.ts`. |
@@ -59,6 +60,9 @@ own header comment where it has one.
 | `shopstore.ts` | Where shops live: `recordstore.ts` holding `logic/shop.ts`'s saved text, one world property each. |
 | `shoptrade.ts` | Carrying out a deal all or nothing: the goods are made first, the customer's side, bounty and means checked and every service prepared, then the payment taken, the goods handed over and the services done; if the game throws part-way, the services done are undone and the bag (every slot) and the coins are put back exactly. |
 | `sound.ts` | The one place `playSound` is called — `playFor` (private), `playAt` (positional, from a player), `playAtPoint` (positional, from a place, no player), `playSequence` (cue lists with a `shouldPlay` re-check). |
+| `startforms.ts` | The operator's screens for the start sequence, opened from a "Start sequence" button in the RAE menu that only operators see: the start commands (numbered, add, edit, an empty box deletes, put the defaults back) and the camera shots (mark the start and the end where the operator's eyes are, name, preview, delete). A refusal comes back in the same box with the reason in its title. |
+| `startsequence.ts` | A Start after the roles are assigned: the operator's start commands (run as the server, a failing one reported and never fatal), then the camera intro (a few saved shots at random, everyone locked), then the reveal, the outlaws' fly-down, the law players' spawn screen and the beginning of play. One generation token cancels whatever is waiting when a round resets or another Start begins, and `finish` is the only place play begins. Called from `game.ts`, which it must not import. Also the safety net that lets everyone go at load and on join, and `previewShot`. |
+| `startstore.ts` | Where the start sequence's authored parts live, on `recordstore.ts`: the camera shots (one world property each) and the start-command list (one). A list never saved means the defaults, saved empty means run nothing, and a list that cannot be read also runs nothing: a damaged list must never quietly become the defaults, which empty bags. |
 | `state.ts` | The per-player record (role, eliminated, jail, ammo, flags), keyed by id. Tags are output only, adopted back on drift. |
 | `telemetry.ts` | Round-by-round history (outcome, kills, deaths, ending coin total). Deliberately outside the round-reset system: it must survive the reset of the round it's recording. |
 | `telemetryevents.ts` | The event stream, not the round history above: `emit(kind, fields)` stamps an event (world id, boot id, line number, tick, build), holds it to a rate limit and a size cap, and writes it as one JSON line through `core/log.ts`'s `info()`, which is the only way out of a running world (the content log). It never throws and decides nothing about what a line holds (`logic/telemetry.ts` is that contract). `telemetry.events` is its live off switch. |
@@ -120,9 +124,10 @@ condition, in separate files. None of this needs fixing — it's just what's act
 | `route.ts` | The train's track math: smoothing, distance, heading, speed, steering. |
 | `schema.ts` | Config schema-version fingerprinting and migration for persisted data. |
 | `shop.ts` | An NPC shop as data: a deal is a cost (coins, items, both or nothing), rewards (items, coins, or a service: effect, enchantment, mount, teleport) and optionally who may take it (law or outlaw, a least bounty), so buying, selling, item-for-item trades, gifts and services are one shape; immutable edits that validate the whole result; finding a shop by an id or a name a builder typed; reading typed coordinates; the saved short-key form; `parse` never throws. |
+| `start.ts` | The rules of the start sequence: a camera shot is two marks (where the camera is and the way it faces), its saved text and parse (`parse` never throws), which shots a Start plays (picked at random, never opening with last time's, an injected random), how the intro's seconds are shared, and the operator's list of start commands with its edits (clean, add, edit, remove, capped, immutable). Its numbers are `config/balance.ts`'s `START`. |
 | `telemetry.ts` | What a telemetry line holds: the stamp every line carries, the fields of each kind of event (round end, robbery start/element/pick/payout/end, shop open/trade/refuse), `toLine` (compact JSON, texts and lists cut, the biggest fields dropped to fit), `limitStep` (the rate limiter as a step function, the state the caller's), and `tradeFacts` (a deal as the numbers and words of a line). The tool in `tools/telemetry/` reads these lines, so a change here is a change to it. |
 
-All nine hold to "no game imports" exactly as documented, modulo `bearing.ts`/`route.ts` each
+All ten hold to "no game imports" exactly as documented, modulo `bearing.ts`/`route.ts` each
 importing `Vector3` as a type only (erased at compile time, so it costs nothing at runtime).
 
 ### `rae/src/config/` — numbers and coordinates, mostly
@@ -261,6 +266,37 @@ same log read twice, still makes sense: the reader drops a repeat by world + boo
 logs folder and refuses an archive placed inside it. None of this had been seen from the real game when it was built (the first
 real line, how long a line the log keeps, when the log is flushed, whether old logs are pruned); `docs/test-cards/TELEMETRY.md`
 is the run sheet that measures it.
+
+### The start sequence's shape
+
+A Start is one function, `begin()` in `core/game.ts` (the menu and `bounty:start_round` both call it), and everything after the roles are
+assigned belongs to `core/startsequence.ts`:
+
+```
+begin():  reset, assign roles
+            |
+          runStartCommands     the operator's list, as the server (a failure is told to whoever pressed Start, never fatal)
+            |
+          startIntro           2 saved shots at random, 10 s, players locked      \  skipped when no shot is saved, the intro is off,
+            |                                                                      /  or it has no seconds
+          startPlacement       reveal the roles; outlaws to a random spawn + fly-down; law get a screen (Law spawn N);
+            |                  everyone locked until
+          finish               every law player has chosen AND the fly-down is over, or the countdown ends  ->  beginActive()
+```
+
+```
+logic/start.ts          shots, picking, seconds, the command list          config/balance.ts  START (the numbers, the default commands)
+core/startstore.ts      shots and the list in the world                     core/cinematic.ts  the only camera and input-lock calls
+core/startsequence.ts   the sequence, previewShot, the safety net           core/startforms.ts the operator's screens (the RAE menu's Start sequence)
+```
+
+What keeps it from hanging or from leaving anyone stuck: a **generation** number, moved on by every round reset (a Start resets first), that a waiting
+timer or a late screen answer checks before doing anything; `finish`, the only place play begins, which every path (all law chosen, the countdown,
+nobody to wait for) goes through once; and the **held** record of who the sequence has locked or put in a camera, which a cancel lets go and which the
+first tick after a load and every join clears for anyone it is not holding. A script cannot close a form, so a spawn screen still open when the
+countdown ends is simply answered too late and ignored. The start commands, the shots and the six numbers are all the operator's to change in game:
+the RAE menu's Start sequence screens and `/rae:config`'s group Start sequence; `docs/test-cards/START-SEQUENCE.md` is the run sheet, and records what
+was unmeasured in the real game when this was built (how a pan looks, a screen right after a camera, several players' cameras at once).
 
 ## `main.ts`: what it wires
 

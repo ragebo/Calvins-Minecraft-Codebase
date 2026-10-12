@@ -51,6 +51,10 @@ rae/                    TypeScript source. This is what you edit.
                          round.ts      round lifecycle state machine (IDLE/SETUP/ACTIVE/ENDING/ENDED);
                                        core/game.ts drives it, endgame.ts and boat.ts gate their win on it
                          persist.ts    contract for state that survives a reload (nothing registers yet)
+                         startsequence.ts  what a Start does after the roles: the start commands, a camera intro,
+                                       the reveal, law choosing a spawn, then play (see "Start sequence" below);
+                                       startstore.ts, startforms.ts and cinematic.ts are its storage, its operator
+                                       screens and its camera
   src/systems/          One file per gameplay system (see below). Each registers itself
                          via registerSystem() and is imported once from main.ts.
   test/                 Tests. They run the compiled code under a fake game API.
@@ -127,8 +131,10 @@ a change of its own still waiting to be written is left alone until it is writte
 `IDLE -> SETUP -> ACTIVE -> ENDING -> ENDED` (any phase can drop back to `IDLE`), with legal-transition
 checking and phase listeners (`onPhase`). `core/game.ts`'s `begin()` drives the start of it: a
 reset always forces `IDLE` first (always legal, whatever phase it was in), then `SETUP` while
-roles are assigned and everyone's teleported, then `ACTIVE` once roles are actually revealed
-(during the "Rolling..." wait it's still `SETUP` — nobody knows their role yet).
+roles are assigned and the start sequence runs (the start commands, the camera intro, the reveal,
+law choosing a spawn: see "Start sequence" below), then `ACTIVE` once every law player has chosen
+and the outlaws' fly-down is over, or the countdown ends. `core/startsequence.ts` is the only
+caller of `beginActive`.
 
 `endgame.ts` (the law win) and `boat.ts` (the outlaw win) each call `endRound(reason)` when they
 detect their condition — it only succeeds once, from `ACTIVE`, so the two can never double-announce
@@ -278,12 +284,34 @@ is no permission check.
 - **Teleport** lists the places in `TELEPORT_TARGETS` (`config/world.ts`, built from the spawn,
   jail, ranch, fort, train and boat coordinates already there) and moves the person who opened it.
 - **Send everyone to their spawns** is `bounty:teleport`.
+- **Start sequence** (operators only; the button is not there for anyone else) is where the start commands and the camera shots are edited: see
+  "Start sequence" below.
 
 The old script events (`bounty:start_round`, `rae:reset`, `bounty:teleport`) are unchanged, so a
 physical button still works. The game's own actions live in `core/game.ts`, shared by both, and
 `core/forms.ts` shows a form and retries while the game says the player is busy (opening a form
 straight from a right-click hits that). The icon is made by `scripts/gen-menu-icon.mjs`; replace the
 PNG with your own art whenever you like.
+
+### Start sequence
+
+What pressing Start does, in order (`core/startsequence.ts`; `docs/test-cards/START-SEQUENCE.md` is the run sheet):
+
+1. **The operator's start commands run first**, as the server, in the overworld. By default they are the last game's: effects cleared, health and food
+   full, bags emptied for anyone not in creative, everyone in survival, coins and bounty back to zero. `@a` and `@a[tag=law]` work (the roles are
+   assigned before they run); `@s` does not. A command the game refuses is told to whoever pressed Start and never stops the rest.
+2. **A camera intro**: two of the saved shots, picked at random and never opening with last time's, 10 seconds in all, everyone playing locked in
+   place. With no shot saved, or the intro off, it is skipped.
+3. **The roles are revealed**, **outlaws fly down** to a random outlaw spawn, and **law choose their spawn** from a screen (Law spawn 1, 2...; two may
+   choose the same one). **Play begins** when every law player has chosen and the fly-down is over, or after 20 seconds with a random spawn for anyone
+   who did not choose. A reset, or another Start, in the middle cancels it all and lets everyone go.
+
+An operator changes all of it in game. The RAE menu has a **Start sequence** button (operators only): **Start commands** (a numbered list: add, edit,
+an empty box deletes, put the defaults back) and **Camera shots** (stand where a shot should start and press Mark the start, go where it ends and
+press Mark the end: a mark is where the camera is, your eyes and the way you face; name it, preview it, delete it). The six numbers (is the intro
+on, how long, how many shots, how long to choose, the fly-down's time and height) are in `/rae:config`, the group Start sequence. A camera shot is a
+pan between two marks, which is what vanilla's `/camera ... ease` does; the script API has the same call, so nothing here types a `/camera`.
+`core/cinematic.ts` is the one place the camera and input locks are touched, and is what endings (not built yet) would use.
 
 ### Live config editor
 
