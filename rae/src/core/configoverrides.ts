@@ -1,5 +1,5 @@
 import type { Player, Vector3 } from "@minecraft/server";
-import { AIM, BOAT, COMPASS, ECONOMY, FORT, HARMING, HORSE, JAILBREAK, RAIDS, RANCH, ROBBERY, SHOP, TRAIN, TUMBLEWEED } from "../config/balance.js";
+import { AIM, BOAT, COMPASS, ECONOMY, FORT, HARMING, HORSE, JAILBREAK, RAIDS, RANCH, ROBBERY, SHOP, TELEMETRY, TRAIN, TUMBLEWEED } from "../config/balance.js";
 import { GUNS } from "../config/guns.js";
 import {
     BOAT_NPC, BOAT_WIN_TELEPORT, BRIDGE_AREA, FORT_AREA, FORT_REWARD_CHEST, FORT_SPAWNS,
@@ -496,6 +496,10 @@ function registerBalanceFields(): void {
 
     // A hold-up is a gun AIMED at a teller (the right-click aim). If the aim toggle is awkward for it, off means holding any gun is enough.
     boolean("robbery.holdUpNeedsAim", "Robbery: a hold-up needs the gun aimed (right-click); off, holding a gun and looking at the teller is enough", "Robbery", () => ROBBERY.holdUpNeedsAim, (v) => { ROBBERY.holdUpNeedsAim = v; });
+
+    // The telemetry lines (core/telemetryevents.ts) are read at every line, so this stops them at once with no redeploy: for a world that
+    // writes too much, or one that is not to be counted. Off writes nothing and uses up no line number.
+    boolean("telemetry.events", "Telemetry: write the round, robbery and shop events to the content log (off writes nothing)", "Telemetry", () => TELEMETRY.events.enabled, (v) => { TELEMETRY.events.enabled = v; });
 }
 
 registerGunFields();

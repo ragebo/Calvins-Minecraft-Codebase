@@ -61,6 +61,7 @@ own header comment where it has one.
 | `sound.ts` | The one place `playSound` is called — `playFor` (private), `playAt` (positional, from a player), `playAtPoint` (positional, from a place, no player), `playSequence` (cue lists with a `shouldPlay` re-check). |
 | `state.ts` | The per-player record (role, eliminated, jail, ammo, flags), keyed by id. Tags are output only, adopted back on drift. |
 | `telemetry.ts` | Round-by-round history (outcome, kills, deaths, ending coin total). Deliberately outside the round-reset system: it must survive the reset of the round it's recording. |
+| `telemetryevents.ts` | The event stream, not the round history above: `emit(kind, fields)` stamps an event (world id, boot id, line number, tick, build), holds it to a rate limit and a size cap, and writes it as one JSON line through `core/log.ts`'s `info()`, which is the only way out of a running world (the content log). It never throws and decides nothing about what a line holds (`logic/telemetry.ts` is that contract). `telemetry.events` is its live off switch. |
 | `tick.ts` | The one `system.runInterval`. Every repeating job is a cadence-aware handler registered with `onTick`. |
 | `ui.ts` | The one writer for title/action bar/chat text, arbitrated by source and priority so one line can't silently overwrite another. |
 
@@ -119,8 +120,9 @@ condition, in separate files. None of this needs fixing — it's just what's act
 | `route.ts` | The train's track math: smoothing, distance, heading, speed, steering. |
 | `schema.ts` | Config schema-version fingerprinting and migration for persisted data. |
 | `shop.ts` | An NPC shop as data: a deal is a cost (coins, items, both or nothing), rewards (items, coins, or a service: effect, enchantment, mount, teleport) and optionally who may take it (law or outlaw, a least bounty), so buying, selling, item-for-item trades, gifts and services are one shape; immutable edits that validate the whole result; finding a shop by an id or a name a builder typed; reading typed coordinates; the saved short-key form; `parse` never throws. |
+| `telemetry.ts` | What a telemetry line holds: the stamp every line carries, the fields of each kind of event (round end, robbery start/element/pick/payout/end, shop open/trade/refuse), `toLine` (compact JSON, texts and lists cut, the biggest fields dropped to fit), `limitStep` (the rate limiter as a step function, the state the caller's), and `tradeFacts` (a deal as the numbers and words of a line). The tool in `tools/telemetry/` reads these lines, so a change here is a change to it. |
 
-All eight hold to "no game imports" exactly as documented, modulo `bearing.ts`/`route.ts` each
+All nine hold to "no game imports" exactly as documented, modulo `bearing.ts`/`route.ts` each
 importing `Vector3` as a type only (erased at compile time, so it costs nothing at runtime).
 
 ### `rae/src/config/` — numbers and coordinates, mostly
@@ -233,6 +235,32 @@ systems/npcprobe.ts      the measurement of how the game treats an NPC
 How a click reaches the shop was unmeasured when this was built, so both routes were built and two live switches (`shop.interceptClicks`, `shop.useDialogueScene`) choose between them. Either the "before" event for a click on an NPC is cancelled and the shop opens a tick later (one screen, if the game honours the cancel), or the NPC is pointed at one static dialogue scene (`your_pack_name_BP/dialogue/rae_npc.json`) whose one button runs `/scriptevent rae:npc shop`. An NPC's button runs as the NPC with the pressing player as the initiator, which `core/events.ts` hands a handler as its `origin`. `docs/test-cards/NPC-PROBE.md` measured which works (2026-10-07): the first. The cancel stops the game's NPC screen, so `interceptClicks` stays on and the scene is the fallback, and what an operator's sneak-click lands on.
 
 Moving an NPC has a shape of its own, because a script can only see an NPC in an area that is loaded and nobody is near most of the map. The world keeps one small property per shop (`rae:shop:at:<id>`, the dimension and whole-block position where its NPC was last put or seen; a placement, a customer's or the wand's click, and `/rae:shop list` refresh it). Bringing an NPC to a builder (`bringShopNpc`) goes: loaded already, move it; else if a place is remembered, load that area with a temporary ticking area (`createTickingArea` resolves when the chunks are loaded and ticking), look for the shop's NPC for a second (a newly loaded area's entities can take a few ticks), move it while the area is still loaded, then remove the area; else it is gone. "Gone" is only ever concluded after the remembered place was loaded and searched, or when nothing is remembered, because a new NPC is made only from "gone": when the area will not load (no room, a refusal, a timeout) the answer is "stuck", nothing is made, and the builder is told where the NPC was last seen. One fetch runs at a time.
+
+### The telemetry's shape
+
+A script can write no file and call nothing outside the game, so the one way a running world can tell anyone anything is the
+content log. Each event worth counting is written as one self-contained JSON line there, and a tool outside the game does the
+counting.
+
+```
+core/robberyrun.ts   robbery.start / element / pick / payout / end
+core/shopforms.ts    shop.open / trade / refuse            ->  core/telemetryevents.ts  emit(): stamp, limit, cap
+core/telemetry.ts    round.end                                       |  (logic/telemetry.ts is the format)
+                                                                     v
+                                                         core/log.ts info() = console.warn
+                                                                     |   the content log, one file per launch
+                                                                     v
+tools/telemetry/  ingest.mjs (read the logs, keep an archive, drop repeats)
+                  aggregate.mjs (figures)  ->  report.mjs (one HTML page, a CSV per kind)
+                  cli.mjs  (tools/telemetry.cmd)         archive and report: telemetry-data/ (gitignored)
+```
+
+The callers only call `emit`; they say what happened and never how a line looks or whether the limit is spent. A line names its
+world, its boot (one load of the scripts), its number in that boot and the build, so a log that lost its first lines, or the
+same log read twice, still makes sense: the reader drops a repeat by world + boot + number. The tool never writes into the
+logs folder and refuses an archive placed inside it. None of this had been seen from the real game when it was built (the first
+real line, how long a line the log keeps, when the log is flushed, whether old logs are pruned); `docs/test-cards/TELEMETRY.md`
+is the run sheet that measures it.
 
 ## `main.ts`: what it wires
 

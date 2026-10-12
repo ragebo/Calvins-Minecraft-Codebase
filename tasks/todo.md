@@ -213,17 +213,19 @@ Nothing is deployed or pushed unless the owner asks.
 
 ## Phase 4: handover
 
-- [ ] **Task 11: Live switch, docs, test card** (M)
+- [x] **Task 11: Live switch, docs, test card** (M) - done
   `telemetry.events` boolean in `core/configoverrides.ts` (the live off switch); `docs/test-cards/TELEMETRY.md` (numbered
   in-game steps, the expected report figures, the log line to look for, how to turn the content log on); README and
   ARCHITECTURE.md rows (named here because the rules normally forbid editing them); `.gitignore` entry for `telemetry-data/`.
   - Acceptance:
-    - [ ] `/rae:config get` and `set` of `telemetry.events` work under the fake and turn the lines off and on
-    - [ ] the card has every step the owner needs, including "close the game or wait before running the tool: the live log is written in bursts"
-    - [ ] `git status` after a tool run shows no data files
+    - [x] `/rae:config get` and `set` of `telemetry.events` work under the fake and turn the lines off and on (typed through the fake registry, and the emitter is checked to stop and restart, not just the setting)
+    - [x] the card has every step the owner needs, including "close the game or wait before running the tool: the live log is written in bursts"
+    - [x] `git status` after a tool run shows no data files (run with the default output folder on a sample log; all three paths ignored by `.gitignore` line 5; the folder was removed after)
   - Verification: check, test, check:legacy
+  - Result: 3 new tests (`telemetry-switch.test.mjs`), 6 deliberate breaks, all caught. The switch has a "Telemetry" group of its own in the editor. The card is two parts: A (a launch alone: 1 boot line, the cheapest proof the channel works) and B (a scripted session with the exact figures the report should show, the off switch, and running the tool twice), then what only the real game can answer. ARCHITECTURE.md got rows for `core/telemetryevents.ts` and `logic/telemetry.ts` (and "All eight" became "All nine") plus a "The telemetry's shape" section; README got the `tools/` and `telemetry-data/` layout lines and a "Telemetry" section.
+  - Not done: CLAUDE.md's engine facts are not touched (the unmeasured items live in the card until the owner runs it; they become facts then).
   - Dependencies: Tasks 2, 10
-  - Files: `rae/src/core/configoverrides.ts`, `docs/test-cards/TELEMETRY.md`, `README.md`, `ARCHITECTURE.md`, `.gitignore`
+  - Files: `rae/src/core/configoverrides.ts`, `rae/test/telemetry-switch.test.mjs`, `docs/test-cards/TELEMETRY.md`, `README.md`, `ARCHITECTURE.md`, `.gitignore`
 
 - [ ] **Task 12: Release** (S; only when the owner asks)
   Bump the BP to 0.2.6 in four places (manifest header and two modules, `config/build.ts`), run the gate, clean build,

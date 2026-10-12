@@ -69,6 +69,11 @@ BountySys_RP/           Resource pack: the revolver and law-compass icons, and t
                          client entity definition.
                          sounds/ (music) is gitignored — not included here, licensing unconfirmed.
 
+tools/                  Node tools that run outside the game, with no dependencies.
+  telemetry/             reads the game's content logs and writes the telemetry report
+                         (see "Telemetry" below). telemetry.cmd is the double-click launcher.
+telemetry-data/         What that tool writes: its archive, report.html and CSV files. Gitignored.
+
 docs/test-cards/        One manual in-game test card per architecture task.
 CLAUDE.md               Rules for agents working in this repo (layers, the seven rules, checks).
 ```
@@ -302,6 +307,27 @@ within a few ticks. A handful of fields are deliberately left out because they'r
 regardless (the scripted train's start/end/speed numbers are baked into a path built once at startup;
 see the file's own header comment). Changes persist as a sparse diff through the existing
 `core/persist.ts` engine, the same mechanism `round.ts`/`telemetry.ts`/`state.ts` already use.
+
+### Telemetry
+
+How rounds, robberies and shops are actually played, counted from the real game. A script can write no file and call nothing
+outside the game, so the game writes one JSON line per event to its **content log** (round ends, every robbery's start,
+elements, picks, payouts and end, every shop visit, deal and refusal), and `tools/telemetry` reads the logs and makes a report.
+
+1. **Turn the log file on** (once): Settings, Creator, *Enable Content Log File* on. The on-screen overlay can stay off. The logs
+   are in `%APPDATA%\Minecraft Bedrock\logs`, one file per launch.
+2. **Play.** Nothing else is needed; lines are written as things happen.
+3. **Run `tools\telemetry.cmd`** (double-click, or `node tools/telemetry/cli.mjs --open`). It reads every log, adds new events to an
+   archive (`telemetry-data/events.jsonl`, so a log the game later deletes loses nothing), and opens `telemetry-data/report.html`
+   (rounds, one section per robbery, the shops, the coin flow, and what the data itself covers) next to a CSV per kind of event in
+   `telemetry-data/csv/` for a spreadsheet. Close the game first, or wait: the live log is written in bursts, so the newest lines
+   may not be in it yet (the tool says how many it saw cut off and a second run picks them up).
+
+`--world <id>` narrows the report to one world (the report lists the ids), `--include-tests` counts a builder's test runs, `--help`
+lists the rest. The lines hold no player names: a raw player id and a law or outlaw role, nothing else about a person. `/rae:config set
+telemetry.events off` stops the game writing them, with no redeploy. It reads the logs and writes only into `telemetry-data/`.
+
+`docs/test-cards/TELEMETRY.md` is the run sheet, with the figures to expect; the format is `logic/telemetry.ts`.
 
 ### Robbery framework
 
