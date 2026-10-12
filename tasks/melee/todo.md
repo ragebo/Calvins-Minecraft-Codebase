@@ -1,0 +1,139 @@
+# Todo: five melee weapons
+
+Status source of truth for `plan.md` in this folder. Every task: RED first (a failing test), then the code, then `check`, `test` (`node scripts/test.mjs`)
+and `check:legacy` as one chain, then one commit. Deliberate-break (mutation) runs on every new rule. The owner chose to build on the typings and fix what
+the game shows (no spike): every engine behavior that is not measured has a fallback and a diagnostic, and a test for each.
+
+## Phase 0: Items
+
+- [ ] **Task 1: The five items, with their sprites, and nothing else** (M)
+  Five item definitions in the behavior pack (`bountysys:knife`, `machete`, `baton`, `axe`, `sledgehammer`: format 1.26.50 like `pistol.json`, stack of 1,
+  hand-equipped, equipment category, a display name each, an icon key each) and their sprites adopted from `weapons11.mcpack` into
+  `BountySys_RP/textures/items/` (`knife.png` from `wood_sword`, `machete.png` from `iron_sword`, `baton.png` from `diamond_sword`, `axe.png` from
+  `spear/diamond_spear`, `sledgehammer.png` from `spear/netherite_spear`) with entries in `item_texture.json`. The ids live once, in `config/balance.ts`'s
+  new `MELEE` block, so code and item files agree. No behavior: a player can `/give` and hold them.
+  - Acceptance:
+    - [ ] each item file's identifier equals the id in `MELEE`, and each has its own icon key, mapped in `item_texture.json` to a PNG that exists
+    - [ ] each sprite is 16x16 with transparency and is byte-for-byte the one in the pack (so a later change to the pack's sprite is noticed)
+    - [ ] each is a plain stack-1 item: not hold-to-use, no cooldown component, nothing that overrides how a tool is held
+    - [ ] the existing asset tests still pass, and no vanilla sword or spear is retextured (the pack is not installed; its sprites are copied)
+  - Verification: check, test, check:legacy; the five sprites looked at on a contact sheet
+  - Dependencies: none
+  - Files: `your_pack_name_BP/items/{knife,machete,baton,axe,sledgehammer}.json`, `BountySys_RP/textures/items/*.png`, `BountySys_RP/textures/item_texture.json`, `rae/src/config/balance.ts`, `rae/test/assets.test.mjs`
+
+## Phase 1: The weapons
+
+- [ ] **Task 2: The core, the hurt hook, the diagnostic log and the base damage of all five** (L)
+  `logic/melee.ts` (the first pure rules: a cooldown as a step function, the threshold and cone tests as plain functions), `core/melee.ts` (which weapon a
+  player holds, by the item in the main hand; per-attacker cooldowns; per-target records cleared on a round reset; the diagnostic log), `systems/melee.ts`
+  (the one `beforeEvents.entityHurt` hook, plus the `rae:melee_debug` script event), the `MELEE` numbers (knife 2, machete 4, baton 3, axe 6, sledgehammer 8),
+  and `minecraft:damage` on each item with the same number, so base damage is right if either path works. The hook sets `event.damage` for a player's melee
+  hit with one of the five; the after-hurt event's `damage` is compared with the number and a warning is logged once if the game did not honor it.
+  - Acceptance:
+    - [ ] a hit with each weapon deals exactly its number (the hook sets `damage`), on a mob and on a player, in the fake's restricted before-event mode
+    - [ ] a hit with anything else (a fist, a gun, a vanilla sword) is left exactly as it was; a hit by a non-player is left alone
+    - [ ] the held weapon is read from the main hand at the moment of the hit, not remembered; a player who swaps item mid-swing gets the item they hold
+    - [ ] each item file carries `minecraft:damage` equal to its number in `MELEE` (an asset test), so the two paths cannot drift apart
+    - [ ] with `rae:melee_debug on` the pipeline is logged (the event, the weapon, the number set, the number dealt); off, nothing is logged and nothing runs
+    - [ ] when the number dealt differs from the number set, one `[melee]` warning says the game ignored the hurt event's damage, once per script load
+    - [ ] a round reset clears the per-attacker and per-target records; nothing restricted is called inside the before-event handler
+  - Verification: check, test, check:legacy; deliberate breaks on every number, every pass-through and the warning
+  - Dependencies: Task 1
+  - Files: `rae/src/logic/melee.ts`, `rae/src/core/melee.ts`, `rae/src/systems/melee.ts`, `rae/src/config/balance.ts`, `your_pack_name_BP/items/*.json`, `rae/src/main.ts`, `rae/test/melee-core.test.mjs`
+
+- [ ] **Task 3: The knife's bleed** (M)
+  A knife hit adds a bleed to the target: 1 damage at 1 second and at 2 seconds after the hit; stacks add up (capped at `maxStacks`); what is due on a tick is dealt as
+  ONE hit per target (separate hits within 10 ticks would be lost to the hit window), by the knife's wielder, with `override` so it ignores armor and the hit window. One cheap
+  tick handler, free when nobody is bleeding.
+  - Acceptance:
+    - [ ] one hit: 1 damage at 20 ticks and 1 at 40, then it stops; 2 total
+    - [ ] three hits in a row: the stacks add up (3 a second at the peak) and the total over time is 6, none of it lost to the hit window
+    - [ ] a bleed on a player and on a mob; it kills, and the damage names the knife's wielder as the attacker (what the game does with that is logged under `rae:melee_debug`)
+    - [ ] it ends on the target's death, on a disconnect and on a round reset; the stack cap is respected
+    - [ ] a target that is not hit by a knife never bleeds; the knife's own 2 damage is dealt as in Task 2
+    - [ ] the handler does nothing, and costs nothing, with no one bleeding
+  - Verification: check, test, check:legacy; deliberate breaks
+  - Dependencies: Task 2
+  - Files: `rae/src/logic/melee.ts`, `rae/src/core/melee.ts`, `rae/src/systems/melee.ts`, `rae/test/melee-knife.test.mjs`
+
+- [ ] **Task 4: The machete's finishing blow** (S-M)
+  A machete hit on a target whose health is 30% of its maximum or less kills it, whatever its armor and effects: the hook sets a huge `damage` (keeping the attacker), and a tick later a target
+  that is still alive (Resistance) is `kill()`ed. Which of the two did it is logged under `rae:melee_debug`.
+  - Acceptance:
+    - [ ] a target at 6 of 20 HP dies; one at 6.5 does not and takes 4; one at full health takes 4
+    - [ ] the threshold follows the target's maximum (a 40 HP mob dies at 12), not a fixed number
+    - [ ] a target that survives the huge hit (the fake's Resistance 5) is killed by the follow-up a tick later; one that died is not killed twice
+    - [ ] a creative or spectator player is not killed; a target that is already dead is left alone
+    - [ ] a hit with any other weapon, however low the target, does not trigger it
+  - Verification: check, test, check:legacy; deliberate breaks of the threshold, the comparison, the maximum and the follow-up
+  - Dependencies: Task 2
+  - Files: `rae/src/logic/melee.ts`, `rae/src/core/melee.ts`, `rae/src/systems/melee.ts`, `rae/test/melee-machete.test.mjs`
+
+- [ ] **Task 5: The baton's stun** (M)
+  A baton hit has a 25% chance (an injected random in the logic) to stun the target for 10 ticks: slowness 255 on any target and, for a player, a movement lock as well. A stun cannot be
+  refreshed while it is active, always ends (even if the target leaves or dies), and never releases a player the start sequence is holding.
+  - Acceptance:
+    - [ ] with the dice at 0 the stun applies; at 0.25 and above it does not; the rate over many seeded hits is about 25%
+    - [ ] the stun lasts exactly 10 ticks and then the target can move again (a mob and a player), with both the effect and the lock undone
+    - [ ] a second stun while one is active is ignored; a hit after it ends can stun again
+    - [ ] a target that dies or leaves while stunned is left in no odd state; a round reset ends every stun
+    - [ ] no stun is applied while a start is under way, and a stun's end does not unlock a player the start sequence holds
+    - [ ] the baton's 3 damage is dealt as in Task 2; other weapons never stun
+  - Verification: check, test, check:legacy; deliberate breaks
+  - Dependencies: Task 2
+  - Files: `rae/src/logic/melee.ts`, `rae/src/core/melee.ts`, `rae/src/systems/melee.ts`, `rae/test/melee-baton.test.mjs`
+
+- [ ] **Task 6: The axe's cone and cooldown** (M)
+  An axe swing hits every living thing within `reach` (3 blocks) whose direction from the player is within 90 degrees of where they look, except the wielder, for 6 damage
+  each, each as its own hit; then a 1 second cooldown during which a swing does nothing (shown on the action bar). A hit and a swing in the same tick count once.
+  - Acceptance:
+    - [ ] the cone test: in front and to either side (within 90 degrees) hits; behind does not; exactly 90 degrees is decided one way and tested; out of reach does not
+    - [ ] items on the ground, the wielder and anything that cannot be hurt are skipped
+    - [ ] each target takes 6, none lost to the hit window (separate targets have separate windows)
+    - [ ] during the cooldown the cone does nothing, a single-target hit is cancelled in the hurt hook (the game may ignore the cancel: logged), and the action bar says how long is left; after it, it works again
+    - [ ] the cooldown is per player and a round reset clears it; two players with axes do not share one
+    - [ ] a swing at the air still sweeps; an axe hit on a single target is not doubled by the cone
+  - Verification: check, test, check:legacy; deliberate breaks of the angle, the reach and the cooldown
+  - Dependencies: Task 2
+  - Files: `rae/src/logic/melee.ts`, `rae/src/core/melee.ts`, `rae/src/systems/melee.ts`, `rae/test/melee-axe.test.mjs`
+
+- [ ] **Task 7: The sledgehammer's blocks and cooldown** (L)
+  A sledgehammer swing at a block from the configured list breaks it (`setblock ... destroy`, so it drops as when mined) once per 1.5 seconds; it never breaks a block a robbery has bound or
+  protected, or one outside the list; it hits entities for 8 as in Task 2.
+  - Acceptance:
+    - [ ] a block on the list is broken and drops; one off the list is left alone
+    - [ ] every block a robbery has bound (door, chest, switch, frame) and every protected one survives a swing, with the robbery running and not; an operator is held to the same
+    - [ ] the cooldown: a second swing inside 1.5 seconds breaks nothing; after it, it does
+    - [ ] a swing at an entity deals 8 and does not break the block behind it
+    - [ ] nothing is broken in an unloaded chunk or across a dimension; the list is read from the config at the swing
+    - [ ] the break runs after the event (never inside a restricted callback)
+  - Verification: check, test, check:legacy; deliberate breaks of the list, the protection and the cooldown
+  - Dependencies: Task 2
+  - Files: `rae/src/logic/melee.ts`, `rae/src/core/melee.ts`, `rae/src/systems/melee.ts`, `rae/src/config/balance.ts`, `rae/test/melee-sledgehammer.test.mjs`
+
+### Checkpoint 1: the weapons
+- [ ] all green; every weapon's rule has a test and deliberate breaks of it; each fallback has a test
+
+## Phase 2: Making it yours
+
+- [ ] **Task 8: Live numbers, docs and the test card** (M)
+  `core/configoverrides.ts` registers the melee numbers (the five damages, the bleed's stack cap, the stun chance and length, the axe's reach and cooldown, the sledgehammer's cooldown) in a
+  group **Melee**, so the config editor and `/rae:config` change them live (and a changed damage also changes what the hook sets; the item component stays the shipped default). `docs/test-cards/MELEE.md`
+  (numbered in-game steps for each weapon, with `rae:melee_debug on`; **"what only the real game can answer" first**, each answer naming the function to change). README and ARCHITECTURE.md rows
+  (named here because the rules normally forbid editing them), and the sprites' credit beside the revolver's.
+  - Acceptance:
+    - [ ] each number is a registered setting with a range, changes the next hit, and resets to its default
+    - [ ] the card has every step the owner needs, and says what is unmeasured and where each fix would go
+    - [ ] README and ARCHITECTURE.md say where melee lives; the credit is there
+  - Verification: check, test, check:legacy
+  - Dependencies: Tasks 3 to 7
+  - Files: `rae/src/core/configoverrides.ts`, `rae/test/melee-config.test.mjs`, `docs/test-cards/MELEE.md`, `README.md`, `ARCHITECTURE.md`
+
+### Checkpoint: complete
+- [ ] every acceptance box above is ticked
+- [ ] the owner has run `docs/test-cards/MELEE.md` in the real game with `rae:melee_debug on`; what it shows is fixed in a follow-up round
+
+- [ ] **Task 9: Release** (S; only when the owner asks)
+  Both packs change (the sprites are an RP change): bump the BP in four places and the RP in its manifest (header and module), gate, clean build, `deploy.ps1` for the BP and `deploy-rp.ps1` for the RP **with the game
+  fully closed**, byte-verify both, read the four worlds' pins for both as JSON, tell the owner to launch fresh. No push unless asked.
+  - Dependencies: all of the above.
