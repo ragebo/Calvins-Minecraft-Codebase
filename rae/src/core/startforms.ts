@@ -1,21 +1,27 @@
 import type { Player } from "@minecraft/server";
 import { ModalFormData } from "@minecraft/server-ui";
 import { START as S } from "../config/balance.js";
-import { addCommand, editCommand, removeCommand, type Result } from "../logic/start.js";
+import { addCommand, editCommand, makeShot, nextShotId, removeCommand, type Mark, type Result, type Shot } from "../logic/start.js";
 import { confirmForm, showForm } from "./forms.js";
+import { warn } from "./log.js";
 import { isOperator } from "./players.js";
-import { BACK, createScreens, type Action } from "./screens.js";
-import { commandsAreDefault, commandsProblem, resetStartCommands, saveStartCommands, startCommands } from "./startstore.js";
+import { BACK, createScreens, type Action, type Step } from "./screens.js";
+import { previewShot } from "./startsequence.js";
+import { commandsAreDefault, commandsProblem, deleteShot, getShot, listStoredShots, resetStartCommands, saveShot, saveStartCommands, startCommands } from "./startstore.js";
 import { format, tell } from "./ui.js";
 
 /**
- * The operator's screens for the start sequence, opened from a "Start sequence" button in the RAE menu that only operators see. This is
- * the start commands half: the numbered list of what runs first at every Start, Add (a text box), Edit one (the box filled in; an empty
- * box deletes it), Put the defaults back, Back. The rules of a command and of the list are logic/start.ts's, and where it is saved is
- * core/startstore.ts's; this is only the screens over them.
+ * The operator's screens for the start sequence, opened from a "Start sequence" button in the RAE menu that only operators see. Two halves:
  *
- * A line that cannot be saved comes straight back in the same box, with the reason in its title and what was typed kept (the way the live
- * config editor does it), and a success shows at the top of the next screen.
+ *   - the START COMMANDS: the numbered list of what runs first at every Start, Add (a text box), Edit one (the box filled in; an empty
+ *     box deletes it), Put the defaults back, Back;
+ *   - the CAMERA SHOTS: the operator stands where a shot should start and presses "Mark the start of a new shot here", goes where it ends and
+ *     presses "Mark the end here" (and names it, if they like). A mark is where the CAMERA is, so the operator's eyes and the way they face,
+ *     not their feet. A shot's own screen has Preview (plays it for the operator alone) and Delete.
+ *
+ * The rules of a command, a shot and the list are logic/start.ts's, and where they are saved is core/startstore.ts's; this is only the
+ * screens over them. A line that cannot be saved comes straight back in the same box, with the reason in its title and what was typed kept
+ * (the way the live config editor does it), and a success shows at the top of the next screen.
  */
 
 const screens = createScreens("start");
@@ -48,9 +54,10 @@ async function mainScreen(player: Player): Promise<void> {
 
     await screens.run(player, () => ({
         title: "Start sequence",
-        body: `What happens when a game starts, before anything else.\n§7Start commands: ${commandsSummary()}`,
+        body: `What happens when a game starts, before anything else.\n§7Start commands: ${commandsSummary()}\n§7Camera shots: ${listStoredShots().length}`,
         actions: [
             { label: `Start commands (${startCommands().length})`, run: () => commandsScreen(player) },
+            { label: `Camera shots (${listStoredShots().length})`, run: () => shotsScreen(player) },
             BACK
         ]
     }));
@@ -164,3 +171,201 @@ async function putDefaultsBack(player: Player): Promise<void> {
 
     screens.notify(player, result.ok ? format("ok", "The default start commands are back.") : format("warn", `Not changed: ${result.reason}.`));
 }
+
+// ---------------------------------------------------------------------------------------------------------
+// The camera shots
+// ---------------------------------------------------------------------------------------------------------
+
+/** Where an operator's pending start is kept: on the operator, so it survives a screen closing and does not belong to a game. */
+const PENDING_MARK = "rae:start:mark";
+
+function pendingMark(player: Player): Mark | undefined {
+
+    try {
+        const raw = player.getDynamicProperty(PENDING_MARK);
+
+        if (typeof raw !== "string") return undefined;
+
+        const list: unknown = JSON.parse(raw);
+
+        // A damaged one is ignored, as if none were made.
+        if (!Array.isArray(list) || list.length !== 5 || !list.every((n) => typeof n === "number" && Number.isFinite(n))) return undefined;
+
+        return { x: list[0] as number, y: list[1] as number, z: list[2] as number, pitch: list[3] as number, yaw: list[4] as number };
+    } catch {
+        return undefined;
+    }
+}
+
+function setPendingMark(player: Player, mark: Mark | undefined): void {
+
+    try {
+        player.setDynamicProperty(PENDING_MARK, mark === undefined ? undefined : JSON.stringify([mark.x, mark.y, mark.z, mark.pitch, mark.yaw]));
+    } catch (err) {
+        warn("start", `Could not keep a start mark for ${player.name}: ${err}`);
+    }
+}
+
+/** Where the operator's camera would be if it were their eyes, and the way they face. */
+function eyeMark(player: Player): Mark {
+
+    const head = player.getHeadLocation();
+    const view = player.getRotation();
+
+    return { x: head.x, y: head.y, z: head.z, pitch: view.x, yaw: view.y };
+}
+
+/** A place as three whole numbers, which is all an operator reading a screen needs. */
+const where = (mark: Mark): string => `${Math.round(mark.x)}, ${Math.round(mark.y)}, ${Math.round(mark.z)}`;
+
+function shotsBody(count: number, pending: Mark | undefined): string {
+
+    const lines = [count === 0
+        ? "No shots yet, so a start has no intro until you make one."
+        : `${count} of ${S.maxShots} shots. A start plays ${S.shotsPerStart} of them at random, ${S.introSeconds} seconds in all.`];
+
+    if (pending !== undefined) lines.push(`§eStart marked at ${where(pending)}. Go where the shot should end, and press "Mark the end here".`);
+
+    return lines.join("\n");
+}
+
+async function shotsScreen(player: Player): Promise<void> {
+
+    await screens.run(player, () => {
+
+        const stored = listStoredShots();
+        const pending = pendingMark(player);
+        const actions: Action[] = [];
+
+        stored.forEach((entry, index) => {
+            const number = index + 1;
+
+            actions.push(entry.ok
+                ? { label: `${number}. ${entry.value.name || entry.id}`, run: () => oneShot(player, entry.id) }
+                : { label: `${number}. ${entry.id} (cannot be read)`, run: () => brokenShot(player, entry.id, entry.problem) });
+        });
+
+        if (pending === undefined) {
+            actions.push({ label: "Mark the start of a new shot here", run: () => markStart(player) });
+        } else {
+            actions.push({ label: "Mark the end here", run: () => markEnd(player) });
+            actions.push({ label: "Cancel marking", run: () => { setPendingMark(player, undefined); screens.notify(player, format("ok", "Marking cancelled.")); } });
+        }
+
+        actions.push(BACK);
+
+        return { title: "Camera shots", body: shotsBody(stored.length, pending), actions };
+    });
+}
+
+function markStart(player: Player): void {
+
+    if (listStoredShots().length >= S.maxShots) {
+        screens.notify(player, format("warn", `There is room for ${S.maxShots} shots and they are all in use: delete one first.`));
+        return;
+    }
+
+    // The next screen says where it was marked (shotsBody), so there is no notice to say it twice.
+    setPendingMark(player, eyeMark(player));
+}
+
+/** The end is taken the moment the button is pressed, before the name box, so what the operator then types cannot move the camera. */
+async function markEnd(player: Player): Promise<void> {
+
+    const start = pendingMark(player);
+
+    if (start === undefined) {
+        screens.notify(player, format("warn", "There is no start marked."));
+        return;
+    }
+
+    const end = eyeMark(player);
+
+    let typed = "";
+    let refusal: string | undefined;
+
+    for (;;) {
+
+        if (!player.isValid) return;
+
+        const form = new ModalFormData()
+            .title(refusal !== undefined ? `Not saved: ${refusal}` : "Name this shot")
+            .textField("Name (optional)", "Bridge flyover", { defaultValue: typed });
+
+        const response = await showForm(player, form);
+
+        if (!response || response.canceled || !response.formValues) {
+            screens.notify(player, format("warn", "Not saved: the box was closed. Your start mark is kept."));
+            return;
+        }
+
+        const name = String(response.formValues[0] ?? "");
+        const made = makeShot(nextShotId(listStoredShots().map((entry) => entry.id)), name, start, end);
+        const saved = made.ok ? saveShot(made.value) : made;
+
+        if (!saved.ok) {
+            typed = name;
+            refusal = saved.reason;
+            continue;
+        }
+
+        setPendingMark(player, undefined);
+        screens.notify(player, format("ok", `Saved ${made.ok ? made.value.id : ""}${made.ok && made.value.name ? ` (${made.value.name})` : ""}.`));
+        return;
+    }
+}
+
+async function oneShot(player: Player, id: string): Promise<void> {
+
+    await screens.run(player, () => {
+
+        const shot = getShot(id);
+
+        // Deleted from under the screen: there is nothing left to show.
+        if (!shot) return undefined;
+
+        return {
+            title: `Shot: ${shot.name || shot.id}`,
+            body: `From ${where(shot.start)} to ${where(shot.end)}.`,
+            actions: [
+                { label: "Preview", run: () => preview(player, shot) },
+                { label: "Delete", run: () => removeShot(player, shot) },
+                BACK
+            ]
+        };
+    });
+}
+
+/** A shot that is saved but cannot be read: all that can be done with it is to delete it, which frees its place. */
+async function brokenShot(player: Player, id: string, problem: string): Promise<void> {
+
+    await screens.run(player, () => ({
+        title: `Shot ${id}`,
+        body: `§cThis shot cannot be read: ${problem}`,
+        actions: [{ label: "Delete", run: () => removeById(player, id, id) }, BACK]
+    }));
+}
+
+/** Plays it for the operator alone and closes the menus, so the screen does not come back over the camera. */
+function preview(player: Player, shot: Shot): void {
+
+    const refusal = previewShot(player, shot);
+
+    if (refusal !== undefined) {
+        screens.notify(player, format("warn", refusal));
+        return;
+    }
+
+    screens.closeAll(player);
+}
+
+function removeById(player: Player, id: string, called: string): Step {
+
+    const result = deleteShot(id);
+
+    screens.notify(player, result.ok ? format("ok", `Deleted ${called}.`) : format("warn", `Not deleted: ${result.reason}.`));
+
+    return "back";
+}
+
+const removeShot = (player: Player, shot: Shot): Step => removeById(player, shot.id, shot.name || shot.id);

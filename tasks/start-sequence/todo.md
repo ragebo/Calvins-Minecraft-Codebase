@@ -131,16 +131,17 @@ Status source of truth for `plan.md` in this folder. Every task: RED first (a fa
   - Dependencies: Tasks 2, 4
   - Files: `rae/src/core/startforms.ts`, `rae/src/systems/menu.ts`, `rae/test/start-forms.test.mjs`
 
-- [ ] **Task 8: The camera-shots screen** (M)
+- [x] **Task 8: The camera-shots screen** (M) - done
   In `core/startforms.ts`: the shot list, "Mark the start of a new shot here" (position and the way you are facing, kept on the operator
   until the end is marked), "Mark the end here" (saves the shot, asks for an optional name), Cancel marking, Preview (plays that one
   shot for the operator alone, then clears their camera), Delete.
   - Acceptance:
-    - [ ] marking start then end saves a shot whose marks are the operator's position and facing at each moment
-    - [ ] a pending start survives the screen closing and shows up when reopened; Cancel clears it
-    - [ ] Preview moves only the operator's camera, does not change the round phase, and ends with their camera cleared and movement restored
-    - [ ] a save over `maxShots` is refused with the reason; delete asks for nothing more than the button
+    - [x] marking start then end saves a shot whose marks are the operator's position and facing at each moment
+    - [x] a pending start survives the screen closing and shows up when reopened; Cancel clears it
+    - [x] Preview moves only the operator's camera, does not change the round phase, and ends with their camera cleared and movement restored
+    - [x] a save over `maxShots` is refused with the reason; delete asks for nothing more than the button
   - Verification: check, test; deliberate breaks
+  - Result: 20 new tests (start-shots-forms.test.mjs): the main screen's Camera shots button and summary, an empty list, marking the start (kept on the operator, eyes and facing not feet), marking the end saves a named shot with the marks of the two moments, the end is taken at the press and not after the name box, an unnamed shot is listed by its id, a name that is too long comes back in the box with the reason and what was typed kept, closing the name box saves nothing and keeps the start, a pending start survives the screen closing and Cancel marking clears it, a damaged pending mark (five kinds, including 1e999) is ignored, a full list refuses a new start at once, a shot's screen with Preview and Delete, Preview (the operator alone, locked, camera given back at the end, menus closed so the screen does not come back over the camera), refused while a start is under way and for an intro of no seconds, a Start in the middle of a preview lets the operator go, a second preview is not cut short by the first, Delete is one button, a damaged shot is listed and deletable, and a new shot never takes a damaged shot's id. About 34 deliberate breaks across the shots half of core/startforms.ts and previewShot in core/startsequence.ts, all caught; running them found a real weakness (a pending mark of 1e999 reads as Infinity) and a redundant notice (Start marked said twice), both fixed. core/startstore.ts listStoredShots is now in the order made (s2 before s10). previewShot lives in startsequence.ts so it shares the hold-and-release rules: a reset or a Start releases an operator mid-preview. Unmeasured in the real game: how a preview looks, that getHeadLocation is where the free camera should sit, and the screens' feel.
   - Dependencies: Tasks 3, 7
   - Files: `rae/src/core/startforms.ts`, `rae/test/start-shots-forms.test.mjs`
 

@@ -2,7 +2,7 @@ import { system, world, type Player, type Vector3 } from "@minecraft/server";
 import { ActionFormData } from "@minecraft/server-ui";
 import { START as S } from "../config/balance.js";
 import { LAW_SPAWNS, OUTLAW_SPAWNS } from "../config/world.js";
-import { pickShots, secondsPerShot } from "../logic/start.js";
+import { pickShots, secondsPerShot, type Shot } from "../logic/start.js";
 import { clearCamera, flyDown, lock, playShot, unlock, unlockEveryone } from "./cinematic.js";
 import { onSpawn } from "./events.js";
 import { showForm } from "./forms.js";
@@ -122,6 +122,44 @@ export function startIntro(playing: readonly Player[], then: () => void): void {
     };
 
     step();
+}
+
+/** Which preview a player's camera belongs to, so a second preview is not cut short by the end of the first. */
+const previews = new Map<string, number>();
+let previewCount = 0;
+
+/**
+ * Plays one shot for one player alone, the way a start would play it (the same share of the intro's seconds), and hands their camera back
+ * after: for an operator checking what they marked. Refused, with the reason, while a start is under way (those players are the sequence's)
+ * and when the intro has no length. A round reset or a Start in the middle lets the player go at once, as it does for anyone the sequence holds.
+ */
+export function previewShot(player: Player, shot: Shot): string | undefined {
+
+    if (isPhase("SETUP")) return "A game is starting: try again in a moment.";
+
+    const seconds = secondsPerShot(S.introSeconds, S.shotsPerStart);
+
+    if (seconds <= 0) return "There is no intro to preview: its length, or the number of shots a start plays, is 0.";
+
+    const token = generation;
+    const mine = ++previewCount;
+
+    previews.set(player.id, mine);
+    held.set(player.id, player);
+    lock(player);
+    playShot(player, shot, seconds);
+
+    system.runTimeout(() => {
+
+        if (token !== generation || previews.get(player.id) !== mine) return;
+
+        previews.delete(player.id);
+        held.delete(player.id);
+        unlock(player);
+        clearCamera(player);
+    }, Math.max(1, Math.round(seconds * TICKS_PER_SECOND)));
+
+    return undefined;
 }
 
 // ---------------------------------------------------------------------------------------------------------

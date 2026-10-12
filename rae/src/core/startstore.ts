@@ -1,6 +1,6 @@
 import { START as S } from "../config/balance.js";
 import { parseCommands, parseShot, serializeCommands, serializeShot, type Shot } from "../logic/start.js";
-import { createRecordStore, type PlainResult, type SaveResult } from "./recordstore.js";
+import { createRecordStore, type PlainResult, type SaveResult, type Stored } from "./recordstore.js";
 
 /**
  * Where the start sequence's authored parts live, both on core/recordstore.ts (the store shops and robberies use): the camera
@@ -52,9 +52,6 @@ const commands = createRecordStore<CommandList>({
 // Shots
 // ---------------------------------------------------------------------------------------------------------
 
-/** Every saved shot, readable or not, by id. */
-export const listStoredShots = shots.list;
-
 /** The shot with this id, or undefined when there is none or it cannot be read. */
 export const getShot = shots.value;
 
@@ -64,8 +61,13 @@ const numberOf = (id: string): number => {
     return found ? Number(found[1]) : Number.MAX_SAFE_INTEGER;
 };
 
+const inOrderMade = (a: { readonly id: string }, b: { readonly id: string }): number => numberOf(a.id) - numberOf(b.id) || (a.id < b.id ? -1 : 1);
+
+/** Every saved shot, readable or not, in the order they were made. */
+export const listStoredShots = (): readonly Stored<Shot>[] => [...shots.list()].sort(inOrderMade);
+
 /** Every readable shot, in the order they were made. */
-export const allShots = (): readonly Shot[] => [...shots.all()].sort((a, b) => numberOf(a.id) - numberOf(b.id) || (a.id < b.id ? -1 : 1));
+export const allShots = (): readonly Shot[] => [...shots.all()].sort(inOrderMade);
 
 export const shotsVersion = shots.version;
 export const saveShot = shots.save;
