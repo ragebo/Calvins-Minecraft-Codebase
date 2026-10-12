@@ -23,20 +23,24 @@ Nothing is deployed or pushed unless the owner asks.
   - Dependencies: none
   - Files: `rae/src/logic/telemetry.ts`, `rae/test/telemetry-events.test.mjs`
 
-- [ ] **Task 2: The emitter** (S-M)
+- [x] **Task 2: The emitter** (S-M) - done
   `core/telemetryevents.ts`: `emit(kind, fields)` stamps `v`, `w` (world id, made on first use and kept in the world property
   `rae:telemetry:world`), `b` (random boot id made at load), `n` (counter), `t` (`system.currentTick`), `bv` (`BUILD_VERSION`)
   and writes `[telemetry] <line>` through `core/log.ts` `info`. Emits `boot` on the first tick after a load. New
-  `TELEMETRY.events` in `config/balance.ts`: `enabled`, `maxLinesPerWindow`, `windowTicks`. Dropped lines are reported by one
-  `telemetry.dropped` line. Never throws into gameplay.
+  `TELEMETRY.events` in `config/balance.ts`: `enabled`, `maxLinesPerWindow`, `windowTicks` and the three size caps. Dropped
+  lines are reported by one `telemetry.dropped` line. Never throws into gameplay. A failure to write is reported once per boot
+  as `[telemetry-problem] ...` (a source of its own, so a reader that expects JSON after `[telemetry]` never meets a sentence).
+  Not loaded by the game yet: nothing imports it until Task 3.
   - Acceptance:
-    - [ ] one stamped line per `emit`, `n` rising by 1
-    - [ ] the world id is made once, is the same after a simulated reload, and `rae:persist_reset` leaves it alone
-    - [ ] `enabled: false` writes nothing
-    - [ ] over the limit, lines are dropped and one `telemetry.dropped` carries the count after the window
-    - [ ] a console that throws does not throw out of `emit`
-    - [ ] a `boot` line appears on the first tick of a fresh load
+    - [x] one stamped line per `emit`, `n` rising by 1
+    - [x] the world id is made once, is the same after a simulated reload, and `rae:persist_reset` leaves it alone
+    - [x] `enabled: false` writes nothing (and uses no line number)
+    - [x] over the limit, lines are dropped and one `telemetry.dropped` carries the count after the window
+    - [x] a console that throws does not throw out of `emit` (also when it throws on the complaint too, and for a field JSON cannot hold)
+    - [x] a `boot` line appears on the first tick of a fresh load
   - Verification: check, test, check:legacy; deliberate break: remove the limiter and see a test fail
+  - Result: 11 new tests; 16 deliberate breaks of the module, each caught by a test. Also fixed on the way (own commit): two
+    event fields were named `n` like the stamp's line number; they are now `players` and `lines`, and the compiler rejects a clash.
   - Dependencies: Task 1
   - Files: `rae/src/core/telemetryevents.ts`, `rae/src/config/balance.ts`, `rae/test/telemetry-emit.test.mjs`
 

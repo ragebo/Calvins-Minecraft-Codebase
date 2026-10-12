@@ -376,7 +376,25 @@ export const PERSIST = {
 
 export const TELEMETRY = {
     /** Round summaries kept at once; the oldest is dropped once a new one would exceed this. */
-    maxStoredRounds: 20
+    maxStoredRounds: 20,
+    /**
+     * The telemetry lines written to the content log (logic/telemetry.ts is their format, core/telemetryevents.ts writes them). Read at
+     * every line, so a change takes effect at once.
+     */
+    events: {
+        /** Off writes nothing. */
+        enabled: true,
+        /** At most this many lines in a window; the rest are dropped, and the next window opens with a line saying how many. */
+        maxLinesPerWindow: 200,
+        /** How long a window is, in ticks (1200 is a minute). */
+        windowTicks: 1200,
+        /** A text in a line is cut to this many characters. */
+        textChars: 80,
+        /** A list in a line keeps this many entries. */
+        listItems: 8,
+        /** A line longer than this loses its biggest fields. */
+        lineChars: 600
+    }
 };
 
 /**
