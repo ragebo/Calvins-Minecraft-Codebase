@@ -299,3 +299,102 @@ test("telemetry: a version mismatch on the real 'telemetry' persistable is silen
     assert.equal(telemetry.totalKills(), 0);
     assert.equal(telemetry.totalDeaths(), 0);
 });
+
+// ---------------------------------------------------------------------------
+// The way out: every record is also written to the content log as a round.end line (core/telemetryevents.ts)
+// ---------------------------------------------------------------------------
+
+/** Runs `body` with the console's warn channel captured, and returns the telemetry lines of the given kind it wrote. */
+function linesOf(kind, body) {
+    const written = [];
+    const realWarn = console.warn;
+    console.warn = (...args) => { written.push(args.join(" ")); };
+    try { body(); } finally { console.warn = realWarn; }
+    return written.filter((text) => text.startsWith("[telemetry] {")).map((text) => JSON.parse(text.slice("[telemetry] ".length))).filter((e) => e.k === kind);
+}
+
+test("telemetry: a normal round is also written out as one round.end line, carrying what was stored", () => {
+    scene();
+    const law = fake.makePlayer("L", { tags: ["law"] });
+    const outlaw = fake.makePlayer("O", { tags: ["outlaw"] });
+    const outlaw2 = fake.makePlayer("O2", { tags: ["outlaw"] });
+    fake.setScore("coins", law, 100);
+    fake.setScore("coins", outlaw, 50);
+
+    // Lopsided on purpose, so a field swapped for its neighbour cannot hide: one kill by the law side, and a second death with nobody to credit.
+    const out = linesOf("round.end", () => {
+        round.startRound();
+        round.beginActive();
+        fake.advance(10);
+        kill(outlaw, law);
+        fake.advance(5);
+        kill(outlaw2, undefined);
+        round.endRound("law_win");
+    });
+
+    const r = telemetry.recentRounds()[0];
+    const e = out[0] ?? {};
+    const { check, done } = checks();
+    check("exactly one line", out.length === 1, out.length);
+    check("it says how the round ended", e.reason === "law_win", e.reason);
+    check("it carries what was stored", e.dur === r.durationTicks && e.kills === r.kills && e.deaths === r.deaths && e.lawKills === r.lawKills && e.outlawKills === r.outlawKills && e.coins === r.totalCoinsAtEnd, JSON.stringify(e));
+    check("and those are the real numbers", e.dur === 15 && e.kills === 1 && e.deaths === 2 && e.lawKills === 1 && e.outlawKills === 0, JSON.stringify(e));
+    check("the coins are the gang's total at the end", e.coins === economy.getCoins(law) + economy.getCoins(outlaw) + economy.getCoins(outlaw2) && e.coins > 0, JSON.stringify(e));
+    done();
+});
+
+test("telemetry: an abort is written out as a round.end line with reason 'aborted'", () => {
+    scene();
+
+    const out = linesOf("round.end", () => {
+        round.startRound();
+        round.beginActive();
+        fake.advance(7);
+        round.resetRound();
+    });
+
+    assert.equal(out.length, 1, "one line");
+    assert.equal(out[0].reason, "aborted");
+    assert.equal(out[0].dur, 7);
+});
+
+test("telemetry: a cancellation before ACTIVE, and a reset after a round already ended, write no extra round.end line", () => {
+    scene();
+
+    const cancelled = linesOf("round.end", () => {
+        round.startRound();
+        fake.advance(3);
+        round.resetRound();
+    });
+
+    const ended = linesOf("round.end", () => {
+        round.startRound();
+        round.beginActive();
+        fake.advance(4);
+        round.endRound("outlaw_win");
+        round.resetRound();
+    });
+
+    const { check, done } = checks();
+    check("a SETUP -> IDLE cancellation writes nothing", cancelled.length === 0, cancelled.length);
+    check("a round that ended and was then reset is written once", ended.length === 1, ended.length);
+    check("and it is the real ending, not an abort", ended[0]?.reason === "outlaw_win", ended[0]?.reason);
+    done();
+});
+
+test("telemetry: every round goes out as a line, including the ones the ring buffer has already dropped", () => {
+    scene();
+    const total = TELEMETRY.maxStoredRounds + 3;
+
+    const out = linesOf("round.end", () => {
+        for (let i = 0; i < total; i++) {
+            round.startRound();
+            round.beginActive();
+            fake.advance(1);
+            round.endRound("law_win");
+        }
+    });
+
+    assert.equal(telemetry.recentRounds().length, TELEMETRY.maxStoredRounds, "the saved history is capped");
+    assert.equal(out.length, total, "the log is not");
+});

@@ -6,6 +6,7 @@ import { registerPersistable } from "./persist.js";
 import { players } from "./players.js";
 import { onPhase, type EndReason } from "./round.js";
 import { recordOf } from "./state.js";
+import { emit } from "./telemetryevents.js";
 
 /**
  * Round-by-round history: who won, how long it took, who killed whom, and the gang's combined
@@ -13,6 +14,9 @@ import { recordOf } from "./state.js";
  * balances, this is a record of what already happened, not live round state, so nothing here is
  * cleared by resetRound(). There is deliberately no registerSystem/reset(): a round reset must
  * never erase the history of the round that just finished.
+ *
+ * Each record is also written to the content log as a `round.end` line (core/telemetryevents.ts):
+ * the saved history below keeps the last few rounds, the log keeps them all.
  */
 
 export interface RoundRecord {
@@ -76,7 +80,7 @@ function pushRecord(reason: EndReason | "aborted"): void {
 
     const endedAtTick = system.currentTick;
 
-    rounds.unshift({
+    const record: RoundRecord = {
         startedAtTick,
         endedAtTick,
         durationTicks: endedAtTick - startedAtTick,
@@ -86,9 +90,21 @@ function pushRecord(reason: EndReason | "aborted"): void {
         lawKills: roundLawKills,
         outlawKills: roundOutlawKills,
         totalCoinsAtEnd: totalCoinsNow()
-    });
+    };
+
+    rounds.unshift(record);
 
     if (rounds.length > TELEMETRY.maxStoredRounds) rounds.length = TELEMETRY.maxStoredRounds;
+
+    emit("round.end", {
+        reason: record.reason,
+        dur: record.durationTicks,
+        kills: record.kills,
+        deaths: record.deaths,
+        lawKills: record.lawKills,
+        outlawKills: record.outlawKills,
+        coins: record.totalCoinsAtEnd
+    });
 
     totals.kills += roundKills;
     totals.deaths += roundDeaths;

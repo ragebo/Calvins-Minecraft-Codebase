@@ -44,16 +44,19 @@ Nothing is deployed or pushed unless the owner asks.
   - Dependencies: Task 1
   - Files: `rae/src/core/telemetryevents.ts`, `rae/src/config/balance.ts`, `rae/test/telemetry-emit.test.mjs`
 
-- [ ] **Task 3: Rounds emit `round.end`** (XS)
+- [x] **Task 3: Rounds emit `round.end`** (XS) - done
   `core/telemetry.ts` `pushRecord` also calls `emit("round.end", ...)` with the fields it stores. Importing the emitter here is
   what loads it in the game. Stored behavior does not change.
   - Acceptance:
-    - [ ] `telemetry.test.mjs` passes untouched (run it first, before editing)
-    - [ ] a normal round gives one `round.end` line equal to the stored record
-    - [ ] an ACTIVE round reset gives reason `aborted`; a SETUP to IDLE cancel gives no line; an ENDED to IDLE reset gives no second line
+    - [x] `telemetry.test.mjs` passes untouched (run it first, before editing): 12 of 12 before, the same 12 after
+    - [x] a normal round gives one `round.end` line equal to the stored record (and to the real numbers: the test is lopsided on purpose so a swapped field cannot hide)
+    - [x] an ACTIVE round reset gives reason `aborted`; a SETUP to IDLE cancel gives no line; an ENDED to IDLE reset gives no second line
+    - [x] (added) rounds the saved history has already dropped (past `maxStoredRounds`) still go out as lines
+    - [x] (added) the whole game, loaded as a world loads it (`main.js`), writes the boot line on its first tick and a `round.end` line when a round ends: the claim "importing the emitter here is what loads it in the game" is now tested, and cutting `main.ts`'s import of `core/telemetry.js` fails it
   - Verification: check, test
+  - Result: 6 new tests (4 in `telemetry.test.mjs`, 2 in the new `telemetry-wiring.test.mjs`); 11 deliberate breaks, each caught by a test.
   - Dependencies: Task 2
-  - Files: `rae/src/core/telemetry.ts`, `rae/test/telemetry.test.mjs`
+  - Files: `rae/src/core/telemetry.ts`, `rae/test/telemetry.test.mjs`, `rae/test/telemetry-wiring.test.mjs`
 
 - [ ] **Task 4: Tool, ingest and archive** (S-M)
   `tools/telemetry/ingest.mjs`: finds the content logs (default `%APPDATA%\Minecraft Bedrock\logs`, `--logs <dir>` overrides),
