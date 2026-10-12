@@ -77,7 +77,7 @@ async function startRandom(player: Player): Promise<void> {
     if (!await confirm(player, "Start a new game with random roles?\n§7This resets the current game.", "Start the game")) return;
 
     // Says why itself when there are too few players.
-    if (startRandomRound()) tell(player, format("ok", "Game started with random roles."));
+    if (startRandomRound(player)) tell(player, format("ok", "Game started with random roles."));
 }
 
 async function startChosen(player: Player): Promise<void> {
@@ -112,7 +112,7 @@ async function startChosen(player: Player): Promise<void> {
         picks.set(listedPlayer, option ? option.choice : "outlaw");
     });
 
-    const result = startChosenRound(picks);
+    const result = startChosenRound(picks, player);
 
     if (!result.ok) {
         tell(player, format("warn", result.refusal ?? "The game could not start."));

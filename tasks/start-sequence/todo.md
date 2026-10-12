@@ -59,18 +59,19 @@ Status source of truth for `plan.md` in this folder. Every task: RED first (a fa
 
 ## Phase 2: The sequence
 
-- [ ] **Task 4: Start commands run when a game starts** (M)
+- [x] **Task 4: Start commands run when a game starts** (M) - done
   `core/startsequence.ts` (first part): `runStartCommands(by?)` runs the saved list in order as the server (overworld dimension), and
   `begin()` in `core/game.ts` calls it after the roles are assigned and before anything else. A command that throws is reported to
   `by` (the operator who pressed Start, when there is one) and to the log, and the rest still run. `startRandomRound` and
   `startChosenRound` take an optional `by`; the menu passes the player.
   - Acceptance:
-    - [ ] with the defaults, a Start sends the seven default commands to the dimension in order, after roles exist (so `@a[tag=law]` would match)
-    - [ ] a command is sent without its leading `/`
-    - [ ] one that throws is reported by name to `by`, and the commands after it still run and the round still starts
-    - [ ] an empty saved list runs nothing; sitting-out players are not affected by the code (the commands' own selectors decide)
-    - [ ] a Start from the script event (no `by`) logs a failure instead of telling nobody
+    - [x] with the defaults, a Start sends the seven default commands to the dimension in order, after roles exist (so `@a[tag=law]` would match)
+    - [x] a command is sent without its leading `/`
+    - [x] one that throws is reported by name to `by`, and the commands after it still run and the round still starts
+    - [x] an empty saved list runs nothing; sitting-out players are not affected by the code (the commands' own selectors decide)
+    - [x] a Start from the script event (no `by`) logs a failure instead of telling nobody
   - Verification: check, test; deliberate breaks
+  - Result: 10 new tests: the seven default commands run in order in the overworld, after the roles exist and before anyone is moved (checked against where players really stood), without a leading slash, a failing one is told to only whoever pressed Start (checked with a second operator online) and the rest still run, the old button tells every operator, a list saved empty or unreadable runs nothing, a refused start runs none (a bag is not emptied for a game that never began), a chosen round too. 20 deliberate breaks across core/startsequence.ts and the wiring in core/game.ts, all caught; running them found two flaws in my own tests (a second 'operator' who was really a member, and no check that a long reason is cut). game.ts, menu.ts: startRandomRound and startChosenRound take an optional who-pressed-it. A command that runs but matches no one counts as run; only a throw is a failure. Unmeasured in the real game: that Dimension.runCommand throws on a command the game refuses, and that selectors like @a[m=!creative] behave as in a command block.
   - Dependencies: Tasks 2, 3
   - Files: `rae/src/core/startsequence.ts`, `rae/src/core/game.ts`, `rae/src/systems/menu.ts`, `rae/test/start-commands.test.mjs`
 

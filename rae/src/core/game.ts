@@ -3,6 +3,7 @@ import { LAW_SPAWNS, OUTLAW_SPAWNS } from "../config/world.js";
 import { error } from "./log.js";
 import { players } from "./players.js";
 import { beginActive, resetRound, startRound } from "./round.js";
+import { runStartCommands } from "./startsequence.js";
 import { getRecord, update, type Role } from "./state.js";
 import { announce, showTitle } from "./ui.js";
 
@@ -74,9 +75,10 @@ export function sendEveryoneToSpawns(): void {
 
 /**
  * The shared part of every start: a clean slate, the roles, the spawns, then the reveal. `roles` maps each
- * player to a role, or to null for someone who sits this round out (they get nothing and go nowhere).
+ * player to a role, or to null for someone who sits this round out (they get nothing and go nowhere). `by` is whoever pressed
+ * Start, so a start command that fails can tell them; without it the operators online are told.
  */
-function begin(roles: ReadonlyMap<Player, Role | null>): void {
+function begin(roles: ReadonlyMap<Player, Role | null>, by?: Player): void {
 
     // One call clears every system, and forces the round phase back to IDLE from wherever it was
     // (always legal), so the SETUP below is always a clean start whatever the round was doing before.
@@ -90,6 +92,9 @@ function begin(roles: ReadonlyMap<Player, Role | null>): void {
         update(player, { role });
         playing.push(player);
     }
+
+    // The operator's commands come first, once the roles exist (so `@a[tag=law]` matches) and before anyone is moved or shown anything.
+    runStartCommands(by);
 
     sendEveryoneToSpawns();
 
@@ -111,7 +116,7 @@ function begin(roles: ReadonlyMap<Player, Role | null>): void {
 }
 
 /** The round everyone has always got: shuffled roles, a quarter of the players (at least one) are law. False when there are too few players. */
-export function startRandomRound(): boolean {
+export function startRandomRound(by?: Player): boolean {
 
     const everyone = shuffle([...players()]);
 
@@ -124,7 +129,7 @@ export function startRandomRound(): boolean {
     const roles = new Map<Player, Role | null>();
 
     everyone.forEach((player, index) => roles.set(player, index < lawCount ? "law" : "outlaw"));
-    begin(roles);
+    begin(roles, by);
 
     return true;
 }
@@ -133,7 +138,7 @@ export function startRandomRound(): boolean {
  * A round with the roles someone picked. Refuses when nobody is playing; an empty side (no law, or no outlaw) is
  * allowed, because testing alone is a real use, and comes back as a warning.
  */
-export function startChosenRound(choices: ReadonlyMap<Player, Choice>): ChosenStart {
+export function startChosenRound(choices: ReadonlyMap<Player, Choice>, by?: Player): ChosenStart {
 
     const roles = new Map<Player, Role | null>();
 
@@ -153,7 +158,7 @@ export function startChosenRound(choices: ReadonlyMap<Player, Choice>): ChosenSt
     if (!chosen.includes("law")) warnings.push("Nobody is law.");
     if (!chosen.includes("outlaw")) warnings.push("Nobody is an outlaw.");
 
-    begin(roles);
+    begin(roles, by);
 
     return { ok: true, warnings };
 }
