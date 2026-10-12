@@ -21,6 +21,7 @@ import {
 import { isPhase } from "./round.js";
 import { playAtPoint, playFor } from "./sound.js";
 import { recordOf } from "./state.js";
+import { emit } from "./telemetryevents.js";
 import { onTick, type TickContext } from "./tick.js";
 import { ACTION_BAR_PRIORITY, format, setActionBar, showTitle, tell } from "./ui.js";
 
@@ -85,6 +86,8 @@ interface Pending {
 
 interface Run {
     readonly id: string;
+    /** This run's number among the runs since the scripts loaded, from 1: every telemetry line of the run carries it. */
+    readonly number: number;
     readonly startedTick: number;
     /** A test run: anyone may take part, and there is no cooldown. */
     readonly test: boolean;
@@ -104,9 +107,14 @@ interface Run {
     lastActorId: string | undefined;
     /** The guards it spawned have been taken away (done once, when the site is put back). */
     guardsCleared: boolean;
+    /** Everyone who completed an element, by player id: how many people took part. */
+    readonly actors: Set<string>;
 }
 
 const runs = new Map<string, Run>();
+
+/** The number of the last run begun. Not cleared by a round reset, so no two runs since the scripts loaded share a number. */
+let runCounter = 0;
 
 /** Whether a robbery has a run (under way, or ended and waiting for its site to be put back): a guard of any other is a stray. */
 const hasRun = (robbery: string): boolean => runs.has(robbery);
@@ -439,7 +447,13 @@ function complete(run: Run, robbery: Robbery, element: Element, actor: Player | 
     if (run.done.has(element.id) || !usable(run)) return;
 
     run.done.add(element.id);
-    if (actor) run.lastActorId = actor.id;
+
+    if (actor) {
+        run.lastActorId = actor.id;
+        run.actors.add(actor.id);
+    }
+
+    emit("robbery.element", { id: run.id, r: run.number, el: element.id, kind: element.kind, locks: element.locks.map((lock) => lock.kind), after: system.currentTick - run.startedTick, p: actor?.id });
 
     changeWorld(robbery, element, actor);
 
@@ -492,11 +506,13 @@ function begin(id: string, by: Player | undefined, test: boolean, holdsSlot: boo
     const now = system.currentTick;
 
     const run: Run = {
-        id, startedTick: now, test, holdsSlot, done: new Set(), picks: new Map(), pending: [],
-        ended: false, result: undefined, resetAt: Infinity, lastAreaCheck: now, lastInside: now, lastActorId: by?.id, guardsCleared: false
+        id, number: ++runCounter, startedTick: now, test, holdsSlot, done: new Set(), picks: new Map(), pending: [],
+        ended: false, result: undefined, resetAt: Infinity, lastAreaCheck: now, lastInside: now, lastActorId: by?.id, guardsCleared: false, actors: new Set()
     };
 
     runs.set(id, run);
+
+    emit("robbery.start", { id, r: run.number, test, p: by?.id, role: (by ? recordOf(by)?.role : undefined) ?? undefined, inside: insideArea(robbery, run).length });
 
     // A robbery only starts once its site is fully put back, so an operator's earlier reset is finished with.
     forcedBack.delete(id);
@@ -597,6 +613,20 @@ export function startRobbery(id: string, options: { readonly by?: Player; readon
 }
 
 /**
+ * Tells the telemetry how a run came out. Called from `endRun` and from the two places that drop a run without ending it (a round reset and
+ * a deleted robbery), so every `robbery.start` gets exactly one `robbery.end`.
+ */
+function reportEnd(run: Run, result: RunResult): void {
+
+    const robbery = getRobbery(run.id);
+
+    emit("robbery.end", {
+        id: run.id, r: run.number, result, test: run.test, dur: system.currentTick - run.startedTick,
+        done: run.done.size, of: robbery ? robbery.elements.length : run.done.size, people: run.actors.size
+    });
+}
+
+/**
  * Decides how the run came out. The first ending is the only one: a failure after a success (the time limit, an empty area, an
  * alarm pressed on the way out) changes nothing. A win or a fail runs its effects, starts the reset countdown and the cooldown and
  * gives the director's slot back. Whether the elements can still be worked afterwards is `usable`'s rule, not this function's.
@@ -619,6 +649,8 @@ function endRun(run: Run, result: RunResult, reason?: string): void {
         // Stopped by hand, or cut short by a round reset: nothing to announce, and the site goes back at once.
         run.resetAt = now;
     }
+
+    reportEnd(run, result);
 
     if (reason) {
         const actor = playerById(run.lastActorId);
@@ -1243,6 +1275,7 @@ function loop(context: TickContext): void {
 
         if (!robbery) {
             // Deleted while running. Whatever it changed is still noted, so the janitor puts that back; its guards go now.
+            if (!run.ended) reportEnd(run, "stopped");
             removeGuards(run.id);
             runs.delete(run.id);
             if (run.holdsSlot && !run.ended) finishEvent(eventId(run.id));
@@ -1364,6 +1397,7 @@ registerSystem({
     reset() {
         // A round reset drops every run on the spot. Nothing about the site is lost: the blocks they changed are still
         // noted in the saved list, so the janitor puts them back on its next pass.
+        for (const run of runs.values()) if (!run.ended) reportEnd(run, "round");
         runs.clear();
         // With no run left, every guard is a stray: they go with the runs.
         removeStrayGuards(hasRun);

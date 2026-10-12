@@ -112,19 +112,23 @@ Nothing is deployed or pushed unless the owner asks.
 
 ## Phase 2: robberies
 
-- [ ] **Task 6: Run start, element and end events** (M; the biggest file in `core/`, edit surgically)
-  In `core/robberyrun.ts`: `Run` gets `number` (a per-boot counter) and `actors` (distinct player ids). `begin()` emits
-  `robbery.start`; `complete()` emits `robbery.element` (kind, locks, ticks since start, who); `endRun()` emits `robbery.end`
-  (result, duration, elements done of total, distinct people). `endRun` is the one place all five endings pass through and its
-  first-ending-wins rule stays.
+- [x] **Task 6: Run start, element and end events** (M; the biggest file in `core/`, edit surgically) - done
+  In `core/robberyrun.ts`: `Run` gets `number` (a per-boot counter, not cleared by a round reset) and `actors` (distinct player
+  ids of those who completed an element). `begin()` emits `robbery.start`; `complete()` emits `robbery.element` (kind, locks, ticks
+  since start, who); `reportEnd()` emits `robbery.end` (result, duration, elements done of total, distinct people). Found on the way:
+  `endRun` is the one place four of the endings pass through, but a round reset (`reset()` just clears the runs; nothing ever set the
+  result `round`) and a robbery deleted mid-run (the loop drops the run) end a run WITHOUT it, which would have left a start with no
+  end. Both now tell their end too, through the same `reportEnd`: `round`, and `stopped` (the robbery is gone, so `of` falls back to the
+  elements that were done). First-ending-wins stays: a run that had already ended is not told again.
   - Acceptance:
-    - [ ] a full flow (reuse an existing run test's setup) emits start, one element line per element completed in order, and one `win` end with duration, done/of and people
-    - [ ] each ending (end effect win and fail, time limit, empty area, stop, round reset) emits exactly one end with the right result; a second ending emits nothing
-    - [ ] a test run carries `test:true`; a command-block start has no `p`
-    - [ ] a teller hold-up shows as an element of kind `teller`
-    - [ ] every existing robbery test passes untouched
-    - [ ] deliberate breaks, each caught by a test: skip the emit in `endRun`; emit twice in `complete`
+    - [x] a full flow (the bank, as `robbery-run.test.mjs` builds it) emits start, one element line per element completed in order, and one `win` end with duration, done/of and people
+    - [x] each ending (the win, the time limit, everyone leaving, stop, site reset, round reset, the robbery deleted) emits exactly one end with the right result; a stop, a reset, a deletion or the time limit after a win adds nothing
+    - [x] a test run carries `test:true`; a command-block start has no `p` and no role
+    - [x] a teller hold-up shows as an element of kind `teller`
+    - [x] every existing robbery test passes untouched (184 of them, run before and after)
+    - [x] deliberate breaks, each caught by a test: 26, including skipping the emit in `endRun` and telling the end twice
   - Verification: check, test, check:legacy
+  - Result: 14 new tests. Test trap hit and fixed in the new file: the store keeps its cleanup list in memory, so a test that ends with a held site handed it to the next; the file clears it in its own setup.
   - Dependencies: Task 2
   - Files: `rae/src/core/robberyrun.ts`, `rae/test/robbery-telemetry.test.mjs`
 
