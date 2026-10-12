@@ -75,19 +75,20 @@ Status source of truth for `plan.md` in this folder. Every task: RED first (a fa
   - Dependencies: Tasks 2, 3
   - Files: `rae/src/core/startsequence.ts`, `rae/src/core/game.ts`, `rae/src/systems/menu.ts`, `rae/test/start-commands.test.mjs`
 
-- [ ] **Task 5: The camera intro before the reveal** (M)
+- [x] **Task 5: The camera intro before the reveal** (M) - done
   Staged with a generation token (`core/startsequence.ts`, second part): when the intro is on and at least one shot is saved, lock the
   playing players, pick `shotsPerStart` shots, play each for `secondsPerShot` on a timer chain for everybody at once, then continue
   into what happens today (spawn, reveal, play). No shots, or the intro switched off: nothing changes. A reset or another Start cancels
   the stage that is waiting, unlocks everyone and clears their cameras.
   - Acceptance:
-    - [ ] playing players are locked and in a camera during the intro; sitting-out players are not
-    - [ ] shots play in order, each cut at the right tick (checked with fake time), 10 s in total with the defaults
-    - [ ] the same pool never repeats the previous Start's first shot
-    - [ ] a round reset mid-intro: everyone unlocked, cameras cleared, no later step runs; a second Start mid-intro takes over cleanly
-    - [ ] no shots saved: no camera call, no lock, and the existing timing is unchanged
-    - [ ] a player who leaves mid-intro does not stop the others
+    - [x] playing players are locked and in a camera during the intro; sitting-out players are not
+    - [x] shots play in order, each cut at the right tick (checked with fake time), 10 s in total with the defaults
+    - [x] the same pool never repeats the previous Start's first shot
+    - [x] a round reset mid-intro: everyone unlocked, cameras cleared, no later step runs; a second Start mid-intro takes over cleanly
+    - [x] no shots saved: no camera call, no lock, and the existing timing is unchanged
+    - [x] a player who leaves mid-intro does not stop the others
   - Verification: check, test; deliberate breaks
+  - Result: 13 new tests, exact to the tick: 2 shots of 5 s each (a cut at tick 100, the end at 200, play 60 ticks later), one shot for the whole 10 s, even shares for 3 shots, never opening with last time's shot, a round reset or a second Start in the middle (old timers do nothing), no shots / intro off / 0 seconds / nobody to show it to (nothing changes), a player leaving mid-intro, and the safety net (everyone let go at the next load, a joining player let go unless the intro holds them; the reload test comes last because a second module copy would unlock everyone). 25 deliberate breaks across core/startsequence.ts and core/game.ts, all caught (6 needed a compiling variant). It found a REAL hang: a player leaving during the 10 s intro made showTitle throw in the continuation before beginActive was scheduled, which would have left the round stuck in SETUP; the continuation now skips a player who left. startIntro(playing, then) is the new stage in begin(); with nothing to play it calls then() at once, so the old timing is untouched. Unmeasured in the real game: the two camera calls of a pan in one tick, free cameras for several players at once, and whether movement lock plus a free camera lets players be hurt.
   - Dependencies: Task 4
   - Files: `rae/src/core/startsequence.ts`, `rae/src/core/game.ts`, `rae/test/start-intro.test.mjs`
 

@@ -3,7 +3,7 @@ import { LAW_SPAWNS, OUTLAW_SPAWNS } from "../config/world.js";
 import { error } from "./log.js";
 import { players } from "./players.js";
 import { beginActive, resetRound, startRound } from "./round.js";
-import { runStartCommands } from "./startsequence.js";
+import { runStartCommands, startIntro } from "./startsequence.js";
 import { getRecord, update, type Role } from "./state.js";
 import { announce, showTitle } from "./ui.js";
 
@@ -96,23 +96,29 @@ function begin(roles: ReadonlyMap<Player, Role | null>, by?: Player): void {
     // The operator's commands come first, once the roles exist (so `@a[tag=law]` matches) and before anyone is moved or shown anything.
     runStartCommands(by);
 
-    sendEveryoneToSpawns();
+    // The camera intro, when there are shots to play and it is on; otherwise this runs at once.
+    startIntro(playing, () => {
 
-    for (const player of playing) {
-        showTitle(player, "§eRolling...");
-    }
-
-    system.runTimeout(() => {
-        // Play begins once roles are actually revealed, not during the "Rolling..." wait: that's
-        // still setup (core/round.ts's own phase docstring).
-        beginActive();
+        sendEveryoneToSpawns();
 
         for (const player of playing) {
+            // Someone may have left during the intro, and a title to a player who is gone throws: that must not keep play from beginning.
             if (!player.isValid) continue;
-            showTitle(player, getRecord(player).role === "law" ? "§9LAWMAN" : "§cOUTLAW");
+            showTitle(player, "§eRolling...");
         }
-        announce("§aRoles Assigned!");
-    }, REVEAL_DELAY_TICKS);
+
+        system.runTimeout(() => {
+            // Play begins once roles are actually revealed, not during the "Rolling..." wait: that's
+            // still setup (core/round.ts's own phase docstring).
+            beginActive();
+
+            for (const player of playing) {
+                if (!player.isValid) continue;
+                showTitle(player, getRecord(player).role === "law" ? "§9LAWMAN" : "§cOUTLAW");
+            }
+            announce("§aRoles Assigned!");
+        }, REVEAL_DELAY_TICKS);
+    });
 }
 
 /** The round everyone has always got: shuffled roles, a quarter of the players (at least one) are law. False when there are too few players. */
