@@ -55,32 +55,39 @@ function scene(shots) {
 
 const start = ({ ada, bob, sid }) => game.startChosenRound(new Map([[ada, "law"], [bob, "outlaw"], [sid, "sit_out"]]));
 
+/** Lets every promise a form is waiting on settle (the law players' spawn screens are answered through promises). */
+const settle = async () => { for (let i = 0; i < 30; i++) await Promise.resolve(); };
+
 /** Runs `body` with Math.random answering 0, which for three shots picks s2 then s3 (the order b, c, a), and puts it back. */
-function withRandomZero(body) {
+async function withRandomZero(body) {
     const real = Math.random;
     Math.random = () => 0;
-    try { body(); } finally { Math.random = real; }
+    try { await body(); } finally { Math.random = real; }
 }
 
 /** Runs `body` with one of START's numbers changed, and puts it back. */
-function withConfig(name, value, body) {
+async function withConfig(name, value, body) {
     const before = START[name];
     START[name] = value;
-    try { body(); } finally { START[name] = before; }
+    try { await body(); } finally { START[name] = before; }
 }
 
-test("the intro plays the shots one after the other for the players who are playing, 10 seconds in all, then everything carries on", () => {
+// What follows the intro (the reveal, the outlaws' fly-down, the law players' screen, play) is start-reveal.test.mjs's. Here it matters only that
+// it follows: the camera is handed back at the end of the intro, everyone is locked again for the reveal until play begins, and law are placed
+// when their screen is answered (the stand-in here answers nothing, which is a random spawn).
+
+test("the intro plays the shots one after the other for the players who are playing, 10 seconds in all, then the reveal follows", async () => {
     const { check, done } = checks();
     const world3 = scene(3);
     const { ada, bob, sid } = world3;
 
-    withRandomZero(() => {
+    await withRandomZero(async () => {
         check("a start went ahead", start(world3).ok === true);
 
         check("playing players are locked", !moving(ada) && !moving(bob));
         check("the one sitting out is not", moving(sid) && calls(sid).length === 0);
         check("both players see the first shot: it appears at x 200 and eases to 250 over 5 seconds", calls(ada).join() === "200,250~5" && calls(bob).join() === "200,250~5", `${calls(ada)} / ${calls(bob)}`);
-        check("nobody has been moved or shown a title yet", round.getPhase() === "SETUP" && !LAW_SPAWNS.some((s) => sameSpot(s, ada.location)));
+        check("nobody has been moved or shown a title yet", round.getPhase() === "SETUP" && !LAW_SPAWNS.some((s) => sameSpot(s, ada.location)) && ada.titles.length === 0);
 
         fake.advance(99);
         check("one tick before the cut it is still the first shot", calls(ada).join() === "200,250~5");
@@ -90,19 +97,23 @@ test("the intro plays the shots one after the other for the players who are play
         check("still locked", !moving(ada) && !moving(bob));
 
         fake.advance(99);
-        check("one tick before the end nothing has finished", !moving(ada) && calls(ada).length === 4 && !LAW_SPAWNS.some((s) => sameSpot(s, ada.location)));
+        check("one tick before the end nothing has finished", !moving(ada) && calls(ada).length === 4 && ada.titles.length === 0 && !LAW_SPAWNS.some((s) => sameSpot(s, ada.location)));
 
         fake.advance(1);
-        check("at 10 seconds everyone is let go and has their own camera back", moving(ada) && moving(bob) && calls(ada).join() === "200,250~5,300,350~5,clear" && calls(bob).at(-1) === "clear");
-        check("and the start carries on: law is sent to a law spawn", LAW_SPAWNS.some((s) => sameSpot(s, ada.location)));
+        await settle();
+        check("at 10 seconds Ada's camera is handed back", calls(ada).join() === "200,250~5,300,350~5,clear", calls(ada).join());
+        check("Bob's too, and the outlaws' fly-down follows it", calls(bob).length === 7 && calls(bob)[4] === "clear", calls(bob).join());
+        check("the roles are revealed", ada.titles.length === 1 && bob.titles.length === 1);
+        check("everyone is locked again for the reveal, until play begins", !moving(ada) && !moving(bob));
+        check("law is at a law spawn once she has chosen", LAW_SPAWNS.some((s) => sameSpot(s, ada.location)));
 
         fake.advance(60);
-        check("play begins after the old reveal delay", round.getPhase() === "ACTIVE");
+        check("play begins when the outlaws' fly-down is over, and everyone is let go", round.getPhase() === "ACTIVE" && moving(ada) && moving(bob));
     });
     done();
 });
 
-test("with one shot saved the whole intro is that shot", () => {
+test("with one shot saved the whole intro is that shot", async () => {
     const { check, done } = checks();
     const world1 = scene(1);
 
@@ -111,17 +122,19 @@ test("with one shot saved the whole intro is that shot", () => {
     check("one shot, eased over all 10 seconds", calls(world1.ada).join() === "100,150~10", calls(world1.ada).join());
 
     fake.advance(200);
-    check("and it ends at 10 seconds", moving(world1.ada) && calls(world1.ada).at(-1) === "clear");
+    await settle();
+    check("and the camera is handed back at 10 seconds", calls(world1.ada).at(-1) === "clear");
+    fake.advance(60);
     done();
 });
 
-test("it is shared evenly however many shots a start plays", () => {
+test("it is shared evenly however many shots a start plays", async () => {
     const { check, done } = checks();
 
-    withConfig("shotsPerStart", 3, () => {
+    await withConfig("shotsPerStart", 3, async () => {
         const world3 = scene(3);
 
-        withRandomZero(() => {
+        await withRandomZero(async () => {
             start(world3);
             fake.advance(1);
             check("three shots: each eases over 10 / 3 seconds", calls(world3.ada).join() === `200,250~${10 / 3}`, calls(world3.ada).join());
@@ -130,30 +143,33 @@ test("it is shared evenly however many shots a start plays", () => {
     done();
 });
 
-test("a start never opens with the shot it opened with last time, when there is another", () => {
+test("a start never opens with the shot it opened with last time, when there is another", async () => {
     const { check, done } = checks();
     const world3 = scene(3);
 
-    withRandomZero(() => {
+    await withRandomZero(async () => {
         start(world3);
         check("the first start opens with s2 (x 200)", calls(world3.ada)[0] === "200", calls(world3.ada).join());
 
-        fake.advance(400);
+        // Let that start run all the way to play, so the next one begins from a clean slate.
+        fake.advance(200);
+        await settle();
+        fake.advance(60);
         world3.ada.camera.calls.length = 0;
 
         start(world3);
         check("the next one is told s2 opened last time, so it opens with s3 (x 300)", calls(world3.ada)[0] === "300", calls(world3.ada).join());
     });
-    fake.advance(400);
+    fake.advance(260);
     done();
 });
 
-test("a round reset in the middle lets everyone go at once and nothing after it runs", () => {
+test("a round reset in the middle lets everyone go at once and nothing after it runs", async () => {
     const { check, done } = checks();
     const world3 = scene(3);
     const { ada, bob } = world3;
 
-    withRandomZero(() => {
+    await withRandomZero(async () => {
         start(world3);
         fake.advance(50);
         game.resetGame();
@@ -162,18 +178,19 @@ test("a round reset in the middle lets everyone go at once and nothing after it 
 
         const seen = calls(ada).length;
         fake.advance(400);
+        await settle();
 
         check("no later shot, no teleport, no play", calls(ada).length === seen && !LAW_SPAWNS.some((s) => sameSpot(s, ada.location)) && round.getPhase() === "IDLE", `${calls(ada)} ${round.getPhase()}`);
     });
     done();
 });
 
-test("a second Start in the middle takes over cleanly: one intro at a time, the old one's timers do nothing", () => {
+test("a second Start in the middle takes over cleanly: one intro at a time, the old one's timers do nothing", async () => {
     const { check, done } = checks();
     const world3 = scene(3);
     const { ada } = world3;
 
-    withRandomZero(() => {
+    await withRandomZero(async () => {
         start(world3);
         fake.advance(50);
         start(world3);
@@ -187,50 +204,56 @@ test("a second Start in the middle takes over cleanly: one intro at a time, the 
         fake.advance(50);
         check("the new intro's own cut, at 100 ticks after it began", calls(ada).length === 7 && calls(ada).at(-2) === "200", calls(ada).join());
 
-        fake.advance(400);
+        fake.advance(100);
+        await settle();
+        fake.advance(60);
         check("it ends once, with play beginning once", round.getPhase() === "ACTIVE" && moving(ada));
     });
     done();
 });
 
-test("with no shots saved, nothing changes: no camera, no lock, and the start carries on at once", () => {
+test("with no shots saved, nothing of the intro happens: no camera for law, and the reveal begins at once", async () => {
     const { check, done } = checks();
     const none = scene(0);
     const { ada, bob } = none;
 
     start(none);
+    await settle();
 
-    check("no camera call", ada.camera.calls.length === 0 && bob.camera.calls.length === 0);
-    check("nobody was locked", moving(ada) && moving(bob));
+    check("no camera call for law", ada.camera.calls.length === 0);
+    check("an outlaw has only the fly-down, which is two calls", bob.camera.calls.length === 2);
+    check("everyone is locked, by the reveal and not by an intro: still until play begins", !moving(ada) && !moving(bob));
     check("law is sent to a spawn straight away", LAW_SPAWNS.some((s) => sameSpot(s, ada.location)));
 
     fake.advance(60);
-    check("play begins after the old reveal delay", round.getPhase() === "ACTIVE");
+    check("play begins when the outlaws' fly-down is over", round.getPhase() === "ACTIVE" && moving(ada) && moving(bob));
     done();
 });
 
-test("with the intro switched off, saved shots are not played", () => {
+test("with the intro switched off, saved shots are not played", async () => {
     const { check, done } = checks();
 
-    withConfig("introEnabled", false, () => {
+    await withConfig("introEnabled", false, async () => {
         const off = scene(3);
 
         start(off);
-        check("no camera, no lock", off.ada.camera.calls.length === 0 && moving(off.ada));
+        await settle();
+        check("no camera for law, only the outlaw's fly-down", off.ada.camera.calls.length === 0 && off.bob.camera.calls.length === 2);
         check("on to the spawns at once", LAW_SPAWNS.some((s) => sameSpot(s, off.ada.location)));
     });
     fake.advance(60);
     done();
 });
 
-test("an intro of no seconds is no intro", () => {
+test("an intro of no seconds is no intro", async () => {
     const { check, done } = checks();
 
-    withConfig("introSeconds", 0, () => {
+    await withConfig("introSeconds", 0, async () => {
         const zero = scene(3);
 
         start(zero);
-        check("no camera, no lock, on to the spawns at once", zero.ada.camera.calls.length === 0 && moving(zero.ada) && LAW_SPAWNS.some((s) => sameSpot(s, zero.ada.location)));
+        await settle();
+        check("no camera for law, only the outlaw's fly-down, on to the spawns at once", zero.ada.camera.calls.length === 0 && zero.bob.camera.calls.length === 2 && LAW_SPAWNS.some((s) => sameSpot(s, zero.ada.location)));
     });
     fake.advance(60);
     done();
@@ -245,12 +268,12 @@ test("with nobody to show it to the intro does not wait: what comes after it is 
     assert.equal(called, 1);
 });
 
-test("a player who leaves during the intro does not stop it for the others", () => {
+test("a player who leaves during the intro does not stop it for the others", async () => {
     const { check, done } = checks();
     const world3 = scene(3);
     const { ada, bob } = world3;
 
-    withRandomZero(() => {
+    await withRandomZero(async () => {
         start(world3);
         fake.advance(50);
         bob.isValid = false;
@@ -258,9 +281,10 @@ test("a player who leaves during the intro does not stop it for the others", () 
 
         check("the shot after the one they left in still reached Ada", calls(ada).join() === "200,250~5,300,350~5", calls(ada).join());
 
-        // The intro ends at tick 200 and play begins 60 ticks later, at 260: this is tick 260.
-        fake.advance(150);
-        check("Ada was let go at the end and play began", moving(ada) && round.getPhase() === "ACTIVE");
+        // The intro ends at tick 200. With no outlaw left there is no fly-down to wait for: play begins as soon as Ada has chosen.
+        fake.advance(90);
+        await settle();
+        check("Ada was let go and play began", moving(ada) && round.getPhase() === "ACTIVE");
     });
     done();
 });
@@ -269,12 +293,12 @@ test("a player who leaves during the intro does not stop it for the others", () 
 // The safety net
 // ---------------------------------------------------------------------------------------------------------
 
-test("a player who joins is let go, unless an intro is holding them", () => {
+test("a player who joins is let go, unless an intro is holding them", async () => {
     const { check, done } = checks();
     const world3 = scene(3);
     const { ada, sid } = world3;
 
-    withRandomZero(() => {
+    await withRandomZero(async () => {
         start(world3);
 
         // Sid is not in the intro. Locked by something that went wrong earlier; joining lets them go.

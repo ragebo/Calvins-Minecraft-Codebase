@@ -1,22 +1,24 @@
-import { system, type Player, type Vector3 } from "@minecraft/server";
+import type { Player, Vector3 } from "@minecraft/server";
 import { LAW_SPAWNS, OUTLAW_SPAWNS } from "../config/world.js";
 import { error } from "./log.js";
 import { players } from "./players.js";
-import { beginActive, resetRound, startRound } from "./round.js";
-import { runStartCommands, startIntro } from "./startsequence.js";
+import { resetRound, startRound } from "./round.js";
+import { runStartCommands, startIntro, startPlacement } from "./startsequence.js";
 import { getRecord, update, type Role } from "./state.js";
-import { announce, showTitle } from "./ui.js";
+import { announce } from "./ui.js";
 
 /**
  * The game's own actions: starting a round with roles, and sending people to their spawns.
  *
  * They used to live in systems/roles.ts, reachable only through its script events. The in-game menu
  * (systems/menu.ts) needs them too, and a system may not import another system, so they live here and
- * both call them. The rules are unchanged: a round resets every system, assigns the roles, sends each
- * player with a role to a random spawn for it, and announces the roles a moment later.
+ * both call them. A start resets every system, assigns the roles and runs the operator's start commands;
+ * core/startsequence.ts then plays the camera intro, reveals the roles, places everyone (law choose their
+ * spawn, outlaws are placed at random) and begins play.
  *
- * `begin()` is also this game's only caller of core/round.ts's SETUP and ACTIVE transitions — the
- * shared "is a round running?" owner endgame.ts and boat.ts both check before declaring a win.
+ * `begin()` is also this game's only caller of core/round.ts's SETUP transition, and the sequence it starts
+ * the only caller of ACTIVE — the shared "is a round running?" owner endgame.ts and boat.ts both check
+ * before declaring a win.
  */
 
 /** What the person starting a round can decide for each player. */
@@ -29,9 +31,6 @@ export interface ChosenStart {
     /** Things worth knowing that did not stop the round (an empty side). */
     readonly warnings: readonly string[];
 }
-
-/** Ticks between "Rolling..." and the role titles. */
-const REVEAL_DELAY_TICKS = 60;
 
 export function pickRandom<T>(list: readonly T[]): T {
     return list[Math.floor(Math.random() * list.length)]!;
@@ -96,29 +95,9 @@ function begin(roles: ReadonlyMap<Player, Role | null>, by?: Player): void {
     // The operator's commands come first, once the roles exist (so `@a[tag=law]` matches) and before anyone is moved or shown anything.
     runStartCommands(by);
 
-    // The camera intro, when there are shots to play and it is on; otherwise this runs at once.
-    startIntro(playing, () => {
-
-        sendEveryoneToSpawns();
-
-        for (const player of playing) {
-            // Someone may have left during the intro, and a title to a player who is gone throws: that must not keep play from beginning.
-            if (!player.isValid) continue;
-            showTitle(player, "§eRolling...");
-        }
-
-        system.runTimeout(() => {
-            // Play begins once roles are actually revealed, not during the "Rolling..." wait: that's
-            // still setup (core/round.ts's own phase docstring).
-            beginActive();
-
-            for (const player of playing) {
-                if (!player.isValid) continue;
-                showTitle(player, getRecord(player).role === "law" ? "§9LAWMAN" : "§cOUTLAW");
-            }
-            announce("§aRoles Assigned!");
-        }, REVEAL_DELAY_TICKS);
-    });
+    // Then the camera intro (when there are shots and it is on), the reveal, the spawns and, at the end of that, play: core/startsequence.ts
+    // owns the rest of a start, and is the only caller of core/round.ts's beginActive.
+    startIntro(playing, () => startPlacement(playing));
 }
 
 /** The round everyone has always got: shuffled roles, a quarter of the players (at least one) are law. False when there are too few players. */

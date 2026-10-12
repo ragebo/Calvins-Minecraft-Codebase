@@ -78,35 +78,42 @@ test("start_round: a single player is refused and nothing is touched", () => {
     done();
 });
 
-test("start_round: 'Rolling...' at once, the role title and 'Roles Assigned!' exactly 60 ticks later", () => {
+// Changed with the start sequence (tasks/start-sequence): the roles are revealed AT ONCE (there is no "Rolling..." wait any more: a camera
+// intro, when shots are saved, is the wait), outlaws fly down to a random outlaw spawn, law choose a spawn from a screen (the stand-in here
+// answers nothing, which means a random spawn), and play begins when the outlaws' 3 second fly-down is over and every law player has chosen.
+// A screen's answer arrives through promises, so a start is followed by `settle()` where the law players' placement is read.
+const settle = async () => { for (let i = 0; i < 30; i++) await Promise.resolve(); };
+
+test("start_round: the roles are revealed at once, and play begins when the outlaws' fly-down is over", async () => {
     const { check, done } = checks();
     scene();
     const players = cast(["A"], ["B"], ["C"], ["D"], ["E"]);       // 2 law, 3 outlaws
     scriptEvent("bounty:start_round");
 
-    check("everyone is told Rolling... immediately", players.every((p) => p.titles.map(strip).join("|") === "Rolling..."), players.map((p) => p.titles.join("|")).join(" / "));
-    check("no announcement yet", !chatLines().includes("Roles Assigned!"));
-    check("the round is in SETUP during the wait, not ACTIVE yet", round.getPhase() === "SETUP", round.getPhase());
-
-    fake.advance(59);
-    check("still Rolling... at tick 59", players.every((p) => p.titles.length === 1) && !chatLines().includes("Roles Assigned!"));
-    check("still SETUP one tick before the reveal", round.getPhase() === "SETUP", round.getPhase());
-
-    fake.advance(1);
     const law = players.filter((p) => p.tags.has("law"));
     const outlaws = players.filter((p) => p.tags.has("outlaw"));
-    check("law see LAWMAN", law.length === 2 && law.every((p) => strip(p.titles.at(-1)) === "LAWMAN" && p.titles.length === 2), law.map((p) => p.titles.join("|")).join(" / "));
-    check("outlaws see OUTLAW", outlaws.length === 3 && outlaws.every((p) => strip(p.titles.at(-1)) === "OUTLAW" && p.titles.length === 2), outlaws.map((p) => p.titles.join("|")).join(" / "));
-    check("Roles Assigned! is announced once", chatLines().filter((m) => m === "Roles Assigned!").length === 1, chatLines().join(" | "));
-    check("the round is ACTIVE once roles are revealed", round.getPhase() === "ACTIVE", round.getPhase());
+
+    check("law see LAWMAN at once, and only that", law.length === 2 && law.every((p) => p.titles.map(strip).join("|") === "LAWMAN"), law.map((p) => p.titles.join("|")).join(" / "));
+    check("outlaws see OUTLAW at once, and only that", outlaws.length === 3 && outlaws.every((p) => p.titles.map(strip).join("|") === "OUTLAW"), outlaws.map((p) => p.titles.join("|")).join(" / "));
+    check("nobody is ever told Rolling...", players.every((p) => !p.titles.map(strip).includes("Rolling...")));
+    check("Roles Assigned! is announced once, at once", chatLines().filter((m) => m === "Roles Assigned!").length === 1, chatLines().join(" | "));
+    check("the round is in SETUP while law choose and the outlaws fly down", round.getPhase() === "SETUP", round.getPhase());
+
+    await settle();
+    fake.advance(59);
+    check("still SETUP one tick before the end of the 3 second fly-down", round.getPhase() === "SETUP", round.getPhase());
+
+    fake.advance(1);
+    check("the round is ACTIVE when it is over", round.getPhase() === "ACTIVE", round.getPhase());
     done();
 });
 
-test("start_round: every player is teleported once, to the spawn list of their role", () => {
+test("start_round: every player is teleported once, to the spawn list of their role", async () => {
     const { check, done } = checks();
     scene();
     const players = cast(["A"], ["B"], ["C"], ["D"], ["E"], ["F"]);
     scriptEvent("bounty:start_round");
+    await settle();                                                // law are placed when their screen is answered
     for (const p of players) {
         const role = p.tags.has("law") ? "law" : "outlaw";
         const spot = p.teleports.at(-1);

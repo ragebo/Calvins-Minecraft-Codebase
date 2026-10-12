@@ -92,22 +92,23 @@ Status source of truth for `plan.md` in this folder. Every task: RED first (a fa
   - Dependencies: Task 4
   - Files: `rae/src/core/startsequence.ts`, `rae/src/core/game.ts`, `rae/test/start-intro.test.mjs`
 
-- [ ] **Task 6: Reveal, outlaw fly-down, law picks a spawn, then play** (L, the biggest)
+- [x] **Task 6: Reveal, outlaw fly-down, law picks a spawn, then play** (L, the biggest) - done
   Replaces the end of `begin()`. After the intro (or straight after the commands when there is none): titles LAWMAN/OUTLAW and
   "Roles Assigned!" show; outlaws are teleported to a random outlaw spawn and fly down to it; law players get a screen of the law
   spawns with a `pickSeconds` countdown; a law player placed by choice or at random; play (`beginActive`) starts when every law player
   has chosen or the countdown ends, whichever is first, everyone unlocked and cameras cleared in the same tick. "Rolling..." is gone.
   - Acceptance:
-    - [ ] roles are revealed at the start of this stage, not at the end
-    - [ ] an outlaw lands at one of the outlaw spawns, with a fly-down that ends at their eyes; they stay locked until play begins
-    - [ ] every law player gets the spawn screen with one button per law spawn; choosing teleports them there, and two players may choose the same one
-    - [ ] play starts at once when the last law player chooses, and after `pickSeconds` otherwise, with the unpicked placed at a random law spawn
-    - [ ] a pick that arrives after the countdown is ignored (no teleport, no second `beginActive`)
-    - [ ] no law players: no screen, play starts after the fly-down; nobody to fly down: play starts at once
-    - [ ] a reset or a second Start mid-stage cancels the countdown, the screens' effects and the locks; a law player leaving does not hang the round
-    - [ ] `beginActive` is called exactly once per Start in every path
-    - [ ] the existing start tests are updated for the new timing and the new titles, each for a stated reason (`round-flow`, `ui`, `menu`, `load-smoke`)
+    - [x] roles are revealed at the start of this stage, not at the end
+    - [x] an outlaw lands at one of the outlaw spawns, with a fly-down that ends at their eyes; they stay locked until play begins
+    - [x] every law player gets the spawn screen with one button per law spawn; choosing teleports them there, and two players may choose the same one
+    - [x] play starts at once when the last law player chooses, and after `pickSeconds` otherwise, with the unpicked placed at a random law spawn
+    - [x] a pick that arrives after the countdown is ignored (no teleport, no second `beginActive`)
+    - [x] no law players: no screen, play starts after the fly-down; nobody to fly down: play starts at once
+    - [x] a reset or a second Start mid-stage cancels the countdown, the screens' effects and the locks; a law player leaving does not hang the round
+    - [x] `beginActive` is called exactly once per Start in every path
+    - [x] the existing start tests are updated for the new timing and the new titles, each for a stated reason (`round-flow`, `ui`, `menu`, `load-smoke`)
   - Verification: check, test, check:legacy; deliberate breaks on every branch
+  - Result: 17 new tests in start-reveal.test.mjs: roles revealed at once (no Rolling...), the outlaw fly-down and lock, the law screen (one button per law spawn, how long there is), two law choosing the same spawn, a random spawn that really follows the dice (a closed screen, a countdown that ran out), play waits for the last law player AND the outlaws' fly-down, a late answer is ignored, a reset or a second Start cancels it all, a law player or an outlaw who leaves does not hold it up, no fly-down time, a countdown shorter than the fly-down, and a whole start end to end (commands, 10 s intro, reveal, pick, fly-down, play at 13 s). 29 deliberate breaks across core/startsequence.ts and core/game.ts, all caught (the first run found a real gap: a fly-down time of 0). Existing tests updated, each for a stated reason: round-flow.test.mjs (2 tests rewritten: roles are revealed at once and play begins when the fly-down is over; law are placed when their screen is answered), menu.test.mjs (3 places: the start now ends with the law player's spawn screen), and my own start-intro (rewritten for the re-lock at the reveal and the settle) and start-commands (1 place). ui.test.mjs and load-smoke.test.mjs needed no change, unlike the plan guessed. No test was deleted. Design notes: the pick screen has no ticking countdown (the body says how many seconds, the game ends it); Esc on the screen means a random spawn at once; the old REVEAL_DELAY_TICKS constant and the Rolling... title are gone; core/startsequence.ts is now the only caller of beginActive. Unmeasured in the real game: that a form opens normally right after a camera is cleared, and what a player who still has the screen open sees when the countdown ends.
   - Dependencies: Task 5
   - Files: `rae/src/core/startsequence.ts`, `rae/src/core/game.ts`, `rae/test/start-reveal.test.mjs`, `rae/test/round-flow.test.mjs`, `rae/test/ui.test.mjs`, `rae/test/menu.test.mjs`, `rae/test/load-smoke.test.mjs`
 

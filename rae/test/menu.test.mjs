@@ -189,7 +189,10 @@ test("start with random roles: asks first, then gives out roles as the old butto
     use(ada);
     await drain();
 
-    check("three forms: the menu, the choice, the confirmation", uiFake.shown.length === 3 && uiFake.shown.map((s) => s.kind).join() === "action,action,action", uiFake.shown.map((s) => s.kind).join());
+    // Changed with the start sequence: a start now ends with a screen for each law player to choose a spawn (here, one law player of three),
+    // so the three menu forms are followed by that one. It is answered by the stand-in's default (no choice), which means a random spawn.
+    check("three menu forms: the menu, the choice, the confirmation, then the one law player's spawn screen", uiFake.shown.length === 4 && uiFake.shown.map((s) => s.kind).join() === "action,action,action,action", uiFake.shown.map((s) => s.kind).join());
+    check("the fourth is the spawn screen", uiFake.shown[3].calls.some((c) => c[0] === "title" && /Choose your spawn/.test(c[1])), JSON.stringify(uiFake.shown[3].calls));
     check("the choice offers random and chosen roles", buttons(uiFake.shown[1]).join("|") === "Random roles|Choose roles");
     check("the confirmation has a cancel and a start, and warns it resets", buttons(uiFake.shown[2]).join("|") === "Cancel|Start the game" && uiFake.shown[2].calls.some((c) => c[0] === "body" && /resets/.test(c[1])));
 
@@ -198,8 +201,8 @@ test("start with random roles: asks first, then gives out roles as the old butto
     check("a quarter, at least one, are law (1 of 3)", roles.filter((r) => r === "law").length === 1, roles.join());
     check("everyone was sent to a spawn", [ada, ben, cy].every((p) => p.teleports.length === 1));
     check("the opener is told", /Game started with random roles/.test(text(ada)), text(ada));
+    check("and the roles are announced at once", fake.chat.some((m) => /Roles Assigned/.test(m)) && ada.titles.some((t) => /LAWMAN|OUTLAW/.test(t)), JSON.stringify(ada.titles));
     fake.advance(70);
-    check("and the roles are announced a moment later", fake.chat.some((m) => /Roles Assigned/.test(m)) && ada.titles.some((t) => /LAWMAN|OUTLAW/.test(t)), JSON.stringify(ada.titles));
     done();
 });
 
@@ -471,7 +474,9 @@ test("the old button still starts a random game", async () => {
     scriptEvent("bounty:start_round", undefined);
     const roles = [ada, ben, cy].map((p) => getRecord(p).role);
     check("everyone got a role, one of them law", roles.every((r) => r !== null) && roles.filter((r) => r === "law").length === 1, roles.join());
-    check("no menu was involved", uiFake.shown.length === 0);
+    // Changed with the start sequence: the one law player is shown the spawn screen, which is part of the start and not a menu.
+    check("no menu was involved: the only screen is the law player's spawn choice", uiFake.shown.every((s) => s.calls.some((c) => c[0] === "title" && /Choose your spawn/.test(c[1]))), uiFake.shown.map((s) => JSON.stringify(s.calls[0])).join());
+    fake.advance(70);
     done();
 });
 

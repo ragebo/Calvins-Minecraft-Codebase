@@ -1,12 +1,18 @@
-import { system, world, type Player } from "@minecraft/server";
+import { system, world, type Player, type Vector3 } from "@minecraft/server";
+import { ActionFormData } from "@minecraft/server-ui";
 import { START as S } from "../config/balance.js";
+import { LAW_SPAWNS, OUTLAW_SPAWNS } from "../config/world.js";
 import { pickShots, secondsPerShot } from "../logic/start.js";
-import { clearCamera, lock, playShot, unlock, unlockEveryone } from "./cinematic.js";
+import { clearCamera, flyDown, lock, playShot, unlock, unlockEveryone } from "./cinematic.js";
 import { onSpawn } from "./events.js";
-import { error } from "./log.js";
+import { showForm } from "./forms.js";
+import { error, warn } from "./log.js";
 import { registerSystem } from "./registry.js";
+import { beginActive, isPhase } from "./round.js";
 import { allShots, startCommands } from "./startstore.js";
+import { getRecord } from "./state.js";
 import { onTick } from "./tick.js";
+import { announce, showTitle } from "./ui.js";
 
 /**
  * The start of a game, as a sequence (core/game.ts's begin() starts it): the operator's start commands, then a camera intro, then the
@@ -116,6 +122,136 @@ export function startIntro(playing: readonly Player[], then: () => void): void {
     };
 
     step();
+}
+
+// ---------------------------------------------------------------------------------------------------------
+// The reveal, the spawns and the beginning of play
+// ---------------------------------------------------------------------------------------------------------
+
+const randomOf = <T>(list: readonly T[]): T => list[Math.floor(Math.random() * list.length)]!;
+
+/** The law spawns are named as the game menu's teleport list names them. */
+const lawSpawnName = (index: number): string => `Law spawn ${index + 1}`;
+
+function place(player: Player, spawn: Vector3): void {
+
+    // core/game.ts's teleportToSpawn does the same, and cannot be used from here: game.ts calls this file.
+    if (!player.isValid) return;
+
+    try {
+        player.teleport(spawn);
+    } catch (err) {
+        error("start", `Could not place ${player.name} at a spawn: ${err}`);
+    }
+}
+
+/**
+ * The end of a start, once the intro (if any) is over: the roles are revealed, outlaws are put at a random outlaw spawn and fly down to it,
+ * law players choose a spawn from a screen, and play begins. Everyone playing is locked from the reveal until play begins, so nobody has a head
+ * start on someone still choosing.
+ *
+ * Play begins when every law player has chosen AND the outlaws' fly-down is over, or when the countdown runs out, whichever way the start goes:
+ * `finish` is the one place it happens, and it happens once. A law player who closes the screen gets a random spawn at once; one who never
+ * answers gets one when the countdown ends. A script cannot close a form, so an answer that comes after that is ignored. A round reset or
+ * another Start in the meantime cancels all of it (`alive` stops being true) and everyone is let go.
+ */
+export function startPlacement(playing: readonly Player[]): void {
+
+    const token = generation;
+    const alive = (): boolean => token === generation && isPhase("SETUP");
+    const here = playing.filter((player) => player.isValid);
+
+    for (const player of here) showTitle(player, getRecord(player).role === "law" ? "§9LAWMAN" : "§cOUTLAW");
+    announce("§aRoles Assigned!");
+
+    for (const player of here) {
+        held.set(player.id, player);
+        lock(player);
+    }
+
+    const law = here.filter((player) => getRecord(player).role === "law");
+    const outlaws = here.filter((player) => getRecord(player).role === "outlaw");
+
+    for (const player of outlaws) {
+        const spawn = randomOf(OUTLAW_SPAWNS);
+
+        place(player, spawn);
+        flyDown(player, spawn, S.flyDownSeconds);
+    }
+
+    const pending = new Set(law.map((player) => player.id));
+    let flyDownOver = outlaws.length === 0;
+    let finished = false;
+
+    const placeLaw = (player: Player, choice: number | undefined): void => place(player, LAW_SPAWNS[choice ?? -1] ?? randomOf(LAW_SPAWNS));
+
+    const finish = (force: boolean): void => {
+
+        if (finished || !alive()) return;
+
+        // Someone who left is not going to choose.
+        for (const player of law) {
+            if (pending.has(player.id) && !player.isValid) pending.delete(player.id);
+        }
+
+        if (!force && (pending.size > 0 || !flyDownOver)) return;
+
+        finished = true;
+
+        for (const player of law) {
+            if (pending.has(player.id)) placeLaw(player, undefined);
+        }
+
+        pending.clear();
+        releaseHeld();
+        beginActive();
+    };
+
+    async function ask(player: Player): Promise<void> {
+
+        let choice: number | undefined;
+
+        try {
+            const form = new ActionFormData()
+                .title("Choose your spawn")
+                .body(`Where do you want to start?\n§7You have ${S.pickSeconds} seconds. If you do not choose, you get a random spawn.`);
+
+            LAW_SPAWNS.forEach((_, index) => form.button(lawSpawnName(index)));
+
+            const response = await showForm(player, form);
+
+            if (response && !response.canceled) choice = response.selection;
+        } catch (err) {
+            warn("start", `The spawn screen failed for ${player.name}: ${err}`);
+        }
+
+        // Too late if play has begun or this start was cancelled; and a player who has been placed cannot choose twice.
+        if (finished || !alive() || !pending.has(player.id)) return;
+
+        pending.delete(player.id);
+        placeLaw(player, choice);
+        finish(false);
+    }
+
+    const flyDownTicks = outlaws.length > 0 ? Math.round(S.flyDownSeconds * TICKS_PER_SECOND) : 0;
+    const pickTicks = Math.round(S.pickSeconds * TICKS_PER_SECOND);
+
+    if (flyDownTicks > 0) {
+        system.runTimeout(() => {
+            flyDownOver = true;
+            finish(false);
+        }, flyDownTicks);
+    } else {
+        flyDownOver = true;
+    }
+
+    // The countdown never ends before the fly-down does, so a short one cannot cut a camera short.
+    if (law.length > 0) system.runTimeout(() => finish(true), Math.max(pickTicks, flyDownTicks));
+
+    for (const player of law) void ask(player);
+
+    // Nobody to ask and nothing to wait for: play begins at once.
+    finish(false);
 }
 
 // ---------------------------------------------------------------------------------------------------------

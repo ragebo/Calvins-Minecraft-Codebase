@@ -61,7 +61,7 @@ test("with the defaults, a Start sends the seven default commands in order, as t
     done();
 });
 
-test("the commands run after the roles exist and before anyone is sent anywhere", () => {
+test("the commands run after the roles exist and before anyone is sent anywhere", async () => {
     const { check, done } = checks();
     scene("Ada", "Bob");
 
@@ -76,8 +76,11 @@ test("the commands run after the roles exist and before anyone is sent anywhere"
         const first = seen[0];
         check("roles are already assigned when the first command runs", first.roles.every(([law, outlaw]) => law !== outlaw), JSON.stringify(first.roles));
         check("nobody has been teleported yet", first.spots.join(" | ") === where.join(" | "), `${first.spots.join(" | ")} against ${where.join(" | ")}`);
-        check("and afterwards they have been", fake.players.every((p, i) => `${p.location.x},${p.location.y},${p.location.z}` !== where[i]));
     });
+
+    // The law player is placed when her spawn screen is answered, which is through a promise; the outlaw at once.
+    for (let i = 0; i < 30; i++) await Promise.resolve();
+    check("and afterwards they have been", fake.players.every((p, i) => `${p.location.x},${p.location.y},${p.location.z}` !== where[i]));
 
     fake.advance(1200);
     done();
