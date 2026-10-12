@@ -78,7 +78,7 @@ Nothing is deployed or pushed unless the owner asks.
   - Dependencies: Task 1 (the format only; the tool has its own parser)
   - Files: `tools/telemetry/ingest.mjs`, `rae/test/telemetry-tool-ingest.test.mjs`
 
-- [ ] **Task 5: Tool, rounds report, CLI and launcher** (M; built as two commits, 5a and 5b, because it came to six files)
+- [x] **Task 5: Tool, rounds report, CLI and launcher** (M; built as two commits, 5a and 5b, because it came to six files) - done
   `aggregate.mjs` (pure: events to figures, one section per area), `report.mjs` (figures to one self-contained HTML file: tables
   with inline bars, no external requests), `cli.mjs` (ingest then report; `--out`, `--logs`, `--world`, `--open`; prints a short
   summary), one CSV per kind next to the report, and `tools/telemetry.cmd` (double-click: runs from its own folder and opens the
@@ -89,21 +89,24 @@ Nothing is deployed or pushed unless the owner asks.
   - 5a, done: `aggregate.mjs`, `report.mjs`, `telemetry-tool-report.test.mjs`. Colours follow the dataviz method: law is palette
     hue 1 and outlaw hue 2 all through (checked with the palette validator in light and dark: colour-blind separation 24.7 and 26.8,
     contrast at least 3:1), aborted is neutral gray, every bar's number is also in text. 14 tests; 58 deliberate breaks, each caught.
-  - 5b, next: `cli.mjs`, `telemetry.cmd`, a CLI test, and the contract test below.
+  - 5b, done: `cli.mjs`, `telemetry.cmd`, `telemetry-tool-cli.test.mjs` (12 tests, 23 deliberate breaks, each caught) and
+    `telemetry-contract.test.mjs` (2 tests; 8 deliberate breaks across the game's writer and the tool's reader, each caught). The
+    CLI's tests always give the command a scratch `--out`, so no test, even against a broken command, can write into the real
+    output folder. An event kind from a log is made into a safe file name, so a hostile line cannot write outside the CSV folder.
   - Acceptance:
     - [x] fixture events give exact figures
     - [x] the HTML makes no external request, and an empty archive says "no data yet" instead of failing
-    - [x] one CSV per kind, a header row and one row per event (`toCsv`; the CLI writes the files in 5b)
-    - [ ] `telemetry.cmd` works when started from any folder
-    - [ ] the report looks right in a browser (checked by eye)
-    - [ ] (moved here from Checkpoint 1) contract test: a round played under the fake game is written as a real line, read by the tool and shown in the report
+    - [x] one CSV per kind, a header row and one row per event (`toCsv`, written by the CLI)
+    - [x] `telemetry.cmd` works when started from any folder (a test runs it through `cmd.exe` from the temp folder)
+    - [x] the report looks right in a browser (checked by eye on a sample of three sessions and two worlds: dark theme at pane width, light theme at phone width; the table scrolls sideways when narrow)
+    - [x] (moved here from Checkpoint 1) contract test: a round played under the fake game is written as a real line, read by the tool and shown in the report
   - Verification: `telemetry-tool-report.test.mjs`; open the generated report in the built-in browser
   - Dependencies: Task 4
   - Files: `tools/telemetry/aggregate.mjs`, `tools/telemetry/report.mjs`, `tools/telemetry/cli.mjs`, `tools/telemetry.cmd`, `rae/test/telemetry-tool-report.test.mjs`, plus in 5b `rae/test/telemetry-tool-cli.test.mjs` and `rae/test/telemetry-contract.test.mjs`
 
 ### Checkpoint 1: walking skeleton
-- [ ] check, test and check:legacy green
-- [ ] contract test: a round played under the fake game produces a line the tool ingests, and the report shows that round
+- [x] check, test and check:legacy green
+- [x] contract test: a round played under the fake game produces a line the tool ingests, and the report shows that round (in Task 5)
 - [ ] (on the owner's request) deploy, load a world: the newest content log has a `[telemetry]` boot line; end one round; run `telemetry.cmd`; the round is in the report
 - [ ] review with the owner before Phase 2
 
