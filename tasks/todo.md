@@ -58,19 +58,23 @@ Nothing is deployed or pushed unless the owner asks.
   - Dependencies: Task 2
   - Files: `rae/src/core/telemetry.ts`, `rae/test/telemetry.test.mjs`, `rae/test/telemetry-wiring.test.mjs`
 
-- [ ] **Task 4: Tool, ingest and archive** (S-M)
-  `tools/telemetry/ingest.mjs`: finds the content logs (default `%APPDATA%\Minecraft Bedrock\logs`, `--logs <dir>` overrides),
-  reads each `ContentLog*.txt` read-only, keeps the `[telemetry]` lines, gives each a wall-clock time (date from the file name,
-  time of day from the line, plus a day each time the clock goes backwards), drops an unfinished last line, and appends new
-  events to `telemetry-data/events.jsonl` (dedupe on world + boot + seq). Returns counts: files, lines found, new, duplicate,
-  skipped (other `v`), unreadable.
+- [x] **Task 4: Tool, ingest and archive** (S-M) - done
+  `tools/telemetry/ingest.mjs`: finds the content logs (default `%APPDATA%\Minecraft Bedrock\logs`, `--logs <dir>` overrides:
+  the flag itself is Task 5's CLI, `defaultLogsDir()` is here), reads each `.txt` in the folder read-only (so a copy of someone's
+  log under any name is read too), keeps the `[telemetry]` lines, gives each a wall-clock time (date from the file name, time of
+  day from the line, plus a day each time the clock jumps back by more than 12 hours, judged by every line's clock), drops an
+  unfinished last line, and appends new events to the archive (dedupe on world + boot + number). Exports `ingest`, `parseLog`,
+  `readArchive`, `launchTime`, `defaultLogsDir`. Returns counts: files, found, added, duplicates, skipped (other `v`), damaged,
+  unfinished (the cut last line of a live log), unreadable. No archive is made when there is nothing to add.
   - Acceptance:
-    - [ ] a fixture log with noise lines, a cut last line and a midnight roll-over gives the right events with the right times
-    - [ ] ingesting the same log twice adds nothing; a copy under another name adds nothing
-    - [ ] a line with another `v`, a damaged JSON line, an empty one and garbage after the tag are counted and skipped, never fatal
-    - [ ] never writes into the logs folder; reads a file another process holds open (the test holds a handle)
-    - [ ] on the real folder (about 121 MB) it finishes with no errors and 0 events (none are emitted yet); the time is reported
+    - [x] a fixture log with noise lines, a cut last line and a midnight roll-over gives the right events with the right times
+    - [x] ingesting the same log twice adds nothing; a copy under another name adds nothing
+    - [x] a line with another `v`, a damaged JSON line, an empty one and garbage after the tag are counted and skipped, never fatal
+    - [x] never writes into the logs folder (an archive placed inside it is refused); reads a file another process holds open (the test holds a handle)
+    - [x] on the real folder it finished with no errors and 0 events (none are emitted yet): 100 logs, 121.3 MB, including the one the running game holds open, in 0.37 s; closed logs untouched, no archive made
+    - [x] (added) the game's real entry separator is `\r\n\r\r\n`, not a newline: the fixtures use it, and a reader that split on plain newlines would match nothing (breaking that fails 10 tests)
   - Verification: `telemetry-tool-ingest.test.mjs`; one manual run on the real folder
+  - Result: 15 new tests; 19 deliberate breaks of the reader, each caught by a test.
   - Dependencies: Task 1 (the format only; the tool has its own parser)
   - Files: `tools/telemetry/ingest.mjs`, `rae/test/telemetry-tool-ingest.test.mjs`
 
