@@ -443,6 +443,21 @@ export const START = {
 };
 
 /**
+ * The melee weapons (the plan is tasks/melee/plan.md). The ids live here once, so the script and the item files agree on them
+ * (test/assets.test.mjs checks that they do, and that each has its own sprite in the resource pack). The sprites came from the
+ * owner's weapons11.mcpack, a createtextures.com texture pack whose licence is unstated.
+ */
+export const MELEE = {
+    weapons: {
+        knife: { id: "bountysys:knife", name: "Knife" },
+        machete: { id: "bountysys:machete", name: "Machete" },
+        baton: { id: "bountysys:baton", name: "Baton" },
+        axe: { id: "bountysys:axe", name: "Axe" },
+        sledgehammer: { id: "bountysys:sledgehammer", name: "Sledgehammer" }
+    }
+};
+
+/**
  * The in-game robbery framework (systems/robbery*.ts, core/robbery*.ts): caps, defaults and tuning only. The
  * robberies themselves (positions, names, loot, effects) are authored in game and saved in the world, the same
  * way the recorded train route is, so none of them live in this file.

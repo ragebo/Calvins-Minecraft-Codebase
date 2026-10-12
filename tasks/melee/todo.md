@@ -6,18 +6,19 @@ the game shows (no spike): every engine behavior that is not measured has a fall
 
 ## Phase 0: Items
 
-- [ ] **Task 1: The five items, with their sprites, and nothing else** (M)
+- [x] **Task 1: The five items, with their sprites, and nothing else** (M) - done
   Five item definitions in the behavior pack (`bountysys:knife`, `machete`, `baton`, `axe`, `sledgehammer`: format 1.26.50 like `pistol.json`, stack of 1,
   hand-equipped, equipment category, a display name each, an icon key each) and their sprites adopted from `weapons11.mcpack` into
   `BountySys_RP/textures/items/` (`knife.png` from `wood_sword`, `machete.png` from `iron_sword`, `baton.png` from `diamond_sword`, `axe.png` from
   `spear/diamond_spear`, `sledgehammer.png` from `spear/netherite_spear`) with entries in `item_texture.json`. The ids live once, in `config/balance.ts`'s
   new `MELEE` block, so code and item files agree. No behavior: a player can `/give` and hold them.
   - Acceptance:
-    - [ ] each item file's identifier equals the id in `MELEE`, and each has its own icon key, mapped in `item_texture.json` to a PNG that exists
-    - [ ] each sprite is 16x16 with transparency and is byte-for-byte the one in the pack (so a later change to the pack's sprite is noticed)
-    - [ ] each is a plain stack-1 item: not hold-to-use, no cooldown component, nothing that overrides how a tool is held
-    - [ ] the existing asset tests still pass, and no vanilla sword or spear is retextured (the pack is not installed; its sprites are copied)
+    - [x] each item file's identifier equals the id in `MELEE`, and each has its own icon key, mapped in `item_texture.json` to a PNG that exists
+    - [x] each sprite is 16x16 with transparency and is byte-for-byte the one in the pack (so a later change to the pack's sprite is noticed)
+    - [x] each is a plain stack-1 item: not hold-to-use, no cooldown component, nothing that overrides how a tool is held
+    - [x] the existing asset tests still pass, and no vanilla sword or spear is retextured (the pack is not installed; its sprites are copied)
   - Verification: check, test, check:legacy; the five sprites looked at on a contact sheet
+  - Result: 4 new asset tests: the five weapons agree across both packs (id from config/balance.ts MELEE, icon, inventory name, texture map entry, sprite file), each is a plain item (equipment category, one at a time, held like a tool, no use_modifiers, no game cooldown, no durability), the five sprites are exactly the ones in weapons11.mcpack (SHA-256 pinned per sprite, since the mcpack itself is not in the repo) and 16x16 with transparency, and nothing vanilla is retextured (no wood/iron/diamond sword sprite, no spear folders). The existing asset tests cover the new sprites automatically (exist, 16x16, alpha, used by an item). 64 deliberate breaks, all caught: 53 on the data files (nine on each item file, four on item_texture.json, four on the config) and 11 on the sprites and folders themselves (each sprite swapped for another's pixels, one deleted, three vanilla-named sprites added, two spear folders added), each restored and hash-checked afterwards. Sprites mapped as the owner confirmed: knife from wood_sword, machete from iron_sword, baton from diamond_sword, axe from spear/diamond_spear, sledgehammer from spear/netherite_spear. The items carry no behavior yet (no minecraft:damage until Task 2). The sprites are a resource pack change, so reaching the game needs the game fully closed and a fresh launch (Task 9). README credit for the sprites waits for Task 8.
   - Dependencies: none
   - Files: `your_pack_name_BP/items/{knife,machete,baton,axe,sledgehammer}.json`, `BountySys_RP/textures/items/*.png`, `BountySys_RP/textures/item_texture.json`, `rae/src/config/balance.ts`, `rae/test/assets.test.mjs`
 

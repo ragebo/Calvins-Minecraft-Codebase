@@ -1,5 +1,6 @@
 import { test } from "node:test";
 import { readFileSync, readdirSync, existsSync } from "node:fs";
+import { createHash } from "node:crypto";
 import { inflateSync } from "node:zlib";
 import { pathToFileURL } from "node:url";
 import path from "node:path";
@@ -519,6 +520,96 @@ test("the aim probe items are hold-to-use items that differ only in their use an
         check(`${probe.id}: one at a time, held like a tool`, components["minecraft:max_stack_size"] === 1 && components["minecraft:hand_equipped"] === true);
     }
     check("plain, bow and spyglass", animations["bountysys:aim_probe_plain"] === "none" && animations["bountysys:aim_probe_bow"] === "bow" && animations["bountysys:aim_probe_spyglass"] === "spyglass", JSON.stringify(animations));
+    done();
+});
+
+// ---------------------------------------------------------------------------------------------------------
+// The melee weapons (tasks/melee): five items whose sprites come from the owner's weapons11.mcpack (createtextures.com).
+// That pack retextures VANILLA item names, so it is not installed: its five sprites are copied here under the weapons'
+// own names, and these checks are what keeps the two packs agreeing and the vanilla swords and spears untouched.
+// ---------------------------------------------------------------------------------------------------------
+
+const MELEE_SPRITES = {
+    knife: { from: "wood_sword", sha256: "901843f4abd7f1d312cf2bb92c5036a1a629cbaf3c037f254395912db01a5b83" },
+    machete: { from: "iron_sword", sha256: "8efdc979e9f4450a6b1883833f0207bb4917426ff1a9b0084f0405029c69b872" },
+    baton: { from: "diamond_sword", sha256: "e3d978591b8ef239e4ddc080e24b8e6dbc7d439470242d86db46e92dbcd8e86f" },
+    axe: { from: "spear/diamond_spear", sha256: "21860cefc1e6d17c0807f72530fafb3e3fabb825bd60c95a75b765a10d2e702d" },
+    sledgehammer: { from: "spear/netherite_spear", sha256: "a5971166d3c54256e02e5f513823c5353c045724944b005a136e7c36edc16e9b" }
+};
+
+test("the five melee weapons are the config's: each item's id, icon, name and sprite agree across both packs", async () => {
+    const { check, done } = checks();
+    const { MELEE } = await load("config/balance.js");
+
+    check("the config lists the five", Object.keys(MELEE.weapons).sort().join() === "axe,baton,knife,machete,sledgehammer", Object.keys(MELEE.weapons).join());
+
+    for (const [key, weapon] of Object.entries(MELEE.weapons)) {
+        check(`${key}: its id is bountysys:${key}`, weapon.id === `bountysys:${key}`, weapon.id);
+
+        const item = items.find((candidate) => candidate.id === weapon.id);
+        check(`${key}: the item exists`, item !== undefined);
+        check(`${key}: its icon is "${key}"`, item?.icon === key, String(item?.icon));
+        check(`${key}: the item map points "${key}" at textures/items/${key}`, textureMap[key]?.textures === `textures/items/${key}`, JSON.stringify(textureMap[key]));
+        check(`${key}: the sprite exists`, existsSync(path.join(RP, "textures", "items", `${key}.png`)));
+
+        const components = item ? readJson(item.file)["minecraft:item"].components : {};
+        check(`${key}: the inventory name is what the script calls it ("${weapon.name}")`, components["minecraft:display_name"]?.value === weapon.name, JSON.stringify(components["minecraft:display_name"]));
+    }
+    done();
+});
+
+test("every melee weapon is a plain item: one at a time, held like a tool, not hold-to-use and with no cooldown of the game's", async () => {
+    const { check, done } = checks();
+    const { MELEE } = await load("config/balance.js");
+
+    for (const [key, weapon] of Object.entries(MELEE.weapons)) {
+        const item = items.find((candidate) => candidate.id === weapon.id);
+        if (!item) { check(`${key}: the item exists`, false); continue; }
+
+        const description = readJson(item.file)["minecraft:item"].description;
+        const components = readJson(item.file)["minecraft:item"].components;
+
+        check(`${key}: in the equipment category`, description.menu_category?.category === "equipment", JSON.stringify(description.menu_category));
+        check(`${key}: one at a time`, components["minecraft:max_stack_size"] === 1);
+        check(`${key}: held like a tool`, components["minecraft:hand_equipped"] === true);
+
+        // A used item blocks left-click (measured with the bolt rifle), and a swing is the whole point of a melee weapon. Attack
+        // cooldowns are the script's (core/melee.ts), so the game's own cooldown component is not used either.
+        check(`${key}: no minecraft:use_modifiers`, components["minecraft:use_modifiers"] === undefined, JSON.stringify(components["minecraft:use_modifiers"]));
+        check(`${key}: no minecraft:cooldown`, components["minecraft:cooldown"] === undefined);
+        check(`${key}: no durability (a weapon here does not wear out)`, components["minecraft:durability"] === undefined);
+    }
+    done();
+});
+
+test("the melee sprites are exactly the ones supplied in weapons11.mcpack, 16x16 with transparency", () => {
+    const { check, done } = checks();
+
+    for (const [key, source] of Object.entries(MELEE_SPRITES)) {
+        const file = path.join(RP, "textures", "items", `${key}.png`);
+        check(`${key}: the sprite exists`, existsSync(file));
+        if (!existsSync(file)) continue;
+
+        const digest = createHash("sha256").update(readFileSync(file)).digest("hex");
+        check(`${key}: is the pack's ${source.from} unchanged`, digest === source.sha256, digest);
+
+        const info = pngInfo(file);
+        check(`${key}: 16x16 with an alpha channel`, info !== null && info.width === 16 && info.height === 16 && ALPHA_COLOR_TYPES.has(info.colorType), JSON.stringify(info));
+    }
+    done();
+});
+
+test("no vanilla sword or spear is retextured: the melee pack's own names are not in this one", () => {
+    const { check, done } = checks();
+    const vanilla = ["wood_sword", "iron_sword", "diamond_sword", "golden_sword", "stone_sword", "netherite_sword", "wooden_sword"];
+
+    for (const name of vanilla) {
+        check(`textures/items/${name}.png is not here`, !existsSync(path.join(RP, "textures", "items", `${name}.png`)));
+        check(`the item map has no "${name}" key`, textureMap[name] === undefined);
+    }
+
+    check("no spear folder of item sprites", !existsSync(path.join(RP, "textures", "items", "spear")));
+    check("no spear entity textures", !existsSync(path.join(RP, "textures", "entity", "spear")));
     done();
 });
 

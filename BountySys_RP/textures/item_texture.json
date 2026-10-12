@@ -11,6 +11,11 @@
         "rifle_ammo": { "textures": "textures/items/rifle_ammo" },
         "shotgun_ammo": { "textures": "textures/items/shotgun_ammo" },
         "law_compass": { "textures": "textures/items/law_compass" },
-        "game_menu": { "textures": "textures/items/game_menu" }
+        "game_menu": { "textures": "textures/items/game_menu" },
+        "knife": { "textures": "textures/items/knife" },
+        "machete": { "textures": "textures/items/machete" },
+        "baton": { "textures": "textures/items/baton" },
+        "axe": { "textures": "textures/items/axe" },
+        "sledgehammer": { "textures": "textures/items/sledgehammer" }
     }
 }

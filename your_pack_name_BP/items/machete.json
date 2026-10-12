@@ -1,0 +1,15 @@
+{
+    "format_version": "1.26.50",
+    "minecraft:item": {
+        "description": {
+            "identifier": "bountysys:machete",
+            "menu_category": { "category": "equipment" }
+        },
+        "components": {
+            "minecraft:icon": "machete",
+            "minecraft:display_name": { "value": "Machete" },
+            "minecraft:max_stack_size": 1,
+            "minecraft:hand_equipped": true
+        }
+    }
+}
