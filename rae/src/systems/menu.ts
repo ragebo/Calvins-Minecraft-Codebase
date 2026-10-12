@@ -6,7 +6,8 @@ import { onScriptEvent } from "../core/events.js";
 import { showForm } from "../core/forms.js";
 import { resetGame, sendEveryoneToSpawns, startChosenRound, startRandomRound, type Choice } from "../core/game.js";
 import { warn } from "../core/log.js";
-import { players } from "../core/players.js";
+import { isOperator, players } from "../core/players.js";
+import { openStartEditor } from "../core/startforms.js";
 import { getRecord } from "../core/state.js";
 import { format, tell } from "../core/ui.js";
 import { registerSystem } from "../core/registry.js";
@@ -163,6 +164,9 @@ async function mainMenu(player: Player): Promise<void> {
         .button("Send everyone to their spawns")
         .button(tumbleweedsEnabled() ? "Turn tumbleweeds off" : "Turn tumbleweeds on");
 
+    // The start sequence's settings are the operator's: the button is not there for anyone else (and the screens refuse them too).
+    if (isOperator(player)) form.button("Start sequence");
+
     const response = await showForm(player, form);
     if (!response || response.canceled) return;
 
@@ -179,6 +183,7 @@ async function mainMenu(player: Player): Promise<void> {
             tell(player, format("ok", on ? "Tumbleweeds are on: new ones will roll in." : "Tumbleweeds are off: no new ones will spawn."));
             break;
         }
+        case 5: await openStartEditor(player); break;
         default: break;
     }
 }

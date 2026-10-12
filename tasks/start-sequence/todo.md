@@ -117,16 +117,17 @@ Status source of truth for `plan.md` in this folder. Every task: RED first (a fa
 
 ## Phase 3: Customizing it
 
-- [ ] **Task 7: The start-commands screen** (M)
+- [x] **Task 7: The start-commands screen** (M) - done
   `core/startforms.ts` (the operator's screens, on `core/screens.ts`), opened from a new "Start sequence" button in the RAE menu that
   only operators see: the numbered list, Add (a text box), Edit one (the box prefilled; an empty box deletes it), Reset to defaults, Back.
   Refusals show on the next screen.
   - Acceptance:
-    - [ ] add, edit, delete and reset change what the next Start runs
-    - [ ] a refused line (too long, empty on add, over the cap) says why on the same screen and changes nothing
-    - [ ] a non-operator never sees the button and cannot open the screens by any route
-    - [ ] closing a screen with Esc leaves the list as it was
+    - [x] add, edit, delete and reset change what the next Start runs
+    - [x] a refused line (too long, empty on add, over the cap) says why on the same screen and changes nothing
+    - [x] a non-operator never sees the button and cannot open the screens by any route
+    - [x] closing a screen with Esc leaves the list as it was
   - Verification: check, test; deliberate breaks
+  - Result: 19 new tests (start-forms.test.mjs) with a stand-in operator: the first screen and its summary in all four states (defaults, your own, none, unreadable), a member refused by the entry and not offered the button (the RAE menu shows Start sequence only to an operator; pressing it opens the editor), the numbered list, add (cleaned, last, announced), edit (the box starts with the command), an empty box deletes, a refused line comes straight back with the reason in the box title and what was typed kept (too long, empty, full list, and a save the store refuses for size), Escape changes nothing, Put the defaults back only on a yes, a saved-empty list, an unreadable list offering only the reset, and a long command cut short on its button. 31 deliberate breaks across core/startforms.ts and the menu button, all caught (8 needed a compiling variant). No reordering (delete and add instead), as planned. Written in the style of the live config editor: an isOperator gate at the entry, one createScreens set, refusals in the modal title. Unmeasured in the real game: how the screens look, and that a text box opens right after another form closes.
   - Dependencies: Tasks 2, 4
   - Files: `rae/src/core/startforms.ts`, `rae/src/systems/menu.ts`, `rae/test/start-forms.test.mjs`
 
