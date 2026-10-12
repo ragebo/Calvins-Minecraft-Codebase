@@ -7,7 +7,7 @@ is covered by the tests (the lines the game writes and the way the tool reads th
 a robbery and a shop visit under the fake game). What they cannot say is whether the REAL game keeps these lines, whole, and when, and that is
 what this card is for. Nothing here has been seen from the real game yet.
 
-- Not deployed yet: it ships in the next behavior pack after 0.2.5 (0.2.6). RP unchanged. Operators only; you need Node.js on this
+- Deployed as behavior pack 0.2.6 (2026-10-12). RP unchanged (1.0.27). Operators only; you need Node.js on this
   computer for the tool (`tools\telemetry.cmd` says so if it is missing).
 - **Turn the content log file on first** (once): Settings, Creator, **Enable Content Log File**. The on-screen overlay can stay off.
   If your game has a content log **level**, it must be Warning or lower (the lines are written as warnings, like every `[shop]`

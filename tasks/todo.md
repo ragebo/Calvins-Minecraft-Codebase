@@ -227,12 +227,16 @@ Nothing is deployed or pushed unless the owner asks.
   - Dependencies: Tasks 2, 10
   - Files: `rae/src/core/configoverrides.ts`, `rae/test/telemetry-switch.test.mjs`, `docs/test-cards/TELEMETRY.md`, `README.md`, `ARCHITECTURE.md`, `.gitignore`
 
-- [ ] **Task 12: Release** (S; only when the owner asks)
+- [x] **Task 12: Release** (S; only when the owner asks) - DEPLOYED 2026-10-12 on the owner's "Go ahead and deploy"
   Bump the BP to 0.2.6 in four places (manifest header and two modules, `config/build.ts`), run the gate, clean build,
   `deploy.ps1` dry run then real, byte-verify, read the four world pins as JSON, tell the owner to fully quit and relaunch if the
   game is running. No push unless asked.
   - Acceptance: all four pins read 0.2.6; the repo build equals the game folder byte for byte; the rollback copy holds 0.2.5.
-  - Dependencies: all of the above. Not started.
+    - [x] all four pins read 0.2.6 as JSON (RP pins still 1.0.27); game manifest 0.2.6 / 0.2.6 / 0.2.6
+    - [x] clean build (78 files) equals the game folder byte for byte (103 files incl. items, entities, loot tables, dialogue); only 6 script files changed and 2 are new
+    - [x] the rollback copy holds 0.2.5 (the deploy script's `backup-before-deploy`)
+  - Result: the game was NOT running (no Minecraft process) and all four worlds were closed, so the next launch is a fresh one. Gate before the deploy: exit 0, 1427 tests. Not pushed: v2 is ahead of origin/v2.
+  - Dependencies: all of the above.
 
 ### Checkpoint: complete
 - [ ] every acceptance box above is ticked
