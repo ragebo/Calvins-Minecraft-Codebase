@@ -113,7 +113,7 @@ Nothing is deployed or pushed unless the owner asks.
   delayed effect is counted too. `applyEffect` passes the run to it.
   - Acceptance:
     - [ ] a jam gives `result: jammed` with misses equal to the lock's strikes; an unlock gives `unlocked`
-    - [ ] a 100-coin reward to 3 players gives one payout with coins 300 and n 3; nobody to pay gives no line
+    - [ ] a 100-coin reward to 3 players gives one payout with coins 300 and players 3; nobody to pay gives no line
     - [ ] a reward delayed past the end of the run still carries the run's number
     - [ ] existing tests untouched and green; one deliberate break caught (a wrong total)
   - Verification: check, test

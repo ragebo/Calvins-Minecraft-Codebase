@@ -9,22 +9,26 @@ const T = await load("logic/telemetry.js");
 
 const LIMITS = { textChars: 80, listItems: 8, lineChars: 600 };
 const STAMP = { v: 1, w: "a3f9c1", b: "x7q2", n: 14, t: 123456, bv: "0.2.5" };
+/** The keys a line's stamp (and the cut flag) use. A field of an event named like one of them would overwrite it. */
+const RESERVED = ["v", "k", "w", "b", "n", "t", "bv", "cut"];
 const event = (k, fields = {}) => ({ ...STAMP, k, ...fields });
 
-/** One realistic event of every kind. A kind added without a sample here fails the second test. */
-const SAMPLES = {
-    "boot": event("boot"),
-    "round.end": event("round.end", { reason: "law_win", dur: 4800, kills: 5, deaths: 4, lawKills: 3, outlawKills: 2, coins: 640 }),
-    "robbery.start": event("robbery.start", { id: "bank", r: 1, test: false, p: "-4294967295", role: "outlaw", inside: 3 }),
-    "robbery.element": event("robbery.element", { id: "bank", r: 1, el: "e2", kind: "door", locks: ["pick"], after: 640, p: "-4294967295" }),
-    "robbery.pick": event("robbery.pick", { id: "bank", r: 1, el: "e2", result: "jammed", hits: 1, misses: 3, p: "-4294967295" }),
-    "robbery.payout": event("robbery.payout", { id: "bank", r: 1, coins: 300, bounty: 150, to: "area", n: 3 }),
-    "robbery.end": event("robbery.end", { id: "bank", r: 1, result: "win", test: false, dur: 3100, done: 5, of: 6, people: 3 }),
-    "shop.open": event("shop.open", { id: "general", p: "-4294967295", role: "law" }),
-    "shop.trade": event("shop.trade", { id: "general", deal: "t1", face: "buy", spent: 20, got: 0, give: ["minecraft:bread x4"], take: [], svc: [], p: "-4294967295", role: "law" }),
-    "shop.refuse": event("shop.refuse", { id: "general", deal: "t1", why: "you need 20 coins (you have 12)", p: "-4294967295" }),
-    "telemetry.dropped": event("telemetry.dropped", { n: 37 })
+/** What each kind of event holds besides the stamp: one realistic set of fields per kind. A kind added without one here fails the second test. */
+const FIELDS = {
+    "boot": {},
+    "round.end": { reason: "law_win", dur: 4800, kills: 5, deaths: 4, lawKills: 3, outlawKills: 2, coins: 640 },
+    "robbery.start": { id: "bank", r: 1, test: false, p: "-4294967295", role: "outlaw", inside: 3 },
+    "robbery.element": { id: "bank", r: 1, el: "e2", kind: "door", locks: ["pick"], after: 640, p: "-4294967295" },
+    "robbery.pick": { id: "bank", r: 1, el: "e2", result: "jammed", hits: 1, misses: 3, p: "-4294967295" },
+    "robbery.payout": { id: "bank", r: 1, coins: 300, bounty: 150, to: "area", players: 3 },
+    "robbery.end": { id: "bank", r: 1, result: "win", test: false, dur: 3100, done: 5, of: 6, people: 3 },
+    "shop.open": { id: "general", p: "-4294967295", role: "law" },
+    "shop.trade": { id: "general", deal: "t1", face: "buy", spent: 20, got: 0, give: ["minecraft:bread x4"], take: [], svc: [], p: "-4294967295", role: "law" },
+    "shop.refuse": { id: "general", deal: "t1", why: "you need 20 coins (you have 12)", p: "-4294967295" },
+    "telemetry.dropped": { lines: 37 }
 };
+
+const SAMPLES = Object.fromEntries(Object.entries(FIELDS).map(([kind, fields]) => [kind, event(kind, fields)]));
 
 /** A shop.trade with the given lists, for the cases that are about lists. */
 const trade = (lists) => event("shop.trade", { id: "general", deal: "t1", face: "buy", spent: 1, got: 0, give: [], take: [], svc: [], p: "7", ...lists });
@@ -52,6 +56,17 @@ test("every kind of event comes through unchanged and unflagged", () => {
         check(`${kind}: nothing lost or changed`, isDeepStrictEqual(back, sample), line);
         check(`${kind}: not flagged as cut`, !("cut" in back), line);
         check(`${kind}: within the cap`, line.length <= LIMITS.lineChars, String(line.length));
+    }
+
+    done();
+});
+
+test("no kind has a field named like a stamp key: merged into the event it would overwrite the stamp, and the reader tells lines apart by it", () => {
+    const { check, done } = checks();
+
+    for (const [kind, fields] of Object.entries(FIELDS)) {
+        const clash = Object.keys(fields).filter((key) => RESERVED.includes(key));
+        check(`${kind} holds no stamp key`, clash.length === 0, `(${clash.join(", ")})`);
     }
 
     done();

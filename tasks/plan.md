@@ -75,12 +75,12 @@ The game side only emits events. All counting happens in the tool, so there is n
 | `robbery.start` | `begin()` | id, r (run number), test, p, role, inside |
 | `robbery.element` | `complete()` | id, r, el, kind, locks, after (ticks since start), p |
 | `robbery.pick` | `pickLoop` on jam or unlock | id, r, el, result, hits, misses, p |
-| `robbery.payout` | `deliverReward()` | id, r, coins, bounty, to, n |
+| `robbery.payout` | `deliverReward()` | id, r, coins, bounty, to, players |
 | `robbery.end` | `endRun()` | id, r, result, test, dur, done, of, people |
 | `shop.open` | `openShop()` | id, p, role |
 | `shop.trade` | `openShop()` after a deal succeeds | id, deal, face, spent, got, give, take, svc, p, role |
 | `shop.refuse` | `openShop()` after a deal is refused | id, deal, why, p |
-| `telemetry.dropped` | the emitter | n |
+| `telemetry.dropped` | the emitter | lines |
 
 ## Task list (ordered; details and status in `tasks/todo.md`)
 

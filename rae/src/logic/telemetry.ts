@@ -95,7 +95,7 @@ export interface EventFields {
         /** Who the reward was for: actor, area, outlaws, law or all. */
         readonly to: string;
         /** How many players were paid. */
-        readonly n: number;
+        readonly players: number;
     };
     "robbery.end": {
         readonly id: string;
@@ -142,7 +142,7 @@ export interface EventFields {
     };
     /** Written when the rate limit held lines back, with how many. */
     "telemetry.dropped": {
-        readonly n: number;
+        readonly lines: number;
     };
 }
 
@@ -151,8 +151,12 @@ export type EventKind = keyof EventFields;
 /** A whole event as `toLine` takes it: the stamp, its kind and the fields that kind holds. */
 export type TelemetryEvent<K extends EventKind = EventKind> = { [P in K]: Stamp & { readonly k: P } & EventFields[P] }[K];
 
-// Typed by the interface above, so a kind added to one and not to the other does not compile.
-const KINDS: Record<EventKind, true> = {
+/** The keys of a line that are not a kind's own: the stamp, the kind and the cut flag. A field named like one would overwrite it. */
+type Reserved = keyof Stamp | "k" | "cut";
+
+// Typed by the interface above, so a kind added to one and not to the other does not compile, and neither does a kind with a field
+// named like a reserved key (its entry here could then only be `never`).
+const KINDS: { readonly [K in EventKind]: [Extract<keyof EventFields[K], Reserved>] extends [never] ? true : never } = {
     "boot": true,
     "round.end": true,
     "robbery.start": true,
