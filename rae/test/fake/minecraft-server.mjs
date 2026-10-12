@@ -35,6 +35,9 @@ export const EntityDamageCause = { entityAttack: "entityAttack", projectile: "pr
 export const PlayerPermissionLevel = { Visitor: 0, Member: 1, Operator: 2, Custom: 3 };
 export const StructureSaveMode = { Memory: "Memory", World: "World" };
 export const CommandPermissionLevel = { Any: 0, GameDirectors: 1, Admin: 2, Host: 3, Owner: 4 };
+// The two enums the camera and input-lock code uses (the real ones have more members; these are the ones the typings give a number or name to).
+export const InputPermissionCategory = { Camera: 1, Movement: 2, LateralMovement: 4, Sneak: 5, Jump: 6, Mount: 7, Dismount: 8, MoveForward: 9, MoveBackward: 10 };
+export const EasingType = { Linear: "Linear", InSine: "InSine", OutSine: "OutSine", InOutSine: "InOutSine", InOutQuad: "InOutQuad", InOutCubic: "InOutCubic", Spring: "Spring" };
 export const CustomCommandParamType = {
     BlockType: "BlockType", Boolean: "Boolean", EntitySelector: "EntitySelector", EntityType: "EntityType",
     Enum: "Enum", Float: "Float", Integer: "Integer", ItemType: "ItemType", Location: "Location",
@@ -605,10 +608,25 @@ function makePlayer(name, options = {}) {
         selectedSlotIndex: options.selectedSlotIndex ?? 0,
         // What is in the off-hand slot (a type id) or null. Tests set it to act out an off-hand swap.
         offhand: options.offhand ?? null,
-        // player.camera: setFov records what it was given, or throws fake.cameraError.
+        // player.camera: setFov records what it was given, or throws fake.cameraError. `calls` is every setCamera / clear / fade in order
+        // ({ method, preset, options }, the options copied so a later change to what was passed cannot rewrite history).
         camera: {
             fovCalls: [],
-            setFov(o) { guard(player); if (fake.cameraError) throw new Error(fake.cameraError); player.camera.fovCalls.push(o); }
+            calls: [],
+            setFov(o) { guard(player); if (fake.cameraError) throw new Error(fake.cameraError); player.camera.fovCalls.push(o); },
+            setCamera(preset, options) { guard(player); if (fake.cameraError) throw new Error(fake.cameraError); player.camera.calls.push({ method: "setCamera", preset, options: options === undefined ? undefined : JSON.parse(JSON.stringify(options)) }); },
+            clear() { guard(player); if (fake.cameraError) throw new Error(fake.cameraError); player.camera.calls.push({ method: "clear" }); },
+            fade(options) { guard(player); if (fake.cameraError) throw new Error(fake.cameraError); player.camera.calls.push({ method: "fade", options: options === undefined ? undefined : JSON.parse(JSON.stringify(options)) }); }
+        },
+        // player.inputPermissions: every category starts enabled; a test reads `isPermissionCategoryEnabled`. Throws fake.inputPermissionError when it is set.
+        inputPermissions: {
+            disabled: new Set(),
+            isPermissionCategoryEnabled(category) { guard(player); return !player.inputPermissions.disabled.has(category); },
+            setPermissionCategory(category, enabled) {
+                guard(player);
+                if (fake.inputPermissionError) throw new Error(fake.inputPermissionError);
+                if (enabled) player.inputPermissions.disabled.delete(category); else player.inputPermissions.disabled.add(category);
+            }
         },
         container,
         permission: options.permission ?? PlayerPermissionLevel.Member,
@@ -922,8 +940,10 @@ export const fake = {
     // drag: what is left of a velocity after each tick. delivered: the share of a velocity that becomes movement (1 = all).
     physics: { drag: 1, delivered: 1 },
     maxImpulse: Infinity,
-    // When set, player.camera.setFov throws this message.
+    // When set, player.camera.setFov / setCamera / clear / fade throw this message.
     cameraError: null,
+    // When set, player.inputPermissions.setPermissionCategory throws this message.
+    inputPermissionError: null,
     // Restricted execution: above zero while a strict "before" event or a custom-command callback is running.
     restricted: 0,
     // Set true to run every "before" event handler in restricted execution, as the real engine does.
@@ -1061,7 +1081,7 @@ export const fake = {
         fake.structureMax = Infinity; fake.structureLog.length = 0; fake.lootTables.clear(); fake.tickingAreas.clear(); fake.shapes.length = 0;
         fake.tickingAreaReady.clear(); fake.tickingAreaDelay = 0; fake.tickingAreaFails = null; fake.tickingAreaCapacity = Infinity; fake.hideUnloadedEntities = false; fake.passableBlocks.clear(); fake.strictFrameSync = false;
         objectives.clear(); fake.calls = freshCalls();
-        fake.physics.drag = 1; fake.physics.delivered = 1; fake.maxImpulse = Infinity; fake.cameraError = null;
+        fake.physics.drag = 1; fake.physics.delivered = 1; fake.maxImpulse = Infinity; fake.cameraError = null; fake.inputPermissionError = null;
         fake.restricted = 0; fake.strictBefore = false;
         // A loader a test installed by hand (the train tests do) is its own business; only setUnloaded's is undone here.
         for (const d of Object.values(fake.dimensions)) {

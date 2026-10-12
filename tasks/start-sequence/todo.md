@@ -35,7 +35,7 @@ Status source of truth for `plan.md` in this folder. Every task: RED first (a fa
   - Dependencies: Task 1
   - Files: `rae/src/core/startstore.ts`, `rae/test/start-store.test.mjs`
 
-- [ ] **Task 3: The camera and lock wrapper, and the fake that lets tests see them** (S-M)
+- [x] **Task 3: The camera and lock wrapper, and the fake that lets tests see them** (S-M) - done
   `core/cinematic.ts` is the only file that calls `player.camera` and `player.inputPermissions`: `lock`/`unlock` (movement),
   `playShot(player, shot, seconds)` (the camera appears at the start mark at once, then eases to the end mark over `seconds`),
   `flyDown(player, spawn, seconds)` (starts `flyDownHeight` above the spawn looking down, eases to eye level), `clearCamera`,
@@ -44,12 +44,13 @@ Status source of truth for `plan.md` in this folder. Every task: RED first (a fa
   list (and `fake.cameraError` covers them), `player.inputPermissions` with its state, and the `InputPermissionCategory` and
   `EasingType` enums.
   - Acceptance:
-    - [ ] `playShot` makes exactly two `setCamera` calls: the start with no ease, then the end with `easeTime` equal to the seconds given
-    - [ ] `flyDown` starts above the spawn looking straight down and ends at eye height, with the ease time given
-    - [ ] lock then unlock restores movement; `unlockEveryone` unlocks every online player and clears their cameras
-    - [ ] an engine error from any call is swallowed and logged once; a player who left (invalid) is skipped
-    - [ ] the whole existing suite still passes with the fake's additions (run before and after)
+    - [x] `playShot` makes exactly two `setCamera` calls: the start with no ease, then the end with `easeTime` equal to the seconds given
+    - [x] `flyDown` starts above the spawn looking straight down and ends at eye height, with the ease time given
+    - [x] lock then unlock restores movement; `unlockEveryone` unlocks every online player and clears their cameras
+    - [x] an engine error from any call is swallowed and logged once; a player who left (invalid) is skipped
+    - [x] the whole existing suite still passes with the fake's additions (run before and after)
   - Verification: check, test; deliberate breaks
+  - Result: 10 new tests (a pan is two camera calls, a fly-down, a negative length is a cut, lock and unlock, clear, unlockEveryone with one who left, a camera that throws is reported once per kind, a lock that throws, one player's failure does not stop the rest). The fake gained camera.setCamera/clear/fade (recorded in camera.calls), inputPermissions, fake.inputPermissionError and the InputPermissionCategory and EasingType enums; the whole existing suite was run before and after the fake's additions: 1457 of 1457 both times. 27 deliberate breaks on core/cinematic.ts, all caught (two needed a compiling variant). The two calls of a pan are made in the same tick: unmeasured in the real game whether the ease starts from the first mark; the card checks it.
   - Dependencies: Task 1
   - Files: `rae/src/core/cinematic.ts`, `rae/test/fake/minecraft-server.mjs`, `rae/test/cinematic.test.mjs`
 
