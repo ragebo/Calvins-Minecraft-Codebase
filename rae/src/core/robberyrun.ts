@@ -459,7 +459,7 @@ function complete(run: Run, robbery: Robbery, element: Element, actor: Player | 
         run.actors.add(actor.id);
     }
 
-    emit("robbery.element", { id: run.id, r: run.number, el: element.id, kind: element.kind, locks: element.locks.map((lock) => lock.kind), after: system.currentTick - run.startedTick, p: actor?.id });
+    emit("robbery.element", { id: run.id, r: run.number, el: element.id, name: element.name, kind: element.kind, locks: element.locks.map((lock) => lock.kind), after: system.currentTick - run.startedTick, p: actor?.id });
 
     changeWorld(robbery, element, actor);
 
@@ -1003,7 +1003,7 @@ async function pickLoop(player: Player, run: Run, elementId: string): Promise<vo
 
             if (step.outcome === "jam") {
                 // The hits it had are lost, and the misses that jammed it are the ones in a row.
-                emit("robbery.pick", { id: run.id, r: run.number, el: elementId, result: "jammed", hits: before.hits, misses: before.strikes + 1, p: player.id });
+                emit("robbery.pick", { id: run.id, r: run.number, el: elementId, name: after.element.name, result: "jammed", hits: before.hits, misses: before.strikes + 1, p: player.id });
                 playFor(player, R.cues.jam);
                 tell(player, format("bad", `The lock jams! It will take ${clock(current.jamSeconds)} to free.`));
                 runEffects(run, after.robbery, after.element.onFail, player.id);
@@ -1011,7 +1011,7 @@ async function pickLoop(player: Player, run: Run, elementId: string): Promise<vo
             }
 
             // unlocked: misses are the ones in a row since the last hit (a hit clears them)
-            emit("robbery.pick", { id: run.id, r: run.number, el: elementId, result: "unlocked", hits: step.state.hits, misses: before.strikes, p: player.id });
+            emit("robbery.pick", { id: run.id, r: run.number, el: elementId, name: after.element.name, result: "unlocked", hits: step.state.hits, misses: before.strikes, p: player.id });
             playFor(player, R.cues.hit);
             run.picks.set(elementId, FRESH_PICK);
             finishLocks(player, run, elementId);

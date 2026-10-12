@@ -68,6 +68,8 @@ export interface EventFields {
         readonly r: number;
         /** The element's id inside the robbery. */
         readonly el: string;
+        /** The name its builder gave it ("Vault door"): the id says nothing to a person reading a report. */
+        readonly name: string;
         /** door, chest, switch, frame or teller. */
         readonly kind: string;
         /** The kinds of lock it had: pick, key, pay or place. */
@@ -80,6 +82,7 @@ export interface EventFields {
         readonly id: string;
         readonly r: number;
         readonly el: string;
+        readonly name: string;
         /** unlocked or jammed. */
         readonly result: string;
         readonly hits: number;

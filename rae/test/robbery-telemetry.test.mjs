@@ -114,9 +114,9 @@ test("a whole robbery is told in order: the start, each element as it is done, a
     check("the whole story in order: a pick opens the keypad, then it and the door are done, a pick opens the lockbox, then it is done and pays, the win pays, and it ends",
         t.map((e) => e.k).join() === "robbery.start,robbery.pick,robbery.element,robbery.element,robbery.pick,robbery.element,robbery.payout,robbery.payout,robbery.end", t.map((e) => e.k).join());
     check("the start: who, as what, and how many were inside", start?.id === "bank" && start.test === false && start.p === ada.id && start.role === "outlaw" && start.inside === 1, JSON.stringify(start));
-    check("the keypad: a switch with a pick lock, done at once by her", keypad?.el === built.keypad.id && keypad.kind === "switch" && JSON.stringify(keypad.locks) === "[\"pick\"]" && keypad.after === 0 && keypad.p === ada.id, JSON.stringify(keypad));
-    check("the vault door: opened by the keypad in the same moment, still by her", door?.el === built.door.id && door.kind === "door" && JSON.stringify(door.locks) === "[]" && door.after === 0 && door.p === ada.id, JSON.stringify(door));
-    check("the lockbox: a chest with a pick and a price, 30 ticks in", box?.el === built.box.id && box.kind === "chest" && JSON.stringify(box.locks) === "[\"pick\",\"pay\"]" && box.after === 30 && box.p === ada.id, JSON.stringify(box));
+    check("the keypad: a switch with a pick lock, done at once by her", keypad?.el === built.keypad.id && keypad.name === "Keypad" && keypad.kind === "switch" && JSON.stringify(keypad.locks) === "[\"pick\"]" && keypad.after === 0 && keypad.p === ada.id, JSON.stringify(keypad));
+    check("the vault door: opened by the keypad in the same moment, still by her", door?.el === built.door.id && door.name === "Vault door" && door.kind === "door" && JSON.stringify(door.locks) === "[]" && door.after === 0 && door.p === ada.id, JSON.stringify(door));
+    check("the lockbox: a chest with a pick and a price, 30 ticks in", box?.el === built.box.id && box.name === "Lockbox" && box.kind === "chest" && JSON.stringify(box.locks) === "[\"pick\",\"pay\"]" && box.after === 30 && box.p === ada.id, JSON.stringify(box));
     check("the end: won, all three elements, one person, 90 ticks (and a loop tick) after it began", end?.result === "win" && end.test === false && end.done === 3 && end.of === 3 && end.people === 1 && end.dur >= 90 && end.dur < 90 + R.tickEvery, JSON.stringify(end));
     check("every line of the run carries the same run number", new Set(t.map((e) => e.r)).size === 1 && Number.isInteger(start?.r), JSON.stringify(t.map((e) => e.r)));
     done();
@@ -256,7 +256,7 @@ test("a teller held up is an element of kind 'teller'", async () => {
 
     const t = told(from);
     const element = t.find((e) => e.k === "robbery.element");
-    check("the hold-up was told, by her, as a teller", element?.kind === "teller" && element.el === teller.element.id && element.p === ada.id && JSON.stringify(element.locks) === "[]", JSON.stringify(t));
+    check("the hold-up was told, by her, as a teller", element?.kind === "teller" && element.el === teller.element.id && element.name === "Teller" && element.p === ada.id && JSON.stringify(element.locks) === "[]", JSON.stringify(t));
     check("and it won the robbery", t.find((e) => e.k === "robbery.end")?.result === "win", JSON.stringify(t));
     done();
 });
@@ -320,8 +320,8 @@ test("a lock that jams is told as jammed with the progress it lost and the misse
     const [jam, open] = picksOf(from);
 
     check("two pick lines, in order", picksOf(from).length === 2, JSON.stringify(picksOf(from)));
-    check("the jam: the keypad, by her, one hit lost, three misses", jam?.result === "jammed" && jam.el === built.keypad.id && jam.p === ada.id && jam.hits === 1 && jam.misses === 3, JSON.stringify(jam));
-    check("the opening: both hits, no misses", open?.result === "unlocked" && open.el === built.keypad.id && open.p === ada.id && open.hits === 2 && open.misses === 0, JSON.stringify(open));
+    check("the jam: the keypad, by her, one hit lost, three misses", jam?.result === "jammed" && jam.el === built.keypad.id && jam.name === "Keypad" && jam.p === ada.id && jam.hits === 1 && jam.misses === 3, JSON.stringify(jam));
+    check("the opening: both hits, no misses", open?.result === "unlocked" && open.el === built.keypad.id && open.name === "Keypad" && open.p === ada.id && open.hits === 2 && open.misses === 0, JSON.stringify(open));
     check("both belong to the run", jam?.r === open?.r && Number.isInteger(jam?.r) && jam.id === "bank", JSON.stringify([jam, open]));
     done();
 });
