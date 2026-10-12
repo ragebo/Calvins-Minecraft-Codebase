@@ -398,6 +398,51 @@ export const TELEMETRY = {
 };
 
 /**
+ * The start of a game (logic/start.ts is its rules, core/startsequence.ts runs it): the operator's start commands, a camera intro of
+ * shots an operator marked in game, then the roles are revealed, law choose a spawn and play begins. The shots and the commands
+ * themselves are saved in the world (they are authored in game); what is here is the numbers around them and the defaults.
+ */
+export const START = {
+    /** Off skips the camera intro (the start commands, the reveal and the law spawn pick still run). No saved shot also skips it. */
+    introEnabled: true,
+    /** How long the whole intro lasts (seconds), shared evenly between its shots. */
+    introSeconds: 10,
+    /** How many shots one Start plays, picked at random from the saved ones. */
+    shotsPerStart: 2,
+    /** How long law players have to choose a spawn (seconds); an unpicked one is given a random spawn when it runs out. */
+    pickSeconds: 20,
+    /** An outlaw's fly-down: the camera starts this many blocks above their spawn and eases to their eyes over this many seconds. */
+    flyDownSeconds: 3,
+    flyDownHeight: 30,
+    /** How high a standing player's eyes are above their feet (blocks). */
+    eyeHeight: 1.62,
+
+    // ---- Caps. Shots are one world property each and the command list is one, so size is the real limit.
+    maxShots: 12,
+    /** A saved shot longer than this many characters is refused. */
+    maxShotChars: 400,
+    maxNameChars: 40,
+    maxCommands: 20,
+    maxCommandChars: 200,
+    /** The saved command list (all of it) longer than this many characters is refused. */
+    maxCommandListChars: 4500,
+
+    /**
+     * The commands run at the start of a game until an operator changes the list. They are the last game's: effects cleared, health
+     * and food full, bags emptied (not for anyone in creative), everyone in survival, coins and bounty back to zero.
+     */
+    defaultCommands: [
+        "effect @a clear",
+        "effect @a instant_health 1 10 true",
+        "effect @a saturation 1 10 true",
+        "clear @a[m=!creative]",
+        "gamemode survival @a",
+        "scoreboard players set @a coins 0",
+        "scoreboard players set @a bounty 0"
+    ] as string[]
+};
+
+/**
  * The in-game robbery framework (systems/robbery*.ts, core/robbery*.ts): caps, defaults and tuning only. The
  * robberies themselves (positions, names, loot, effects) are authored in game and saved in the world, the same
  * way the recorded train route is, so none of them live in this file.

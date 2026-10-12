@@ -5,7 +5,7 @@ Status source of truth for `plan.md` in this folder. Every task: RED first (a fa
 
 ## Phase 1: Foundation
 
-- [ ] **Task 1: Shots, the command list and the START config** (M)
+- [x] **Task 1: Shots, the command list and the START config** (M) - done
   `logic/start.ts` (pure, no game imports): a `Shot` is a name and two marks (position and the way the camera faces); its saved text
   and the parse back (malformed input never throws); `pickShots(pool, count, previousFirstId, random)`; `secondsPerShot(total, count)`;
   the start-command list: `cleanCommand` (trim, one leading `/` dropped, empty or over-long or multi-line refused), `addCommand`,
@@ -13,11 +13,12 @@ Status source of truth for `plan.md` in this folder. Every task: RED first (a fa
   `introSeconds` 10, `shotsPerStart` 2, `pickSeconds` 20, `flyDownSeconds` 3, `flyDownHeight` 30, caps (`maxShots` 12, `maxCommands`
   20, `maxCommandChars` 200, `maxSavedChars`), and `defaultCommands` (the plan's list).
   - Acceptance:
-    - [ ] a shot survives save and parse exactly; text that is damaged, has a NaN, a pitch outside -90..90 or a height outside the world gives a reason and no shot
-    - [ ] `pickShots` returns distinct shots, never more than the pool, never the same first shot as last time when the pool has another, and is exact with a fixed random
-    - [ ] `secondsPerShot(10, 2)` is 5; a count of 0 or a total of 0 cannot divide by zero
-    - [ ] a command is cleaned the same way every time; a line over the cap, an empty line and a line with a newline are refused with a reason; add/edit/remove never change their input and respect the cap
+    - [x] a shot survives save and parse exactly; text that is damaged, has a NaN, a pitch outside -90..90 or a height outside the world gives a reason and no shot
+    - [x] `pickShots` returns distinct shots, never more than the pool, never the same first shot as last time when the pool has another, and is exact with a fixed random
+    - [x] `secondsPerShot(10, 2)` is 5; a count of 0 or a total of 0 cannot divide by zero
+    - [x] a command is cleaned the same way every time; a line over the cap, an empty line and a line with a newline are refused with a reason; add/edit/remove never change their input and respect the cap
   - Verification: check, test; deliberate breaks on every rule above
+  - Result: 16 new tests (shots, picking, seconds, ids, the command list and its edits, the START defaults). 46 deliberate breaks on logic/start.ts, all caught (one is guarded by the type checker itself); running them found 6 gaps in my own tests (the end mark's rounding, a yaw range, the z edge, an id that only ends like one, a space after the slash, a saved list at exactly the cap, the shuffle's range) and each got a check. START is in config/balance.ts; nothing reads it yet.
   - Dependencies: None
   - Files: `rae/src/logic/start.ts`, `rae/src/config/balance.ts`, `rae/test/start-logic.test.mjs`
 
