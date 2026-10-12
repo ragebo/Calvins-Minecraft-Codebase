@@ -176,19 +176,22 @@ Nothing is deployed or pushed unless the owner asks.
 
 ## Phase 3: NPC shops
 
-- [ ] **Task 9: Shop open, trade and refuse events** (S-M)
-  In `core/shopforms.ts` `openShop`: `shop.open` once per screen opening; after `carryOutTrade`, `shop.trade` for a success
-  (coins paid, coins received, items given and taken, service kinds) or `shop.refuse` with the reason text cut to 80 characters.
-  The facts of a deal come from a small pure helper `tradeFacts(trade)` in `logic/telemetry.ts`. `shoptrade.ts` is not touched.
+- [x] **Task 9: Shop open, trade and refuse events** (S-M) - done
+  In `core/shopforms.ts` `openShop`: `shop.open` once per visit (however many deals are done on the screen; a shop that is gone or
+  empty never gets there); after `carryOutTrade`, `shop.trade` for a success (coins paid, coins received, items handed over and taken,
+  service kinds) or `shop.refuse` with the reason the customer was shown (the emitter cuts it to 80 characters). The facts of a deal come
+  from a small pure helper `tradeFacts(trade)` in `logic/telemetry.ts` (items are named as the shop's own screen names them: "Iron Sword",
+  "Arrow x6"). `shoptrade.ts` is not touched.
   - Acceptance:
-    - [ ] buying one item gives open then trade, spent equal to the price, the item in give
-    - [ ] a sell deal gives got; a deal with a service lists its kinds; a refusal for lack of coins gives refuse with the reason and no trade line
-    - [ ] a deal that failed part-way and was undone gives refuse, not trade
-    - [ ] "that deal has just changed" and the Close button emit nothing beyond the open; a second open while one is up emits nothing
-    - [ ] existing shop tests untouched and green; one deliberate break caught
+    - [x] buying one item gives open then trade, spent equal to the price, the item in give
+    - [x] a sell deal gives got and the stack in take; a swap lists items both ways; a deal with a service lists its kind; a refusal for lack of coins gives refuse with the reason and no trade line
+    - [x] a deal that failed part-way and was undone gives refuse, not trade
+    - [x] "that deal has just changed" and the Close button emit nothing beyond the open; a second open while one is up emits nothing; a visit after a closed one is a new open; a shop that is gone or empty emits nothing
+    - [x] existing shop tests untouched and green (252 of them, run before and after); deliberate breaks: 18, each caught
   - Verification: check, test
+  - Result: 9 new tests (8 on the screen, 1 for the helper).
   - Dependencies: Task 2
-  - Files: `rae/src/core/shopforms.ts`, `rae/src/logic/telemetry.ts`, `rae/test/shop-telemetry.test.mjs`
+  - Files: `rae/src/core/shopforms.ts`, `rae/src/logic/telemetry.ts`, `rae/test/shop-telemetry.test.mjs`, `rae/test/telemetry-events.test.mjs`
 
 - [ ] **Task 10: Shops report section and coin flow** (S-M)
   Per shop: opens, trades, trades per open, coins spent by customers, coins paid to customers, top deals, services used, top

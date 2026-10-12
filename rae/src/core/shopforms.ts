@@ -6,6 +6,7 @@ import {
     readDestination, removeTrade, renameShop, setGreeting, signature, teleportOf, updateTrade, whyNotOpen, withPrice,
     type Destination, type Requirement, type Shop, type Trade
 } from "../logic/shop.js";
+import { tradeFacts } from "../logic/telemetry.js";
 import { getCoins } from "./economy.js";
 import { confirmForm, showForm } from "./forms.js";
 import { error } from "./log.js";
@@ -19,6 +20,8 @@ import { bindNpc, bringShopNpc, broughtText, needsFetch, npcsByShop, npcsOf, rec
 import { allShops, deleteShop, getShop, listStored, undoAvailable, undoLast } from "./shopstore.js";
 import { carryOutTrade, whyCannotTrade } from "./shoptrade.js";
 import { playFor } from "./sound.js";
+import { recordOf } from "./state.js";
+import { emit } from "./telemetryevents.js";
 import { format, tell } from "./ui.js";
 
 /**
@@ -75,6 +78,7 @@ export async function openShop(player: Player, shopId: string): Promise<void> {
     try {
 
         let notice = "";
+        let opened = false;
 
         for (;;) {
 
@@ -92,6 +96,12 @@ export async function openShop(player: Player, shopId: string): Promise<void> {
             if (closed) {
                 tell(player, warn(heading(shop.name, `${closed}.`)));
                 return;
+            }
+
+            // One open for the whole visit, however many deals are done on the screen. A shop that is gone or empty never gets here.
+            if (!opened) {
+                opened = true;
+                emit("shop.open", { id: shopId, p: player.id, role: recordOf(player)?.role ?? undefined });
             }
 
             // What the player is shown, deal by deal. A deal is bought only if it is still exactly this.
@@ -120,9 +130,11 @@ export async function openShop(player: Player, shopId: string): Promise<void> {
             const outcome = carryOutTrade(player, now);
 
             if (outcome.ok) {
+                emit("shop.trade", { id: shopId, deal: now.id, ...tradeFacts(now), p: player.id, role: recordOf(player)?.role ?? undefined });
                 playFor(player, faceOf(now) === "sell" ? S.cues.sold : S.cues.bought);
                 notice = ok(`${outcome.summary}${outcome.dropped > 0 ? " Your bag was full, so some of it is on the ground." : ""}`);
             } else {
+                emit("shop.refuse", { id: shopId, deal: now.id, why: outcome.reason, p: player.id });
                 playFor(player, S.cues.denied);
                 notice = warn(outcome.reason);
             }

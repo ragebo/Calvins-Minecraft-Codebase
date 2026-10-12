@@ -12,6 +12,8 @@
  * Nothing here knows the game: the limits and the tick come in as arguments (config/balance.ts holds the numbers).
  */
 
+import { describeItem, faceOf, isService, type Trade } from "./shop.js";
+
 /** Bump when a field changes meaning or goes away: a reader skips lines of a version it does not know. */
 export const TELEMETRY_VERSION = 1;
 
@@ -131,7 +133,7 @@ export interface EventFields {
         /** Items handed over and items taken, one entry each: "minecraft:bread x4". */
         readonly give: readonly string[];
         readonly take: readonly string[];
-        /** The services it did: effect, enchant, tame or teleport. */
+        /** The services it did: effect, enchant, mount or teleport. */
         readonly svc: readonly string[];
         readonly p: string;
         readonly role?: string;
@@ -150,6 +152,31 @@ export interface EventFields {
 }
 
 export type EventKind = keyof EventFields;
+
+/** What a deal did for and to the customer, in the words of a `shop.trade` line. Items are named as the shop's own screen names them. */
+export interface TradeFacts {
+    /** buy, sell, trade, gift or service. */
+    readonly face: string;
+    /** Coins the customer pays, and coins they are paid. */
+    readonly spent: number;
+    readonly got: number;
+    /** Items handed to the customer, and items taken from them: "Iron Sword", "Arrow x6". */
+    readonly give: readonly string[];
+    readonly take: readonly string[];
+    /** The services it does: effect, enchant, mount or teleport. */
+    readonly svc: readonly string[];
+}
+
+export function tradeFacts(trade: Trade): TradeFacts {
+    return {
+        face: faceOf(trade),
+        spent: trade.cost.coins,
+        got: trade.rewards.reduce((total, reward) => total + (reward.kind === "coins" ? reward.amount : 0), 0),
+        give: trade.rewards.flatMap((reward) => (reward.kind === "item" ? [describeItem(reward.item)] : [])),
+        take: trade.cost.items.map(describeItem),
+        svc: trade.rewards.filter(isService).map((reward) => reward.kind)
+    };
+}
 
 /** A whole event as `toLine` takes it: the stamp, its kind and the fields that kind holds. */
 export type TelemetryEvent<K extends EventKind = EventKind> = { [P in K]: Stamp & { readonly k: P } & EventFields[P] }[K];

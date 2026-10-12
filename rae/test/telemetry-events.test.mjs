@@ -154,6 +154,26 @@ test("the stamp is never cut, and a cap nothing could meet still gives valid JSO
     done();
 });
 
+const L = await load("logic/shop.js");
+
+/** A deal as the shop holds it: the builder's new-deal shape with an id. */
+const deal = (spec) => ({ id: "t1", ...spec });
+const sword = { type: "minecraft:iron_sword", amount: 1 };
+
+test("a deal's facts: which shape it has, the coins each way, the items each way and the services it does", () => {
+    const { check, done } = checks();
+    const facts = (spec) => JSON.stringify(T.tradeFacts(deal(spec)));
+
+    check("buying: coins out, an item in", facts(L.buyDeal(sword, 60)) === JSON.stringify({ face: "buy", spent: 60, got: 0, give: ["Iron Sword"], take: [], svc: [] }), facts(L.buyDeal(sword, 60)));
+    check("selling: an item out, coins in", facts(L.sellDeal({ type: "minecraft:feather", amount: 3 }, 8)) === JSON.stringify({ face: "sell", spent: 0, got: 8, give: [], take: ["Feather x3"], svc: [] }), facts(L.sellDeal({ type: "minecraft:feather", amount: 3 }, 8)));
+    check("trading: items both ways and a little coin", facts(L.swapDeal({ type: "minecraft:diamond", amount: 1 }, [{ type: "minecraft:gold_ingot", amount: 2 }], 10)) === JSON.stringify({ face: "trade", spent: 10, got: 0, give: ["Diamond"], take: ["Gold Ingot x2"], svc: [] }));
+    check("a service: coins out, its kind named, no item", facts(L.effectDeal("regeneration", 10, 2, 20)) === JSON.stringify({ face: "service", spent: 20, got: 0, give: [], take: [], svc: ["effect"] }), facts(L.effectDeal("regeneration", 10, 2, 20)));
+    check("an enchantment and a mount are their own kinds", T.tradeFacts(deal(L.enchantDeal("flame", 1, 30))).svc.join() === "enchant" && T.tradeFacts(deal(L.mountDeal("minecraft:horse", 100))).svc.join() === "mount");
+    check("two coin rewards are added up", T.tradeFacts(deal({ cost: { coins: 0, items: [{ type: "minecraft:feather", amount: 1 }] }, rewards: [{ kind: "coins", amount: 5 }, { kind: "coins", amount: 7 }] })).got === 12);
+    check("something for nothing is a gift", T.tradeFacts(deal({ cost: { coins: 0, items: [] }, rewards: [{ kind: "item", item: sword }] })).face === "gift");
+    done();
+});
+
 test("a rate limiter lets max lines through per window and refuses the rest, and never writes into the state it was given", () => {
     const { check, done } = checks();
 
