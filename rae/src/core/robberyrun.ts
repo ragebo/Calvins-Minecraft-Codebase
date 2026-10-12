@@ -269,7 +269,7 @@ function deliverSay(effect: SayEffect, recipients: readonly Player[]): void {
     }
 }
 
-function deliverReward(effect: RewardEffect, recipients: readonly Player[]): void {
+function deliverReward(run: Run, effect: RewardEffect, recipients: readonly Player[]): void {
 
     for (const player of recipients) {
 
@@ -283,6 +283,12 @@ function deliverReward(effect: RewardEffect, recipients: readonly Player[]): voi
             tell(player, format("bad", `+${effect.bounty} bounty on your head`));
         }
     }
+
+    // One line per reward effect, with what all of its recipients got added up. A reward with nobody to receive it is not told. (The logic layer
+    // refuses a reward that is negative or has nothing in it, so the amounts here are never less than zero.)
+    if (recipients.length === 0) return;
+
+    emit("robbery.payout", { id: run.id, r: run.number, coins: effect.coins * recipients.length, bounty: effect.bounty * recipients.length, to: effect.to, players: recipients.length });
 }
 
 /**
@@ -318,7 +324,7 @@ function applyEffect(run: Run, robbery: Robbery, effect: Effect, actorId: string
     const recipients = recipientsFor(effect.to, robbery, run, actorId);
 
     if (effect.kind === "say") deliverSay(effect, recipients);
-    else deliverReward(effect, recipients);
+    else deliverReward(run, effect, recipients);
 }
 
 /** Runs a list of effects: the ones with no delay now, the rest when their time comes (the shared loop fires them). */
@@ -971,13 +977,17 @@ async function pickLoop(player: Player, run: Run, elementId: string): Promise<vo
             if (now - (lastGuessTick.get(player.id) ?? -Infinity) < R.pickGuessCooldownTicks) continue;
             lastGuessTick.set(player.id, now);
 
-            const step = pickStep(run.picks.get(elementId) ?? FRESH_PICK, guess, paramsOf(current), CURVE, Math.random, now);
+            const before = run.picks.get(elementId) ?? FRESH_PICK;
+            const step = pickStep(before, guess, paramsOf(current), CURVE, Math.random, now);
             run.picks.set(elementId, step.state);
 
             if (step.outcome === "waiting") {
                 deny(player, "the lock is jammed");
                 return;
             }
+
+            // A guess that was scored is taking part, whether or not the lock ever opens.
+            run.actors.add(player.id);
 
             if (step.outcome === "miss") {
                 playFor(player, { ...R.cues.ping, pitch: step.pitch });
@@ -992,13 +1002,16 @@ async function pickLoop(player: Player, run: Run, elementId: string): Promise<vo
             }
 
             if (step.outcome === "jam") {
+                // The hits it had are lost, and the misses that jammed it are the ones in a row.
+                emit("robbery.pick", { id: run.id, r: run.number, el: elementId, result: "jammed", hits: before.hits, misses: before.strikes + 1, p: player.id });
                 playFor(player, R.cues.jam);
                 tell(player, format("bad", `The lock jams! It will take ${clock(current.jamSeconds)} to free.`));
                 runEffects(run, after.robbery, after.element.onFail, player.id);
                 return;
             }
 
-            // unlocked
+            // unlocked: misses are the ones in a row since the last hit (a hit clears them)
+            emit("robbery.pick", { id: run.id, r: run.number, el: elementId, result: "unlocked", hits: step.state.hits, misses: before.strikes, p: player.id });
             playFor(player, R.cues.hit);
             run.picks.set(elementId, FRESH_PICK);
             finishLocks(player, run, elementId);

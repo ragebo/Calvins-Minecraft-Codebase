@@ -132,16 +132,19 @@ Nothing is deployed or pushed unless the owner asks.
   - Dependencies: Task 2
   - Files: `rae/src/core/robberyrun.ts`, `rae/test/robbery-telemetry.test.mjs`
 
-- [ ] **Task 7: Pick and payout events** (S)
-  `pickLoop` emits `robbery.pick` when a lock jams or unlocks (hits, misses). `deliverReward` emits `robbery.payout` (coins and
-  bounty actually given, summed over the recipients, the audience, the number of recipients): one line per reward effect, so a
-  delayed effect is counted too. `applyEffect` passes the run to it.
+- [x] **Task 7: Pick and payout events** (S) - done
+  `pickLoop` emits `robbery.pick` when a lock jams (the hits it lost, the misses in a row that jammed it) or unlocks (its hits, and
+  the misses in a row since the last hit: a hit clears them, so this is not a total of guesses). `deliverReward` emits
+  `robbery.payout` (coins and bounty summed over the players paid, the audience, how many were paid): one line per reward effect, so a
+  delayed effect is counted too, with the run's number even after the run has ended. `applyEffect` passes the run to it. A player whose
+  guess was scored now counts in `people` even if they never completed anything (a jammer took part).
   - Acceptance:
-    - [ ] a jam gives `result: jammed` with misses equal to the lock's strikes; an unlock gives `unlocked`
-    - [ ] a 100-coin reward to 3 players gives one payout with coins 300 and players 3; nobody to pay gives no line
-    - [ ] a reward delayed past the end of the run still carries the run's number
-    - [ ] existing tests untouched and green; one deliberate break caught (a wrong total)
+    - [x] a jam gives `result: jammed` with misses equal to the lock's strikes (and the hits it lost); an unlock gives `unlocked`
+    - [x] a 100-coin reward to 3 players gives one payout with coins 300 and players 3 (and a 250 bounty gives 750); nobody to pay gives no line
+    - [x] a reward delayed past the end of the run still carries the run's number, and comes after the end
+    - [x] existing tests untouched and green (the 184 robbery tests, run before and after); deliberate breaks: 18, each caught
   - Verification: check, test
+  - Result: 6 new tests. A guard I had added for a reward with nothing in it, and a `Math.max(0, …)` on its amounts, were dead code (the logic layer refuses both); a break survived them, so they were deleted instead of tested. Three of Task 6's own expectations were updated: `robbery.*` now also includes picks and payouts, so the whole-flow test now pins the full order.
   - Dependencies: Task 6
   - Files: `rae/src/core/robberyrun.ts`, `rae/test/robbery-telemetry.test.mjs`
 

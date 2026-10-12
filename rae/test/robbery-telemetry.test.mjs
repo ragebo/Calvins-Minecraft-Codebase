@@ -107,9 +107,12 @@ test("a whole robbery is told in order: the start, each element as it is done, a
     fake.advance(70);                                  // past the win's 3-second delay
 
     const t = told(from);
-    const [start, keypad, door, box, end] = t;
+    const start = t.find((e) => e.k === "robbery.start");
+    const [keypad, door, box] = t.filter((e) => e.k === "robbery.element");
+    const end = t.find((e) => e.k === "robbery.end");
 
-    check("a start, three elements and an end, in that order", t.map((e) => e.k).join() === "robbery.start,robbery.element,robbery.element,robbery.element,robbery.end", t.map((e) => e.k).join());
+    check("the whole story in order: a pick opens the keypad, then it and the door are done, a pick opens the lockbox, then it is done and pays, the win pays, and it ends",
+        t.map((e) => e.k).join() === "robbery.start,robbery.pick,robbery.element,robbery.element,robbery.pick,robbery.element,robbery.payout,robbery.payout,robbery.end", t.map((e) => e.k).join());
     check("the start: who, as what, and how many were inside", start?.id === "bank" && start.test === false && start.p === ada.id && start.role === "outlaw" && start.inside === 1, JSON.stringify(start));
     check("the keypad: a switch with a pick lock, done at once by her", keypad?.el === built.keypad.id && keypad.kind === "switch" && JSON.stringify(keypad.locks) === "[\"pick\"]" && keypad.after === 0 && keypad.p === ada.id, JSON.stringify(keypad));
     check("the vault door: opened by the keypad in the same moment, still by her", door?.el === built.door.id && door.kind === "door" && JSON.stringify(door.locks) === "[]" && door.after === 0 && door.p === ada.id, JSON.stringify(door));
@@ -285,6 +288,132 @@ test("each run has a number of its own, and the people who took part are counted
     check("two runs, two ends", starts.length === 2 && first !== undefined && second !== undefined, t.map((e) => e.k).join());
     check("two people in the first, one in the second", first?.people === 2 && second?.people === 1, JSON.stringify([first, second]));
     check("the second run's number is the first's plus one", starts[1].r === starts[0].r + 1, JSON.stringify(starts.map((e) => e.r)));
-    check("and each run's lines share its own number", t.filter((e) => e.r === starts[0].r).length === 5 && t.filter((e) => e.r === starts[1].r).length === 4, JSON.stringify(t.map((e) => `${e.k}:${e.r}`)));
+    const one = t.filter((e) => e.r === starts[0].r);
+    const two = t.filter((e) => e.r === starts[1].r);
+    check("every line belongs to one of the two runs, and each run has the elements it did", one.length + two.length === t.length && one.filter((e) => e.k === "robbery.element").length === 3 && two.filter((e) => e.k === "robbery.element").length === 2, JSON.stringify(t.map((e) => `${e.k}:${e.r}`)));
     done();
+});
+
+// ---------------------------------------------------------------------------------------------------------
+// Picks and payouts
+// ---------------------------------------------------------------------------------------------------------
+
+const picksOf = (from) => told(from).filter((e) => e.k === "robbery.pick");
+const payoutsOf = (from) => told(from).filter((e) => e.k === "robbery.payout");
+
+test("a lock that jams is told as jammed with the progress it lost and the misses that jammed it, and one that opens as unlocked", async () => {
+    const built = setup();
+    const { check, done } = checks();
+    const ada = outlaw();
+    const from = mark();
+
+    guess(41);                                          // one hit banked
+    guess(95); guess(96); guess(97);                    // then three misses in a row
+    touch(ada, SITE.keypad);
+    await settle();
+
+    fake.advance(20 * 20);                              // the jam ends
+    guess(40); guess(40);                               // two hits: the lost progress means two are needed
+    touch(ada, SITE.keypad);
+    await settle();
+
+    const [jam, open] = picksOf(from);
+
+    check("two pick lines, in order", picksOf(from).length === 2, JSON.stringify(picksOf(from)));
+    check("the jam: the keypad, by her, one hit lost, three misses", jam?.result === "jammed" && jam.el === built.keypad.id && jam.p === ada.id && jam.hits === 1 && jam.misses === 3, JSON.stringify(jam));
+    check("the opening: both hits, no misses", open?.result === "unlocked" && open.el === built.keypad.id && open.p === ada.id && open.hits === 2 && open.misses === 0, JSON.stringify(open));
+    check("both belong to the run", jam?.r === open?.r && Number.isInteger(jam?.r) && jam.id === "bank", JSON.stringify([jam, open]));
+    done();
+});
+
+test("a miss between two hits is counted in the opening that follows", async () => {
+    setup();
+    const ada = outlaw();
+    const from = mark();
+
+    guess(41); guess(90); guess(40);                    // a hit, a miss, a hit
+    touch(ada, SITE.keypad);
+    await settle();
+
+    const [open] = picksOf(from);
+    assert.equal(open?.result, "unlocked", JSON.stringify(open));
+    assert.equal(open.hits, 2);
+    assert.equal(open.misses, 1);
+});
+
+test("a reward is told once, with the coins and the bounty added up over everyone paid", async () => {
+    setup();
+    const { check, done } = checks();
+    const ada = outlaw("Ada", IN_AREA, 100);
+    outlaw("Bob");
+    outlaw("Cy");
+    const from = mark();
+
+    await openKeypad(ada);
+    guess(40); guess(40);
+    touch(ada, SITE.box);
+    await settle();
+    fake.advance(70);                                   // the win, and its hook
+
+    const t = told(from);
+    const [bounty, win] = payoutsOf(from);
+    const run = t.find((e) => e.k === "robbery.start").r;
+
+    check("two rewards: the lockbox's bounty, then the win's coins", payoutsOf(from).length === 2, JSON.stringify(payoutsOf(from)));
+    check("a 250 bounty to the three in the area is 750, and no coins", bounty?.bounty === 750 && bounty.coins === 0 && bounty.to === "area" && bounty.players === 3, JSON.stringify(bounty));
+    check("100 coins to the three is 300, and no bounty", win?.coins === 300 && win.bounty === 0 && win.to === "area" && win.players === 3, JSON.stringify(win));
+    check("both belong to the run", bounty?.r === run && win?.r === run && bounty.id === "bank", JSON.stringify([bounty, win, run]));
+    check("the lockbox, its bounty, the win's coins and the end come in that order", t.slice(-4).map((e) => e.k).join() === "robbery.element,robbery.payout,robbery.payout,robbery.end", t.map((e) => e.k).join());
+    done();
+});
+
+test("a reward nobody is there to receive is not told", async () => {
+    const built = setup();
+    const ada = outlaw();
+    // The law is who the reward is for, and there is no law player.
+    assert.equal(S.saveRobbery(ok(L.setHook(built.r, "start", [{ kind: "reward", coins: 50, bounty: 0, to: "law" }]))).ok, true);
+    const from = mark();
+
+    await openKeypad(ada);
+
+    assert.equal(payoutsOf(from).length, 0, JSON.stringify(payoutsOf(from)));
+});
+
+test("a reward delayed past the end of the run is told after the end, with the run's own number", async () => {
+    const built = setup();
+    const { check, done } = checks();
+    const ada = outlaw("Ada", IN_AREA, 100);
+    assert.equal(S.saveRobbery(ok(L.setHook(built.r, "win", [{ kind: "reward", coins: 10, bounty: 0, to: "area", delaySeconds: 5 }]))).ok, true);
+    const from = mark();
+
+    await openKeypad(ada);
+    guess(40); guess(40);
+    touch(ada, SITE.box);
+    await settle();
+    fake.advance(70);                                   // the win
+
+    check("the end is told, and the delayed reward has not come yet", told(from).some((e) => e.k === "robbery.end") && payoutsOf(from).filter((p) => p.coins === 10).length === 0, JSON.stringify(told(from).map((e) => e.k)));
+
+    fake.advance(5 * 20 + 20);
+
+    const late = payoutsOf(from).find((p) => p.coins === 10);
+    check("then it is", late !== undefined && late.players === 1 && late.to === "area", JSON.stringify(payoutsOf(from)));
+    const all = told(from);
+    check("with the run's number, and after the end", late?.r === all[0].r && all.findIndex((e) => e.k === "robbery.end") < all.findIndex((e) => e.k === "robbery.payout" && e.coins === 10), JSON.stringify(all.map((e) => e.k)));
+    done();
+});
+
+test("a player who only jammed a lock took part: counted in the people, though they completed nothing", async () => {
+    setup();
+    const ada = outlaw();
+    const from = mark();
+
+    guess(95); guess(96); guess(97);                    // three misses and a jam, nothing completed
+    touch(ada, SITE.keypad);
+    await settle();
+    Run.stopRobbery("bank");
+
+    const end = told(from).find((e) => e.k === "robbery.end");
+    assert.equal(end?.done, 0, JSON.stringify(end));
+    assert.equal(end.people, 1);
 });
