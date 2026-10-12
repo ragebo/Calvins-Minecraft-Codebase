@@ -419,8 +419,8 @@ export const START = {
 
     // ---- Caps. Shots are one world property each and the command list is one, so size is the real limit.
     maxShots: 12,
-    /** A saved shot longer than this many characters is refused. */
-    maxShotChars: 400,
+    /** A saved shot longer than this many characters is refused. The longest a valid shot can be (a name of 40 control characters, which are written as 6 each, and marks at the edge of the world) is about 450. */
+    maxShotChars: 600,
     maxNameChars: 40,
     maxCommands: 20,
     maxCommandChars: 200,

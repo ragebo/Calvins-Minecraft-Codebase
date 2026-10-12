@@ -22,15 +22,16 @@ Status source of truth for `plan.md` in this folder. Every task: RED first (a fa
   - Dependencies: None
   - Files: `rae/src/logic/start.ts`, `rae/src/config/balance.ts`, `rae/test/start-logic.test.mjs`
 
-- [ ] **Task 2: Saving shots and start commands in the world** (S)
+- [x] **Task 2: Saving shots and start commands in the world** (S) - done
   `core/startstore.ts` on `core/recordstore.ts` (the store shops and robberies use): shots one world property each, the command list
   one more. A list never saved means the defaults; a list saved empty means "run nothing" (the two are different on purpose).
   - Acceptance:
-    - [ ] save, read, list, delete and undo of a shot; a save over the cap is refused with a reason and changes nothing
-    - [ ] the default commands come back when nothing was saved, and an empty saved list stays empty
-    - [ ] after a script reload (forget loaded) everything reads back the same
-    - [ ] an unreadable record is listed and never overwritten
+    - [x] save, read, list, delete and undo of a shot; a save over the cap is refused with a reason and changes nothing
+    - [x] the default commands come back when nothing was saved, and an empty saved list stays empty
+    - [x] after a script reload (forget loaded) everything reads back the same
+    - [x] an unreadable record is listed and never overwritten
   - Verification: check, test
+  - Result: 14 new tests (shots saved, read back after a reload, ordered s2 before s10, deleted and undone, capped at 12 with an existing one still editable, a damaged one listed and never overwritten; the command list: defaults when never saved, saved empty means run nothing, an unreadable list runs nothing and says why, reset, over-size refused). 19 deliberate breaks on core/startstore.ts, all caught (one needed a second test check, a readable list reporting a problem). Found while testing: a name of 40 control characters (written as 6 characters each) could push a valid shot past the 400-character cap, so `maxShotChars` is now 600 and a test holds the longest valid shot to it.
   - Dependencies: Task 1
   - Files: `rae/src/core/startstore.ts`, `rae/test/start-store.test.mjs`
 
