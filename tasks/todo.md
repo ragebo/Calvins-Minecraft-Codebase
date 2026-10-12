@@ -193,17 +193,18 @@ Nothing is deployed or pushed unless the owner asks.
   - Dependencies: Task 2
   - Files: `rae/src/core/shopforms.ts`, `rae/src/logic/telemetry.ts`, `rae/test/shop-telemetry.test.mjs`, `rae/test/telemetry-events.test.mjs`
 
-- [ ] **Task 10: Shops report section and coin flow** (S-M)
+- [x] **Task 10: Shops report section and coin flow** (S-M) - done
   Per shop: opens, trades, trades per open, coins spent by customers, coins paid to customers, top deals, services used, top
   refusal reasons (numbers replaced by `#`, so "you need 50 coins (you have 12)" groups). A coin-flow panel: coins in (robbery
   payouts plus sell deals) against coins out (purchases), and the last round-end coin total.
   - Acceptance:
-    - [ ] fixture exact; refusal reasons group after the numbers are normalized
-    - [ ] the coin-flow totals equal the sums of the section figures
-    - [ ] contract test: a purchase under the fake game shows in the report
+    - [x] fixture exact; refusal reasons group after the numbers are normalized
+    - [x] the coin-flow totals equal the sums of the section figures
+    - [x] contract test: a purchase under the fake game shows in the report (the game plays a visit, its exact console lines go through a content log and the tool, and the page says what the player did)
   - Verification: tests; look at the report in the browser
+  - Result: 16 new tests (14 on the figures and the page, 2 contract). Deliberate breaks: 46 on `aggregate.mjs` and 32 on `report.mjs`, all caught; running them showed 6 gaps in my own fixtures (a deal sold twice, a service done twice, the cap of five reasons, ties between shops, "newest activity", "1 coin" and "nothing" wording, last round vs median) and each got a test. Looked at in the browser on a sample made by the real command: dark mode reads, no page overflow at 375px, tables scroll inside their own box. The coin flow is shown whenever there are shops or robberies, and says what it leaves out (bounty is not coins, other coin sources are not recorded). Test files are `telemetry-tool-shops.test.mjs` and `telemetry-contract-shop.test.mjs`, not the single file named here.
   - Dependencies: Tasks 5, 8, 9
-  - Files: `tools/telemetry/aggregate.mjs`, `tools/telemetry/report.mjs`, `rae/test/telemetry-tool-report.test.mjs`
+  - Files: `tools/telemetry/aggregate.mjs`, `tools/telemetry/report.mjs`, `rae/test/telemetry-tool-shops.test.mjs`, `rae/test/telemetry-contract-shop.test.mjs`
 
 ### Checkpoint 3: shops
 - [ ] all green

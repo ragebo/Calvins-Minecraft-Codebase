@@ -1,6 +1,6 @@
 // Turns the archive's events into the figures a report shows (tasks/plan.md). Pure: events in, plain numbers and lists out, so every figure
-// can be checked by hand. One section per area: this file has the rounds and the data panel, and the robbery and shop sections are added
-// beside them. Times stay in ticks and counts stay raw; report.mjs decides how they read.
+// can be checked by hand. One section per area: the rounds, the robberies, the shops with the coin flow they add up to, and the data panel.
+// Times stay in ticks and counts stay raw; report.mjs decides how they read.
 
 /** Oldest first. `at` sorts as text; the boot and the line number settle two lines in the same second. */
 export const byTime = (a, b) => (a.at < b.at ? -1 : a.at > b.at ? 1 : a.b < b.b ? -1 : a.b > b.b ? 1 : a.n - b.n);
@@ -167,6 +167,110 @@ function robberyFigures(id, runs) {
     };
 }
 
+/** How many deals, and how many refusal reasons, a shop's section lists. */
+const TOP = 5;
+
+const coins = (n) => `${n} coin${n === 1 ? "" : "s"}`;
+
+/** A field that should be a list of texts; anything else counts as empty. */
+const listOf = (value) => (Array.isArray(value) ? value : []);
+
+/** Most first; the same count by name, so the order never depends on the order the events came in. */
+const ranked = (items, name) => items.sort((a, b) => b.count - a.count || (a[name] < b[name] ? -1 : a[name] > b[name] ? 1 : 0));
+
+/** A deal in words, as what the customer got for what they paid: "Iron Sword for 60 coins", "8 coins for Feather x3", "Bread x4 for free". */
+function dealLabel(trade) {
+
+    const got = [...listOf(trade.give), ...(num(trade.got) > 0 ? [coins(trade.got)] : []), ...listOf(trade.svc)];
+    const paid = [...listOf(trade.take), ...(num(trade.spent) > 0 ? [coins(trade.spent)] : [])];
+
+    return `${got.length === 0 ? "nothing" : got.join(", ")} for ${paid.length === 0 ? "free" : paid.join(", ")}`;
+}
+
+/**
+ * The shops, one figure set each, newest activity first. A visit is a `shop.open`, a deal done a `shop.trade`, a deal turned down a `shop.refuse`.
+ * The same deal at another price (a shop's owner edited it) is another line in the top deals, because the label holds the price. A refusal
+ * reason has its numbers taken out ("you need 60 coins" and "you need 90 coins" are one reason), or every price would be a reason of its own.
+ */
+function shopsSection(events) {
+
+    const shops = new Map();
+
+    for (const e of events) {
+
+        if (!e.k.startsWith("shop.")) continue;
+
+        const shop = shops.get(e.id) ?? { id: e.id, lastAt: e.at, opens: 0, people: new Set(), trades: 0, refusals: 0, spent: 0, got: 0, deals: new Map(), services: new Map(), reasons: new Map() };
+
+        shops.set(e.id, shop);
+        shop.lastAt = e.at;                 // oldest first, so the last one seen is the newest
+        if (typeof e.p === "string") shop.people.add(e.p);
+
+        if (e.k === "shop.open") shop.opens++;
+        else if (e.k === "shop.trade") {
+
+            shop.trades++;
+            shop.spent += num(e.spent);
+            shop.got += num(e.got);
+
+            const label = dealLabel(e);
+            const deal = shop.deals.get(`${e.deal}|${label}`) ?? { deal: e.deal, label, face: e.face, count: 0, spent: 0, got: 0 };
+
+            deal.count++;
+            deal.spent += num(e.spent);
+            deal.got += num(e.got);
+            shop.deals.set(`${e.deal}|${label}`, deal);
+
+            for (const kind of listOf(e.svc)) shop.services.set(kind, (shop.services.get(kind) ?? 0) + 1);
+        }
+        else if (e.k === "shop.refuse") {
+
+            shop.refusals++;
+
+            const why = String(e.why ?? "").replace(/\d+/g, "#");
+
+            shop.reasons.set(why, (shop.reasons.get(why) ?? 0) + 1);
+        }
+    }
+
+    return [...shops.values()].sort((a, b) => (a.lastAt < b.lastAt ? 1 : a.lastAt > b.lastAt ? -1 : a.id < b.id ? -1 : 1)).map((shop) => ({
+        id: shop.id,
+        lastAt: shop.lastAt,
+        opens: shop.opens,
+        customers: shop.people.size,
+        trades: shop.trades,
+        refusals: shop.refusals,
+        tradesPerOpen: shop.opens === 0 ? null : shop.trades / shop.opens,
+        spent: shop.spent,
+        got: shop.got,
+        topDeals: ranked([...shop.deals.values()], "label").slice(0, TOP),
+        services: ranked([...shop.services].map(([kind, n]) => ({ kind, count: n })), "kind"),
+        refusalReasons: ranked([...shop.reasons].map(([why, n]) => ({ why, count: n })), "why").slice(0, TOP)
+    }));
+}
+
+/**
+ * Where the coins these events can see went: in from robbery payouts and shop sales, out to shop purchases. The robberies' figures are the ones
+ * the page shows (so with test runs left out they are left out here), and the round's total is the newest round's, for comparison. Bounty is not
+ * coins, so it is kept apart. Coins from anywhere else (a kill's reward, say) are not in any event, so they are not here.
+ */
+function coinFlow(robberies, shops, rounds) {
+
+    const robberyCoins = sum(robberies.list.map((x) => x.coins.total));
+    const shopSales = sum(shops.map((x) => x.got));
+    const out = sum(shops.map((x) => x.spent));
+
+    return {
+        robberyCoins,
+        robberyBounty: sum(robberies.list.map((x) => x.bounty.total)),
+        shopSales,
+        in: robberyCoins + shopSales,
+        out,
+        net: robberyCoins + shopSales - out,
+        lastRoundCoins: rounds.coins === null ? null : rounds.coins.last
+    };
+}
+
 /** What the page says about the data itself: how much of it, from which worlds and builds, and what was lost on the way. */
 function dataSection(events, ingest) {
 
@@ -211,5 +315,9 @@ export function summarize(events, { world, ingest, includeTests } = {}) {
     const sorted = [...events].sort(byTime);
     const chosen = world === undefined ? sorted : sorted.filter((e) => e.w === world);
 
-    return { world: world ?? null, rounds: roundsSection(chosen), robberies: robberiesSection(chosen, includeTests === true), data: dataSection(sorted, ingest) };
+    const rounds = roundsSection(chosen);
+    const robberies = robberiesSection(chosen, includeTests === true);
+    const shops = shopsSection(chosen);
+
+    return { world: world ?? null, rounds, robberies, shops: { list: shops, flow: coinFlow(robberies, shops, rounds) }, data: dataSection(sorted, ingest) };
 }

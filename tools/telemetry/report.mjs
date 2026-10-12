@@ -188,6 +188,69 @@ function robberiesHtml(figures) {
     return `${intro}${r.list.map(robberyHtml).join("\n")}`;
 }
 
+/** A shop's section: its visits and coins, the deals done most, the services, and why customers were turned away. */
+function shopHtml(x, index) {
+
+    const dealRows = x.topDeals.map((d) => `<tr><td>${esc(d.label)}</td><td>${esc(d.face)}</td><td class="num">${count(d.count)}</td><td class="num">${count(d.spent)}</td><td class="num">${count(d.got)}</td></tr>`).join("");
+    const reasonRows = x.refusalReasons.map((r) => `<tr><td>${esc(r.why)}</td><td class="num">${count(r.count)}</td></tr>`).join("");
+
+    const deals = x.trades === 0 ? `<p class="empty">No deals were done here yet.</p>` : `<div class="wide"><table>
+<caption>Top deals</caption>
+<thead><tr><th scope="col">Deal</th><th scope="col">Kind</th><th scope="col" class="num">Times</th><th scope="col" class="num">Coins paid</th><th scope="col" class="num">Coins received</th></tr></thead>
+<tbody>${dealRows}</tbody>
+</table></div>`;
+
+    const services = x.services.length === 0 ? "" : `<p>Services done: ${x.services.map((s) => `${esc(s.kind)} ${count(s.count)}`).join(", ")}</p>`;
+
+    const reasons = x.refusals === 0 ? "" : `<div class="wide"><table>
+<caption>Why customers were refused</caption>
+<thead><tr><th scope="col">Reason</th><th scope="col" class="num">Times</th></tr></thead>
+<tbody>${reasonRows}</tbody>
+</table></div>`;
+
+    return `<section aria-labelledby="shop-${index}">
+<h2 id="shop-${index}">Shop: ${esc(x.id)}</h2>
+<div class="tiles">
+${tile("Visits", count(x.opens), plural(x.customers, "customer"))}
+${tile("Deals done", count(x.trades), x.tradesPerOpen === null ? "no visit recorded" : `${one(x.tradesPerOpen)} per visit`)}
+${tile("Spent by customers", count(x.spent), "coins paid for goods and services")}
+${tile("Paid to customers", count(x.got), "coins for what they sold")}
+</div>
+${deals}
+${services}
+${reasons}
+</section>`;
+}
+
+/** Coins in against coins out, as far as the events can see, with the last round's total beside them. */
+function flowHtml(figures) {
+
+    const s = figures.shops;
+
+    if (s.list.length === 0 && figures.robberies.list.length === 0) return "";
+
+    const f = s.flow;
+    const net = f.net > 0 ? `+${count(f.net)}` : f.net < 0 ? `-${count(-f.net)}` : "0";
+
+    const round = f.lastRoundCoins === null ? "Last round ended with n/a: no round has finished in this data." : `Last round ended with ${count(f.lastRoundCoins)} coins held by the gang.`;
+
+    return `<section aria-labelledby="flow">
+<h2 id="flow">Coin flow</h2>
+<div class="tiles">
+${tile("Coins in", count(f.in), `${count(f.robberyCoins)} from robberies, ${count(f.shopSales)} from shop sales`)}
+${tile("Coins out", count(f.out), "spent in shops")}
+${tile("Net", net, "coins in minus coins out")}
+</div>
+<p>${round}</p>
+<p class="note">Only robbery payouts and shop deals are counted. Robbery bounty (${count(f.robberyBounty)}) is not coins, and coins from anywhere else are not recorded.</p>
+</section>`;
+}
+
+/** The coin flow first, as the overview, then a section for each shop. */
+function shopsHtml(figures) {
+    return `${flowHtml(figures)}${figures.shops.list.map(shopHtml).join("\n")}`;
+}
+
 function dataHtml(figures) {
 
     const d = figures.data;
@@ -236,6 +299,7 @@ ${figures.world === null ? "" : `<p class="note">Showing world ${esc(figures.wor
 <main>
 ${d.events === 0 ? nothing : roundsHtml(figures)}
 ${robberiesHtml(figures)}
+${shopsHtml(figures)}
 ${dataHtml(figures)}
 </main>
 </body>
