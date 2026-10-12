@@ -2,7 +2,7 @@ import { EntityDamageCause, world, system, type Player } from "@minecraft/server
 import { honored } from "../logic/melee.js";
 import { onScriptEvent } from "../core/events.js";
 import { warn } from "../core/log.js";
-import { heldWeapon, meleeTrace, noteSet, setMeleeDebug, takeSet } from "../core/melee.js";
+import { heldWeapon, meleeTrace, noteSet, reportOnce, setMeleeDebug, startBleed, takeSet } from "../core/melee.js";
 import { format, tell } from "../core/ui.js";
 
 /**
@@ -20,15 +20,7 @@ import { format, tell } from "../core/ui.js";
 const SOURCE = "melee";
 const USAGE = "Use rae:melee_debug on or rae:melee_debug off.";
 
-const reported = new Set<string>();
 let warnedIgnored = false;
-
-/** A failure inside an event handler is reported once per kind, never thrown into the engine and never repeated for every hit. */
-function reportOnce(kind: string, err: unknown): void {
-    if (reported.has(kind)) return;
-    reported.add(kind);
-    warn(SOURCE, `${kind} failed: ${err instanceof Error ? err.message : String(err)}`);
-}
 
 function listen(label: string, subscribe: () => unknown): void {
     try {
@@ -62,6 +54,12 @@ listen("the hurt event, after", () => world.afterEvents.entityHurt.subscribe((ev
         if (!entry) return;
 
         meleeTrace(`${entry.weapon.key} hit: set ${entry.set}, dealt ${event.damage}`);
+
+        // A knife hit that landed starts a bleed. (The bleed's own damage never gets here: it is not an attack, so no number was set for it.)
+        const attacker = event.damageSource.damagingEntity;
+        if (entry.weapon.key === "knife" && event.damage > 0 && attacker?.typeId === "minecraft:player") {
+            startBleed(event.hurtEntity, attacker as Player, system.currentTick);
+        }
 
         if (honored(entry.set, event.damage) || warnedIgnored) return;
         warnedIgnored = true;

@@ -459,7 +459,14 @@ export const MELEE = {
         baton: { id: "bountysys:baton", name: "Baton", damage: 3 },
         axe: { id: "bountysys:axe", name: "Axe", damage: 6 },
         sledgehammer: { id: "bountysys:sledgehammer", name: "Sledgehammer", damage: 8 }
-    }
+    },
+
+    /**
+     * The knife's bleed: every knife hit adds a stack that deals `damage` after `intervalTicks`, and again, `hits` times in all (the
+     * owner's "2 damage over 2 seconds, 1 per second"). Stacks add up, to `maxStacks` on one target; a hit on a full target refreshes
+     * its oldest stack. It is dealt as the script's own "override" damage, which ignores armor and the game's 10-tick hit window.
+     */
+    bleed: { damage: 1, intervalTicks: 20, hits: 2, maxStacks: 10 }
 };
 
 /**

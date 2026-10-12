@@ -43,18 +43,19 @@ the game shows (no spike): every engine behavior that is not measured has a fall
   - Dependencies: Task 1
   - Files: `rae/src/logic/melee.ts`, `rae/src/core/melee.ts`, `rae/src/systems/melee.ts`, `rae/src/config/balance.ts`, `your_pack_name_BP/items/*.json`, `rae/src/main.ts`, `rae/test/melee-core.test.mjs`
 
-- [ ] **Task 3: The knife's bleed** (M)
+- [x] **Task 3: The knife's bleed** (M) - done
   A knife hit adds a bleed to the target: 1 damage at 1 second and at 2 seconds after the hit; stacks add up (capped at `maxStacks`); what is due on a tick is dealt as
   ONE hit per target (separate hits within 10 ticks would be lost to the hit window), by the knife's wielder, with `override` so it ignores armor and the hit window. One cheap
   tick handler, free when nobody is bleeding.
   - Acceptance:
-    - [ ] one hit: 1 damage at 20 ticks and 1 at 40, then it stops; 2 total
-    - [ ] three hits in a row: the stacks add up (3 a second at the peak) and the total over time is 6, none of it lost to the hit window
-    - [ ] a bleed on a player and on a mob; it kills, and the damage names the knife's wielder as the attacker (what the game does with that is logged under `rae:melee_debug`)
-    - [ ] it ends on the target's death, on a disconnect and on a round reset; the stack cap is respected
-    - [ ] a target that is not hit by a knife never bleeds; the knife's own 2 damage is dealt as in Task 2
-    - [ ] the handler does nothing, and costs nothing, with no one bleeding
+    - [x] one hit: 1 damage at 20 ticks and 1 at 40, then it stops; 2 total
+    - [x] three hits in a row: the stacks add up (3 a second at the peak) and the total over time is 6, none of it lost to the hit window
+    - [x] a bleed on a player and on a mob; it kills, and the damage names the knife's wielder as the attacker (what the game does with that is logged under `rae:melee_debug`)
+    - [x] it ends on the target's death, on a disconnect and on a round reset; the stack cap is respected
+    - [x] a target that is not hit by a knife never bleeds; the knife's own 2 damage is dealt as in Task 2
+    - [x] the handler does nothing, and costs nothing, with no one bleeding
   - Verification: check, test, check:legacy; deliberate breaks
+  - Result: knife hit adds a stack; 1 damage at +20 and +40 ticks, stacks add up to 10 (a full target refreshes its oldest), what is due on a tick is ONE override hit per target naming the wielder (or nobody if they left); one tick handler, registered only while someone bleeds (core/melee.ts); ends on death, leave, removal, health 0 and round reset. 1596 tests (+19), 51-break mutation run all caught.
   - Dependencies: Task 2
   - Files: `rae/src/logic/melee.ts`, `rae/src/core/melee.ts`, `rae/src/systems/melee.ts`, `rae/test/melee-knife.test.mjs`
 
