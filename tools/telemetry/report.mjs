@@ -32,8 +32,14 @@ const plural = (n, word) => `${count(n)} ${word}${n === 1 ? "" : "s"}`;
 /** How a round ended, in words, and the colour class that goes with it. */
 const RESULTS = { law_win: ["Law won", "law"], outlaw_win: ["Outlaw won", "outlaw"], aborted: ["Aborted", "neutral"] };
 
+/**
+ * How a robbery run ended. A win and a fail are states, not sides, so they wear the fixed status colours (green and red) and not the law and
+ * outlaw colours, which mean a side everywhere else on the page; each also has its label and its number in the text.
+ */
+const RUN_RESULTS = { win: ["Won", "good"], fail: ["Failed", "critical"], stopped: ["Stopped", "neutral"], round: ["Cut short by a round reset", "neutral"], unfinished: ["No end recorded", "neutral"] };
+
 const STYLE = `
-:root { color-scheme: light dark; --page: #f9f9f7; --surface: #fcfcfb; --ink: #0b0b0b; --ink-2: #52514e; --grid: #e1e0d9; --border: rgba(11,11,11,0.10); --law: #2a78d6; --outlaw: #eb6834; --neutral: #898781; }
+:root { color-scheme: light dark; --page: #f9f9f7; --surface: #fcfcfb; --ink: #0b0b0b; --ink-2: #52514e; --grid: #e1e0d9; --border: rgba(11,11,11,0.10); --law: #2a78d6; --outlaw: #eb6834; --neutral: #898781; --good: #0ca30c; --critical: #d03b3b; }
 @media (prefers-color-scheme: dark) {
   :root { --page: #0d0d0d; --surface: #1a1a19; --ink: #ffffff; --ink-2: #c3c2b7; --grid: #2c2c2a; --border: rgba(255,255,255,0.10); --law: #3987e5; --outlaw: #d95926; --neutral: #898781; }
 }
@@ -57,6 +63,8 @@ section { background: var(--surface); border: 1px solid var(--border); border-ra
 .law { background: var(--law); }
 .outlaw { background: var(--outlaw); }
 .neutral { background: var(--neutral); }
+.good { background: var(--good); }
+.critical { background: var(--critical); }
 .wide { overflow-x: auto; margin-bottom: 1rem; }
 table { border-collapse: collapse; width: 100%; font-size: 0.92rem; }
 caption { text-align: left; font-weight: 600; padding: 0 0 0.5rem; }
@@ -118,6 +126,68 @@ ${tile("Kills per round", one(r.kills.perRound), `${one(r.deaths.perRound)} deat
 </section>`;
 }
 
+/** A robbery's section: how its runs ended, its elements, and its newest runs. */
+function robberyHtml(x, index) {
+
+    const wins = x.byResult.win;
+    const parts = Object.entries(RUN_RESULTS).map(([result, [label, cls]]) => ({ label, cls, count: x.byResult[result] ?? 0 }));
+    const other = x.runs - parts.reduce((total, part) => total + part.count, 0);
+
+    if (other > 0) parts.push({ label: "Other", cls: "neutral", count: other });
+
+    const summary = parts.map((part, i) => `${i === 0 ? part.label : part.label[0].toLowerCase() + part.label.slice(1)} ${part.count}`).join(", ");
+    const bar = parts.filter((part) => part.count > 0).map((part) => `<span class="${part.cls}" style="flex: ${part.count} 1 0" title="${esc(part.label)}: ${part.count} of ${x.runs} runs"></span>`).join("");
+    const legend = parts.map((part) => `<li><span class="sw ${part.cls}"></span>${esc(part.label)} <b>${count(part.count)}</b></li>`).join("");
+
+    const elementRows = x.elements.map((row) => `<tr><td>${esc(row.name || row.el)}${row.kind === null ? "" : ` (${esc(row.kind)})`}</td><td class="num">${count(row.completed)}</td>`
+        + `<td class="num">${percent(row.share)}<span class="track" aria-hidden="true"><span class="bar" style="width: ${Math.round(row.share * 100)}%"></span></span></td>`
+        + `<td class="num">${row.medianAfter === null ? "-" : clock(row.medianAfter)}</td><td class="num">${count(row.jams)}</td><td class="num">${row.avgMisses === null ? "-" : one(row.avgMisses)}</td></tr>`).join("");
+
+    const runRows = x.latest.map((run) => {
+        const [label, cls] = run.result === null ? RUN_RESULTS.unfinished : RUN_RESULTS[run.result] ?? [run.result, "neutral"];
+        const ended = run.result !== null;
+
+        return `<tr><td>${when(run.at)}</td><td>${esc(run.w)}</td><td><span class="sw ${cls}"></span>${esc(label)}</td>`
+            + `<td class="num">${ended ? clock(run.dur) : "-"}</td><td class="num">${ended ? `${count(run.done)} of ${count(run.of)}` : "-"}</td><td class="num">${ended ? count(run.people) : "-"}</td>`
+            + `<td class="num">${count(run.coins)}</td><td class="num">${count(run.bounty)}</td><td>${run.test ? "test" : ""}</td></tr>`;
+    }).join("");
+
+    return `<section aria-labelledby="robbery-${index}">
+<h2 id="robbery-${index}">Robbery: ${esc(x.id)}</h2>
+<div class="tiles">
+${tile("Runs", count(x.runs), "recorded")}
+${tile("Win rate", x.winShare === null ? "n/a" : percent(x.winShare), x.decided === 0 ? "none decided" : `${wins} of ${x.decided} decided`)}
+${tile("Median length", x.length === null ? "n/a" : clock(x.length.median), x.length === null ? "no run ended" : `average ${clock(x.length.average)}`)}
+${tile("Paid per run", `${one(x.coins.perRun)} coins`, `${one(x.bounty.perRun)} bounty`)}
+</div>
+<div class="share" role="img" aria-label="${esc(summary)} of ${x.runs} runs">${bar}</div>
+<ul class="legend">${legend}</ul>
+<div class="wide"><table>
+<caption>Elements</caption>
+<thead><tr><th scope="col">Element</th><th scope="col" class="num">Done in</th><th scope="col" class="num">Share of runs</th><th scope="col" class="num">Median time in</th><th scope="col" class="num">Jams</th><th scope="col" class="num">Average misses</th></tr></thead>
+<tbody>${elementRows}</tbody>
+</table></div>
+${x.untouched > 0 ? `<p class="note">${plural(x.untouched, "more element")} ${x.untouched === 1 ? "was" : "were"} never touched in these runs.</p>` : ""}
+<div class="wide"><table>
+<caption>Latest runs</caption>
+<thead><tr><th scope="col">When</th><th scope="col">World</th><th scope="col">Result</th><th scope="col" class="num">Length</th><th scope="col" class="num">Elements</th><th scope="col" class="num">People</th><th scope="col" class="num">Coins</th><th scope="col" class="num">Bounty</th><th scope="col">Note</th></tr></thead>
+<tbody>${runRows}</tbody>
+</table></div>
+</section>`;
+}
+
+/** The robberies: a note about test runs where there is one to make, then a section for each robbery. */
+function robberiesHtml(figures) {
+
+    const r = figures.robberies;
+    const note = r.includeTests ? "Test runs are included, and marked."
+        : r.excludedTests > 0 ? `${plural(r.excludedTests, "test run")} ${r.excludedTests === 1 ? "is" : "are"} left out (run with --include-tests to see ${r.excludedTests === 1 ? "it" : "them"}).` : "";
+
+    const intro = note === "" ? "" : `<section aria-labelledby="robberies"><h2 id="robberies">Robberies</h2><p class="note">${note}</p></section>`;
+
+    return `${intro}${r.list.map(robberyHtml).join("\n")}`;
+}
+
 function dataHtml(figures) {
 
     const d = figures.data;
@@ -165,6 +235,7 @@ ${figures.world === null ? "" : `<p class="note">Showing world ${esc(figures.wor
 </header>
 <main>
 ${d.events === 0 ? nothing : roundsHtml(figures)}
+${robberiesHtml(figures)}
 ${dataHtml(figures)}
 </main>
 </body>

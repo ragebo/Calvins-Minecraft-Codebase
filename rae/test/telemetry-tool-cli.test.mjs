@@ -88,6 +88,26 @@ test("--world shows one world's rounds, and a world with no events says so inste
     done();
 });
 
+test("--include-tests brings a builder's test runs of a robbery into the report, and without it they are left out and the report says so", () => {
+    const { check, done } = checks();
+
+    const robbery = (k, at, fields) => tele(at, ev(k, { id: "bank", r: 1, b: "t3st", ...fields }));
+    const { logs, out } = folders([
+        robbery("robbery.start", "19:00:00", { n: 1, test: true, p: "7", role: "outlaw", inside: 1 }),
+        robbery("robbery.end", "19:05:00", { n: 2, result: "stopped", test: true, dur: 100, done: 0, of: 3, people: 0 })
+    ].join(""));
+
+    const without = run(["--logs", logs, "--out", out]);
+    const html = () => readFileSync(path.join(out, "report.html"), "utf8");
+
+    check("by default the test run is left out, and the report says how to see it", without.code === 0 && html().includes("1 test run is left out") && html().includes("--include-tests") && !html().includes("Robbery: bank"), html().slice(0, 300));
+
+    const withTests = run(["--logs", logs, "--out", out, "--include-tests"]);
+
+    check("with the flag it is in, and marked", withTests.code === 0 && html().includes("Robbery: bank") && html().includes("Test runs are included, and marked."), withTests.errors);
+    done();
+});
+
 test("--open opens the report, --no-open undoes it, and by default nothing opens", () => {
     const { check, done } = checks();
     const { logs, out } = folders();
@@ -136,7 +156,7 @@ test("a wrong command line is exit code 2 with the usage, and --help is exit cod
     check("an option without its value", missing.code === 2 && missing.errors.includes("--logs needs a value"), missing.errors);
 
     const help = run(["--help"]);
-    check("help", help.code === 0 && help.said.includes("Usage") && help.said.includes("--world") && help.said.includes("--logs") && help.said.includes("--out"), help.said);
+    check("help", help.code === 0 && help.said.includes("Usage") && help.said.includes("--world") && help.said.includes("--logs") && help.said.includes("--out") && help.said.includes("--include-tests"), help.said);
     done();
 });
 

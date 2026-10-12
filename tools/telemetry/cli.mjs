@@ -19,7 +19,8 @@ Reads the game's content logs, keeps every telemetry event in an archive, and wr
 
   --logs <folder>   where the game's logs are (default: %APPDATA%\\Minecraft Bedrock\\logs)
   --out <folder>    where the archive, the report and the CSV files go (default: telemetry-data, beside the tools folder)
-  --world <id>      show the rounds of one world only (the report lists the world ids)
+  --world <id>      show the rounds and robberies of one world only (the report lists the world ids)
+  --include-tests   count a builder's test runs of a robbery too (they are left out otherwise)
   --open            open the report when it is done
   --no-open         do not (the last of --open and --no-open wins)
   --help            this text`;
@@ -33,7 +34,7 @@ const safeName = (kind) => kind.replace(/[^A-Za-z0-9._-]/g, "_");
 
 function parseArgs(argv) {
 
-    const args = { logs: undefined, out: undefined, world: undefined, open: false, help: false };
+    const args = { logs: undefined, out: undefined, world: undefined, open: false, includeTests: false, help: false };
 
     for (let i = 0; i < argv.length; i++) {
 
@@ -41,6 +42,7 @@ function parseArgs(argv) {
 
         if (arg === "--open") args.open = true;
         else if (arg === "--no-open") args.open = false;
+        else if (arg === "--include-tests") args.includeTests = true;
         else if (arg === "--help" || arg === "-h") args.help = true;
         else if (arg === "--logs" || arg === "--out" || arg === "--world") {
 
@@ -109,7 +111,7 @@ export function main(argv, io = {}) {
     }
 
     const archive = readArchive(archivePath);
-    const figures = summarize(archive.events, { world: args.world, ingest: counts });
+    const figures = summarize(archive.events, { world: args.world, ingest: counts, includeTests: args.includeTests });
 
     mkdirSync(path.join(out, "csv"), { recursive: true });
     writeFileSync(reportPath, renderReport(figures, { generated: stamp(now()) }));

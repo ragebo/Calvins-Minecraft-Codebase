@@ -148,18 +148,26 @@ Nothing is deployed or pushed unless the owner asks.
   - Dependencies: Task 6
   - Files: `rae/src/core/robberyrun.ts`, `rae/test/robbery-telemetry.test.mjs`
 
-- [ ] **Task 8: Robberies report section** (S-M)
-  Per robbery (test runs left out unless `--include-tests`): runs; win, fail, stopped and round counts; average and median
-  duration; average elements done of total; coins and bounty paid (total and per run); a per-element table (reached, completed
-  percent, median time since start, jams, average pick misses); the latest runs.
+- [x] **Task 8: Robberies report section** (S-M) - done
+  Per robbery (test runs left out unless `--include-tests`): runs; win, fail, stopped, round and no-end counts; win rate over the decided
+  runs; median and average length; average elements done of how many there are; coins and bounty paid (total and per run); an elements
+  table (done in, share of runs, median time in, jams, average misses, in build order); how many elements were never touched; the
+  latest runs, with the ones that have no end said so. A run is told apart by world + boot + robbery + number, so two boots that both
+  have a run 1 are two runs and each payout lands on its own; a run whose start or end was lost still counts. A win and a fail wear the
+  fixed status colours (green, red; each with its label and number), not the law and outlaw colours, which mean a side everywhere else.
+  Changed from the first draft: (1) `robbery.element` and `robbery.pick` now carry the element's `name` (own commit, done first: a
+  report that says "e3, chest" means nothing to the builder); (2) how many elements a robbery has is the NEWEST ended run's answer, not a
+  maximum (a builder may add or remove elements); (3) `--include-tests` is on the command line.
   - Acceptance:
-    - [ ] fixture events give exact figures; an element nobody completed shows 0%
-    - [ ] test runs are excluded by default and included with the flag
-    - [ ] a payout attaches to the right run by boot and run number
-    - [ ] contract test: a bank robbery played under the fake game appears in the report with the right figures
+    - [x] fixture events give exact figures; an element nobody completed shows 0% (one that was only ever jammed, so it is seen); the ones never seen at all are counted
+    - [x] test runs are excluded by default and included with the flag; the report says how many were left out and how to see them
+    - [x] a payout attaches to the right run by world, boot and run number
+    - [x] contract test: a bank robbery played in the whole game appears in the report with the right figures (the lines the game wrote are all read: none skipped, none damaged)
+    - [x] the report looks right in a browser (a sample of two robberies and nine runs: dark theme)
   - Verification: tests; look at the report in the browser
+  - Result: 16 new tests (13 for the section, 2 contract, 1 for the flag); 61 deliberate breaks of the aggregator, the report writer, the flag and the game's writer, each caught. Several survivors on the way were real gaps (no fixture had two worlds with the same boot id; elements arrived already in build order; every run had the same element count), closed with new tests.
   - Dependencies: Tasks 5, 6, 7
-  - Files: `tools/telemetry/aggregate.mjs`, `tools/telemetry/report.mjs`, `rae/test/telemetry-tool-report.test.mjs`
+  - Files: `tools/telemetry/aggregate.mjs`, `tools/telemetry/report.mjs`, `tools/telemetry/cli.mjs`, `rae/test/telemetry-tool-robberies.test.mjs`, `rae/test/telemetry-contract-robbery.test.mjs`, `rae/test/telemetry-tool-cli.test.mjs`
 
 ### Checkpoint 2: robberies
 - [ ] all green; the contract test covers a full robbery
