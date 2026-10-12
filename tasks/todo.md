@@ -6,17 +6,20 @@ Nothing is deployed or pushed unless the owner asks.
 
 ## Phase 1: walking skeleton (rounds, end to end)
 
-- [ ] **Task 1: Event contract (pure)** (S)
-  Define the one-line format in `logic/telemetry.ts`: the event types for every kind in the plan, `toLine(event)` (compact
-  JSON; strings cut at 80 characters, lists at 8, whole line under 600 by dropping the longest fields and setting `cut:1`),
-  `parseLine(text)` (an event or undefined, never throws, another `v` is undefined), the tag `[telemetry]`, and a pure rate
-  limiter `createLimiter(max, windowTicks)` (the tick is passed in).
+- [x] **Task 1: Event contract (pure)** (S) - done
+  Define the one-line format in `logic/telemetry.ts`: the event types for every kind in the plan, `toLine(event, limits)`
+  (compact JSON, stamp first; strings cut at 80 characters, lists at 8, a line over 600 loses its biggest fields and says
+  `cut:1`; the numbers are passed in and Task 2 puts them in config), the log source `telemetry`, and a pure rate limiter
+  `limitStep(state, tick, max, windowTicks)` (state in, state out, as `pickStep` does, because `logic/` keeps no state).
+  Changed from the first draft: no `parseLine` here. The game never reads its own lines and the tool has its own parser
+  (Task 4), so a parser in the pack would be dead code; its "garbage never throws" check moved to Task 4.
   - Acceptance:
-    - [ ] every kind survives `toLine` then `parseLine` unchanged
-    - [ ] a 5,000-character string field gives a line of at most 600 characters that is still valid JSON
-    - [ ] garbage, an empty string, `null` and a wrong `v` give undefined and never throw
-    - [ ] the limiter lets `max` through per window, counts the rest, and reports the count once when the window rolls over
+    - [x] every kind survives `toLine` then `JSON.parse` unchanged and unflagged
+    - [x] a 5,000-character string field gives a line of at most 600 characters that is still valid JSON
+    - [x] the limiter lets `max` through per window, counts the rest, and reports the count once when the window rolls over
+    - [x] (added) the exact wire format is pinned; the stamp is never cut or dropped; an undefined field never trips the cap
   - Verification: `npm run check`; `npm test` (new `telemetry-events.test.mjs`; `layers.test.mjs` proves `logic/` has no game imports)
+  - Result: 10 new tests; 12 deliberate breaks of the module, each caught by a test.
   - Dependencies: none
   - Files: `rae/src/logic/telemetry.ts`, `rae/test/telemetry-events.test.mjs`
 
@@ -57,7 +60,7 @@ Nothing is deployed or pushed unless the owner asks.
   - Acceptance:
     - [ ] a fixture log with noise lines, a cut last line and a midnight roll-over gives the right events with the right times
     - [ ] ingesting the same log twice adds nothing; a copy under another name adds nothing
-    - [ ] a line with another `v`, and a damaged JSON line, are counted and skipped, not fatal
+    - [ ] a line with another `v`, a damaged JSON line, an empty one and garbage after the tag are counted and skipped, never fatal
     - [ ] never writes into the logs folder; reads a file another process holds open (the test holds a handle)
     - [ ] on the real folder (about 121 MB) it finishes with no errors and 0 events (none are emitted yet); the time is reported
   - Verification: `telemetry-tool-ingest.test.mjs`; one manual run on the real folder
