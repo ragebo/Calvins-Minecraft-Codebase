@@ -1,9 +1,12 @@
 import { EntityDamageCause, EquipmentSlot, system, type Entity, type Player } from "@minecraft/server";
 import { MELEE } from "../config/balance.js";
-import { addStack, dueNow, isFinishable, weaponForItem, type BleedStack, type MeleeWeapon } from "../logic/melee.js";
+import { addStack, dueNow, isFinishable, rollStun, weaponForItem, type BleedStack, type MeleeWeapon } from "../logic/melee.js";
+import { lock, unlock } from "./cinematic.js";
 import { onDeath } from "./events.js";
 import { info, warn } from "./log.js";
 import { registerSystem } from "./registry.js";
+import { isPhase } from "./round.js";
+import { isHeld } from "./startsequence.js";
 import { onTick, type TickContext } from "./tick.js";
 
 /**
@@ -226,9 +229,94 @@ function finishUp(targetId: string): void {
     }
 }
 
+// ---------------------------------------------------------------------------------------------------------
+// The baton's stun
+// ---------------------------------------------------------------------------------------------------------
+
+interface Stunned {
+    readonly target: Entity;
+    /** Which stun this is, so the timer of an earlier one (ended by a reset) cannot cut a later one short. */
+    readonly serial: number;
+    /** Whether a player's movement was locked for it, and so has to be given back. */
+    readonly locked: boolean;
+}
+
+const stunned = new Map<string, Stunned>();
+let stunSerial = 0;
+
+export function stunnedNow(): number {
+    return stunned.size;
+}
+
+/** Whether a baton hit that landed stuns, by the dice. Rolled here so the system has one call to make. */
+export function rollBatonStun(): boolean {
+    return rollStun(Math.random(), MELEE.baton.stunChance);
+}
+
+/**
+ * Stuns the target for `stunTicks`. Not while a game is starting, and not while a stun already lasts (it is never refreshed). A player is
+ * locked in place as well as slowed. Returns whether a stun began.
+ */
+export function stun(target: Entity): boolean {
+    if (!target.isValid) return false;
+
+    if (isPhase("SETUP")) {
+        meleeTrace(`stun: ignored on ${target.typeId}, a game is starting`);
+        return false;
+    }
+    if (stunned.has(target.id)) {
+        meleeTrace(`stun: ${target.typeId} is already stunned, not refreshed`);
+        return false;
+    }
+
+    const ticks = MELEE.baton.stunTicks;
+    const isPlayer = target.typeId === "minecraft:player";
+
+    try {
+        target.addEffect("slowness", ticks, { amplifier: MELEE.baton.slownessAmplifier, showParticles: false });
+    } catch (err) {
+        reportOnce("a stun", err);
+        return false;
+    }
+
+    if (isPlayer) lock(target as Player);
+
+    const serial = ++stunSerial;
+    stunned.set(target.id, { target, serial, locked: isPlayer });
+    system.runTimeout(() => {
+        if (stunned.get(target.id)?.serial === serial) endStun(target.id, false);
+    }, ticks);
+
+    meleeTrace(`stun: ${target.typeId} stunned for ${ticks} ticks`);
+    return true;
+}
+
+/** Lets a stunned target go. The slowness runs out by itself; taking it off early is for a death or a reset. A player the start sequence holds stays held. */
+function endStun(targetId: string, early: boolean): void {
+    const state = stunned.get(targetId);
+    if (!state) return;
+    stunned.delete(targetId);
+
+    if (!state.target.isValid) return;
+
+    if (early) {
+        try {
+            state.target.removeEffect("slowness");
+        } catch (err) {
+            reportOnce("ending a stun", err);
+        }
+    }
+    if (state.locked && !isHeld(state.target as Player)) unlock(state.target as Player);
+}
+
+function endAllStuns(): void {
+    for (const id of [...stunned.keys()]) endStun(id, true);
+}
+
 onDeath("melee", 5, ({ dead }) => {
     bleeding.delete(dead.id);
     if (bleeding.size === 0) endTick();
+    endStun(dead.id, true);
 });
 
 registerSystem({
@@ -237,5 +325,6 @@ registerSystem({
         setNumbers.clear();
         finishing.clear();
         stopBleeding();
+        endAllStuns();
     }
 });

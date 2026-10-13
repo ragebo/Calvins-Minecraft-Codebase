@@ -3,7 +3,7 @@ import { honored } from "../logic/melee.js";
 import { onScriptEvent } from "../core/events.js";
 import { warn } from "../core/log.js";
 import { MELEE } from "../config/balance.js";
-import { beginFinish, finishLanded, finishReading, heldWeapon, meleeTrace, noteSet, reportOnce, setMeleeDebug, startBleed, takeSet } from "../core/melee.js";
+import { beginFinish, finishLanded, finishReading, heldWeapon, meleeTrace, noteSet, reportOnce, rollBatonStun, setMeleeDebug, startBleed, stun, takeSet } from "../core/melee.js";
 import { format, tell } from "../core/ui.js";
 
 /**
@@ -71,6 +71,9 @@ listen("the hurt event, after", () => world.afterEvents.entityHurt.subscribe((ev
             finishLanded(event.hurtEntity.id);
             return;
         }
+
+        // A baton hit that landed may stun. (A hit that dealt nothing, because it was blocked, does not.)
+        if (entry.weapon.key === "baton" && event.damage > 0 && rollBatonStun()) stun(event.hurtEntity);
 
         // A knife hit that landed starts a bleed. (The bleed's own damage never gets here: it is not an attack, so no number was set for it.)
         const attacker = event.damageSource.damagingEntity;

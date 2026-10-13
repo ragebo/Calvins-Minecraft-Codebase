@@ -47,6 +47,11 @@ function releaseHeld(): void {
     held.clear();
 }
 
+/** Whether the sequence is holding this player (locked, or in a cutscene camera) right now: whoever else locks a player must not let them go. */
+export function isHeld(player: Player): boolean {
+    return held.has(player.id);
+}
+
 /** Stops whatever the sequence has waiting and lets every player it was holding go. Runs on every round reset, so a new start begins clean. */
 export function cancelSequence(): void {
     generation++;

@@ -73,17 +73,18 @@ the game shows (no spike): every engine behavior that is not measured has a fall
   - Dependencies: Task 2
   - Files: `rae/src/logic/melee.ts`, `rae/src/core/melee.ts`, `rae/src/systems/melee.ts`, `rae/test/melee-machete.test.mjs`
 
-- [ ] **Task 5: The baton's stun** (M)
+- [x] **Task 5: The baton's stun** (M) - done
   A baton hit has a 25% chance (an injected random in the logic) to stun the target for 10 ticks: slowness 255 on any target and, for a player, a movement lock as well. A stun cannot be
   refreshed while it is active, always ends (even if the target leaves or dies), and never releases a player the start sequence is holding.
   - Acceptance:
-    - [ ] with the dice at 0 the stun applies; at 0.25 and above it does not; the rate over many seeded hits is about 25%
-    - [ ] the stun lasts exactly 10 ticks and then the target can move again (a mob and a player), with both the effect and the lock undone
-    - [ ] a second stun while one is active is ignored; a hit after it ends can stun again
-    - [ ] a target that dies or leaves while stunned is left in no odd state; a round reset ends every stun
-    - [ ] no stun is applied while a start is under way, and a stun's end does not unlock a player the start sequence holds
-    - [ ] the baton's 3 damage is dealt as in Task 2; other weapons never stun
+    - [x] with the dice at 0 the stun applies; at 0.25 and above it does not; the rate over many seeded hits is about 25%
+    - [x] the stun lasts exactly 10 ticks and then the target can move again (a mob and a player), with both the effect and the lock undone
+    - [x] a second stun while one is active is ignored; a hit after it ends can stun again
+    - [x] a target that dies or leaves while stunned is left in no odd state; a round reset ends every stun
+    - [x] no stun is applied while a start is under way, and a stun's end does not unlock a player the start sequence holds
+    - [x] the baton's 3 damage is dealt as in Task 2; other weapons never stun
   - Verification: check, test, check:legacy; deliberate breaks
+  - Result: a baton hit that landed (dealt > 0) rolls the dice (25%, pure rollStun(random, chance)); a stun is slowness 255 for 10 ticks (no particles) on anything plus a movement lock on a player; not refreshed while active, ends on its own timer, on death and on a round reset, never unlocks a player the start sequence holds (new core/startsequence isHeld), none while a game is starting (SETUP). 1627 tests (+16), 49-break mutation run all caught.
   - Dependencies: Task 2
   - Files: `rae/src/logic/melee.ts`, `rae/src/core/melee.ts`, `rae/src/systems/melee.ts`, `rae/test/melee-baton.test.mjs`
 

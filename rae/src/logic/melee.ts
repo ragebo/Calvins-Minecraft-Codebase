@@ -26,6 +26,11 @@ export function isFinishable(health: number, max: number, fraction: number): boo
     return health > 0 && health <= max * fraction + 1e-9;
 }
 
+/** Whether a baton hit stuns, given a random number in [0, 1): the same roll for the same dice, with the dice passed in so a test can rig them. */
+export function rollStun(random: number, chance: number): boolean {
+    return random < chance;
+}
+
 /** Whether the game dealt the number a hit was set to. A hair of tolerance, because the engine keeps health in floats. */
 export function honored(set: number, dealt: number): boolean {
     return Math.abs(set - dealt) < 0.001;

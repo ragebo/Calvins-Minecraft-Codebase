@@ -124,3 +124,28 @@ test("a late step catches up without losing the rhythm, and a zero interval cann
     check("the damage per stack is the rule's", bigger.amount === 6, String(bigger.amount));
     done();
 });
+
+// ---------------------------------------------------------------------------------------------------------
+// The baton's stun
+// ---------------------------------------------------------------------------------------------------------
+
+const { rollStun } = await load("logic/melee.js");
+
+test("the stun roll: below the chance stuns, at it or above does not, and the rate over many seeded rolls is the chance", () => {
+    const { check, done } = checks();
+    check("0 stuns", rollStun(0, 0.25));
+    check("just below the chance stuns", rollStun(0.2499, 0.25));
+    check("exactly the chance does not", !rollStun(0.25, 0.25));
+    check("above does not", !rollStun(0.7, 0.25));
+    check("a chance of 0 never stuns", !rollStun(0, 0));
+    check("a chance of 1 always does", rollStun(0.9999, 1));
+
+    // A small seeded generator (a linear congruential one), so the count is the same every run.
+    let seed = 12345;
+    const dice = () => { seed = (seed * 1103515245 + 12345) % 2147483648; return seed / 2147483648; };
+    let stuns = 0;
+    for (let i = 0; i < 20000; i++) if (rollStun(dice(), 0.25)) stuns++;
+    const rate = stuns / 20000;
+    check("about a quarter over 20000 rolls", rate > 0.24 && rate < 0.26, String(rate));
+    done();
+});

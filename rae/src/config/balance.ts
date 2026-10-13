@@ -475,7 +475,14 @@ export const MELEE = {
      * Resistance absorbs completely, the follow-up does not know the hit landed and skips the kill (so a hit the game refused for another
      * reason, such as a gamerule, cannot kill); `killWithoutHurtEvent` turns that caution off once the test card has shown it is needed.
      */
-    machete: { finishFraction: 0.3, finishDamage: 10000, followUpTicks: 1, killWithoutHurtEvent: false }
+    machete: { finishFraction: 0.3, finishDamage: 10000, followUpTicks: 1, killWithoutHurtEvent: false },
+
+    /**
+     * The baton's stun: a hit that lands has a `stunChance` of stunning its target for `stunTicks` (half a second): slowness at
+     * `slownessAmplifier` (255, the largest the engine takes) on anything, and a movement lock as well on a player. A stun is not refreshed
+     * while it lasts, and none starts while a game is starting.
+     */
+    baton: { stunChance: 0.25, stunTicks: 10, slownessAmplifier: 255 }
 };
 
 /**
