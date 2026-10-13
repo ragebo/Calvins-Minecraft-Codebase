@@ -59,16 +59,17 @@ the game shows (no spike): every engine behavior that is not measured has a fall
   - Dependencies: Task 2
   - Files: `rae/src/logic/melee.ts`, `rae/src/core/melee.ts`, `rae/src/systems/melee.ts`, `rae/test/melee-knife.test.mjs`
 
-- [ ] **Task 4: The machete's finishing blow** (S-M)
+- [x] **Task 4: The machete's finishing blow** (S-M) - done
   A machete hit on a target whose health is 30% of its maximum or less kills it, whatever its armor and effects: the hook sets a huge `damage` (keeping the attacker), and a tick later a target
   that is still alive (Resistance) is `kill()`ed. Which of the two did it is logged under `rae:melee_debug`.
   - Acceptance:
-    - [ ] a target at 6 of 20 HP dies; one at 6.5 does not and takes 4; one at full health takes 4
-    - [ ] the threshold follows the target's maximum (a 40 HP mob dies at 12), not a fixed number
-    - [ ] a target that survives the huge hit (the fake's Resistance 5) is killed by the follow-up a tick later; one that died is not killed twice
-    - [ ] a creative or spectator player is not killed; a target that is already dead is left alone
-    - [ ] a hit with any other weapon, however low the target, does not trigger it
+    - [x] a target at 6 of 20 HP dies; one at 6.5 does not and takes 4; one at full health takes 4
+    - [x] the threshold follows the target's maximum (a 40 HP mob dies at 12), not a fixed number
+    - [x] a target that survives the huge hit (the fake's Resistance 5) is killed by the follow-up a tick later; one that died is not killed twice
+    - [x] a creative or spectator player is not killed; a target that is already dead is left alone
+    - [x] a hit with any other weapon, however low the target, does not trigger it
   - Verification: check, test, check:legacy; deliberate breaks of the threshold, the comparison, the maximum and the follow-up
+  - Result: a machete hit on a target at or below 30% of its OWN maximum health (float-safe, creative/spectator excluded, dead/no-health left alone) writes a huge damage to the hurt event; a tick later a target still alive is kill()ed, a target the hit killed is not; follow-up only if the game reported the hurt (killWithoutHurtEvent is the config fallback, off); a finishing blow is not mistaken for an ignored number; reset cancels waiting follow-ups. 1611 tests (+15), 45-break mutation run all caught.
   - Dependencies: Task 2
   - Files: `rae/src/logic/melee.ts`, `rae/src/core/melee.ts`, `rae/src/systems/melee.ts`, `rae/test/melee-machete.test.mjs`
 

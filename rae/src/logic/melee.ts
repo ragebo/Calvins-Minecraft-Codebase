@@ -21,6 +21,11 @@ export function weaponForItem(itemId: string | undefined): MeleeWeapon | undefin
     return undefined;
 }
 
+/** Whether a target with this much health, of this much at most, is within the machete's finishing range. A dead target (no health left) is not. */
+export function isFinishable(health: number, max: number, fraction: number): boolean {
+    return health > 0 && health <= max * fraction + 1e-9;
+}
+
 /** Whether the game dealt the number a hit was set to. A hair of tolerance, because the engine keeps health in floats. */
 export function honored(set: number, dealt: number): boolean {
     return Math.abs(set - dealt) < 0.001;

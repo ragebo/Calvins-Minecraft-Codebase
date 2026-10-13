@@ -1,6 +1,6 @@
-import { EntityDamageCause, EquipmentSlot, type Entity, type Player } from "@minecraft/server";
+import { EntityDamageCause, EquipmentSlot, system, type Entity, type Player } from "@minecraft/server";
 import { MELEE } from "../config/balance.js";
-import { addStack, dueNow, weaponForItem, type BleedStack, type MeleeWeapon } from "../logic/melee.js";
+import { addStack, dueNow, isFinishable, weaponForItem, type BleedStack, type MeleeWeapon } from "../logic/melee.js";
 import { onDeath } from "./events.js";
 import { info, warn } from "./log.js";
 import { registerSystem } from "./registry.js";
@@ -55,6 +55,8 @@ export interface SetNumber {
     readonly weapon: MeleeWeapon;
     readonly set: number;
     readonly tick: number;
+    /** The machete's finishing blow: the number is a huge one that the game is expected to cap, so it is not checked against what was dealt. */
+    readonly finish?: boolean;
 }
 
 const setNumbers = new Map<string, SetNumber>();
@@ -152,6 +154,78 @@ function stepBleeds({ tick }: TickContext): void {
     if (bleeding.size === 0) endTick();
 }
 
+// ---------------------------------------------------------------------------------------------------------
+// The machete's finishing blow
+// ---------------------------------------------------------------------------------------------------------
+
+interface Finishing {
+    readonly target: Entity;
+    /** Whether the game reported this hit as a hurt (the after event came). */
+    landed: boolean;
+}
+
+const finishing = new Map<string, Finishing>();
+
+/** The game mode a `/gamemode` command knows, or "survival" when the engine will not say (the same reading as systems/jail.ts). */
+function modeOf(player: Player): string {
+    try {
+        return String(player.getGameMode()).toLowerCase();
+    } catch {
+        return "survival";
+    }
+}
+
+/** A target's health and maximum when a machete hit would finish it, or undefined. Creative and spectator players cannot be finished. */
+export function finishReading(target: Entity): { readonly health: number; readonly max: number } | undefined {
+    try {
+        if (target.typeId === "minecraft:player" && ["creative", "spectator"].includes(modeOf(target as Player))) return undefined;
+
+        const health = target.getComponent("minecraft:health");
+        if (!health || !isFinishable(health.currentValue, health.effectiveMax, MELEE.machete.finishFraction)) return undefined;
+        return { health: health.currentValue, max: health.effectiveMax };
+    } catch {
+        return undefined;
+    }
+}
+
+/** Marks a finishing blow in flight and schedules the check that follows it. Safe inside a before event: a timeout changes nothing yet. */
+export function beginFinish(target: Entity): void {
+    finishing.set(target.id, { target, landed: false });
+    system.runTimeout(() => finishUp(target.id), MELEE.machete.followUpTicks);
+}
+
+export function finishingNow(): number {
+    return finishing.size;
+}
+
+/** The game reported the hurt for this target: the finishing blow landed. */
+export function finishLanded(targetId: string): void {
+    const blow = finishing.get(targetId);
+    if (blow) blow.landed = true;
+}
+
+function finishUp(targetId: string): void {
+    const blow = finishing.get(targetId);
+    if (!blow) return;
+    finishing.delete(targetId);
+
+    if (!blow.landed && !MELEE.machete.killWithoutHurtEvent) {
+        meleeTrace(`finish: no hurt event came for the ${blow.target.typeId}, so the hit is assumed refused and nothing is killed`);
+        return;
+    }
+    if (!blow.target.isValid || isDead(blow.target)) {
+        meleeTrace("finish: the hit itself killed it, no kill needed");
+        return;
+    }
+
+    try {
+        blow.target.kill();
+        meleeTrace(`finish: the ${blow.target.typeId} survived the hit, so kill() finished it`);
+    } catch (err) {
+        reportOnce("a finishing kill", err);
+    }
+}
+
 onDeath("melee", 5, ({ dead }) => {
     bleeding.delete(dead.id);
     if (bleeding.size === 0) endTick();
@@ -161,6 +235,7 @@ registerSystem({
     name: "melee",
     reset() {
         setNumbers.clear();
+        finishing.clear();
         stopBleeding();
     }
 });

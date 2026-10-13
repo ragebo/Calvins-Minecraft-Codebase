@@ -40,7 +40,23 @@ test("a number is honored when the game dealt it, give or take a float's roundin
 // The knife's bleed
 // ---------------------------------------------------------------------------------------------------------
 
-const { addStack, dueNow } = await load("logic/melee.js");
+const { addStack, dueNow, isFinishable } = await load("logic/melee.js");
+
+test("a target is finishable at 30% of its maximum or less, with a float's rounding forgiven, and never when dead", () => {
+    const { check, done } = checks();
+    check("exactly 30%", isFinishable(6, 20, 0.3));
+    check("below it", isFinishable(1, 20, 0.3));
+    check("a hair above it", !isFinishable(6.0001, 20, 0.3));
+    check("above it", !isFinishable(6.5, 20, 0.3));
+    check("at full health", !isFinishable(20, 20, 0.3));
+    check("0.9 of 3 is 30% although 0.3 * 3 is 0.8999999999999999 in a float", isFinishable(0.9, 3, 0.3));
+    check("no health left is dead, not finishable", !isFinishable(0, 20, 0.3));
+    check("negative health", !isFinishable(-2, 20, 0.3));
+    check("a maximum of nothing", !isFinishable(1, 0, 0.3));
+    check("a maximum that is not a number", !isFinishable(1, NaN, 0.3));
+    check("another fraction", isFinishable(10, 20, 0.5) && !isFinishable(10.1, 20, 0.5));
+    done();
+});
 const RULES = { damage: 1, intervalTicks: 20, hits: 2, maxStacks: 3 };
 
 test("a new hit adds a stack that is first due one interval later, with all its ticks to come", () => {

@@ -2,7 +2,8 @@ import { EntityDamageCause, world, system, type Player } from "@minecraft/server
 import { honored } from "../logic/melee.js";
 import { onScriptEvent } from "../core/events.js";
 import { warn } from "../core/log.js";
-import { heldWeapon, meleeTrace, noteSet, reportOnce, setMeleeDebug, startBleed, takeSet } from "../core/melee.js";
+import { MELEE } from "../config/balance.js";
+import { beginFinish, finishLanded, finishReading, heldWeapon, meleeTrace, noteSet, reportOnce, setMeleeDebug, startBleed, takeSet } from "../core/melee.js";
 import { format, tell } from "../core/ui.js";
 
 /**
@@ -41,6 +42,16 @@ listen("the hurt event", () => world.beforeEvents.entityHurt.subscribe((event) =
         const weapon = heldWeapon(attacker as Player);
         if (!weapon) return;
 
+        // The machete finishes a target at three hearts or less: the game is told a number nothing survives, and a follow-up kills what did.
+        const reading = weapon.key === "machete" ? finishReading(event.hurtEntity) : undefined;
+        if (reading) {
+            event.damage = MELEE.machete.finishDamage;
+            noteSet(event.hurtEntity.id, { weapon, set: event.damage, tick: system.currentTick, finish: true });
+            meleeTrace(`machete: finishing blow on ${event.hurtEntity.typeId} at ${reading.health} of ${reading.max} health`);
+            beginFinish(event.hurtEntity);
+            return;
+        }
+
         event.damage = weapon.damage;
         noteSet(event.hurtEntity.id, { weapon, set: weapon.damage, tick: system.currentTick });
     } catch (err) {
@@ -54,6 +65,12 @@ listen("the hurt event, after", () => world.afterEvents.entityHurt.subscribe((ev
         if (!entry) return;
 
         meleeTrace(`${entry.weapon.key} hit: set ${entry.set}, dealt ${event.damage}`);
+
+        // A finishing blow is set far above any health, so "dealt" is not the number set and says nothing about the game ignoring it.
+        if (entry.finish) {
+            finishLanded(event.hurtEntity.id);
+            return;
+        }
 
         // A knife hit that landed starts a bleed. (The bleed's own damage never gets here: it is not an attack, so no number was set for it.)
         const attacker = event.damageSource.damagingEntity;

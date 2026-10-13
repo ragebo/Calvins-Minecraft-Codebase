@@ -466,7 +466,16 @@ export const MELEE = {
      * owner's "2 damage over 2 seconds, 1 per second"). Stacks add up, to `maxStacks` on one target; a hit on a full target refreshes
      * its oldest stack. It is dealt as the script's own "override" damage, which ignores armor and the game's 10-tick hit window.
      */
-    bleed: { damage: 1, intervalTicks: 20, hits: 2, maxStacks: 10 }
+    bleed: { damage: 1, intervalTicks: 20, hits: 2, maxStacks: 10 },
+
+    /**
+     * The machete's finishing blow: a hit on a target at or below `finishFraction` of its maximum health kills it, whatever its armor and
+     * effects. The hurt event is given `finishDamage` (more than anything survives), and `followUpTicks` later a target that is somehow
+     * still alive is killed outright. A creative or spectator player is never finished. If the game sends no hurt event for a hit that
+     * Resistance absorbs completely, the follow-up does not know the hit landed and skips the kill (so a hit the game refused for another
+     * reason, such as a gamerule, cannot kill); `killWithoutHurtEvent` turns that caution off once the test card has shown it is needed.
+     */
+    machete: { finishFraction: 0.3, finishDamage: 10000, followUpTicks: 1, killWithoutHurtEvent: false }
 };
 
 /**
