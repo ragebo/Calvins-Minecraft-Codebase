@@ -15,6 +15,11 @@ turned 45 degrees clockwise). The other five gun sprites (`pistol.png`, `bolt_ri
 sprites (`handgun_ammo.png`, `rifle_ammo.png`, `shotgun_ammo.png`) were supplied by the
 project owner in the same way; their source and terms are not known.
 
+The five melee weapon sprites (`knife.png`, `machete.png`, `baton.png`, `axe.png`, `sledgehammer.png`) came from a
+texture pack the project owner supplied on 2026-10-12, `weapons11.mcpack`, which is also a createtextures.com pack and
+states no license, so its terms are unconfirmed. It redrew several vanilla swords and spears; only five of its sprites
+were taken, copied unchanged, and they are used under this add-on's own item names, so no vanilla item is retextured.
+
 Until commit `6661ecb` the revolver was a 3D model, "Minecraft Revolver [Block Bench]"
 (https://skfb.ly/prxvz) by Jgcsketch, licensed under Creative Commons Attribution
 (http://creativecommons.org/licenses/by/4.0/). It is no longer in the pack but is still in
@@ -51,6 +56,8 @@ rae/                    TypeScript source. This is what you edit.
                          round.ts      round lifecycle state machine (IDLE/SETUP/ACTIVE/ENDING/ENDED);
                                        core/game.ts drives it, endgame.ts and boat.ts gate their win on it
                          persist.ts    contract for state that survives a reload (nothing registers yet)
+                         melee.ts      what the melee weapons remember: bleeds, stuns, cooldowns, finishing blows
+                                       (see "Melee weapons" below)
                          startsequence.ts  what a Start does after the roles: the start commands, a camera intro,
                                        the reveal, law choosing a spawn, then play (see "Start sequence" below);
                                        startstore.ts, startforms.ts and cinematic.ts are its storage, its operator
@@ -104,6 +111,7 @@ and fails if a count goes up.
 | `horse.ts` | Horse speed standardization |
 | `gold.ts` | Gold item → coins conversion |
 | `guns.ts` | The 6-gun weapon system — see below |
+| `melee.ts` | The five melee weapons (knife, machete, baton, axe, sledgehammer) — see below |
 | `endgame.ts` | Law win condition: every outlaw eliminated **or in jail** (a jailed gang has nobody left free to run a jailbreak) |
 | `compass.ts` | Law compass — see below |
 
@@ -268,6 +276,27 @@ length while a fire loop is active — a second client-synced property (`bountys
 tick by the same burst-ramped amount the fire rate itself uses and wrapped modulo 360, driving the same
 animation file. It's left alone the instant nothing is firing, so the barrels coast to a stop wherever they
 were rather than snapping back to 0.
+
+### Melee weapons
+
+Five items, `bountysys:knife`, `machete`, `baton`, `axe` and `sledgehammer` (stack of 1, held like a tool, no use animation and no cooldown component: a used item
+blocks left-click). They work at any time, not only in a round, and there are no team rules beyond vanilla. Nothing hands them out: `/give`, or a shop.
+A player's hit with one in the main hand has its damage set by one `beforeEvents.entityHurt` hook in `systems/melee.ts`; each item also carries the same
+number as `minecraft:damage`, so the base damage is right if either path works. Damage is in health points (2 is one heart). Every number is `MELEE` in
+`config/balance.ts` and the group **Melee** of `/rae:config`.
+
+| Weapon | Damage | What else it does |
+|---|---|---|
+| Knife | 2 | Every hit adds a bleed stack: 1 damage a second later and 1 more a second after that. Stacks add up (10 at most per target), and what is due on a tick is dealt as ONE hit by the wielder, so the game's hit window does not eat it. Ends on death, leaving, a round reset. |
+| Machete | 4 | A target at 30% of its own maximum health or less (three hearts of twenty) is finished: a huge damage is written to the hit, and a tick later a target that somehow lived is killed outright. Creative and spectator players are never finished. |
+| Baton | 3 | 25% of the hits that land stun for half a second (slowness at its largest, and a movement lock on a player). Not refreshed while it lasts, none while a game is starting, never undoes the start sequence's own lock. |
+| Axe | 6 | An attack hits everything alive within 3 blocks in the half circle in front of the wielder, each as its own hit, then waits a second (the action bar says how long). A click that hits something is one attack: the game's own hit takes the target in front, the sweep takes the rest. |
+| Sledgehammer | 8 | A swing at a block from a list (wood, glass, hay) breaks it as if mined, once per 1.5 seconds. It never breaks a block a robbery has bound, whatever the robbery's settings, and not for an adventure or spectator player. |
+
+`/scriptevent rae:melee_debug on` writes the whole pipeline to the content log (what was set, what was dealt, each bleed, stun, sweep and break) and
+`off` stops it. The code leans on engine behavior nobody has measured yet (whether the game honors a number written to a hurt event, a cancel, the order of a
+swing and its hit, whether a script's damage is announced), each with a fallback and a warning in the log; `docs/test-cards/MELEE.md` lists them first and says
+which line to change for each answer.
 
 ### Game menu
 

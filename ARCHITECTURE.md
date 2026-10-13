@@ -37,6 +37,7 @@ own header comment where it has one.
 | `forms.ts` | Shows a form to a player, retrying automatically when a right-click-opened form is refused as `UserBusy`; `confirmForm` is a yes/no where only the yes button counts. |
 | `game.ts` | Starting a round (reset, assign roles, run the start commands, then hand over to `startsequence.ts`) and sending everyone to their spawns — shared by the old script events and the in-game menu, since a system can't import a system. |
 | `log.ts` | The one place a failure or diagnostic goes: console always, chat only for `error()`, and only to an operator. |
+| `melee.ts` | What the melee weapons remember, and the engine calls behind their rules: which weapon a player holds (read from the main hand at each hit), the number a hit was set to until the game reports what it dealt, each target's knife bleed and the one tick handler that deals it (registered only while someone bleeds), the machete's finishing blow and its follow-up kill, the baton's stun (and its respect for `startsequence.isHeld`), each axe wielder's attack and cooldown and the sweep, the sledgehammer's block break (which asks `robberystore.boundAt` first). Cleared by a registered reset. |
 | `persist.ts` | The save/restore contract and engine — one world dynamic property per registered key, survives a world reload. |
 | `players.ts` | Cached "which players are X?" queries (law, alive outlaws, spectators, ...), read from `core/state`, fetched at most once a tick. Also `isOperator(player)`, the one answer to "is this an operator?" outside `core/log.ts`. |
 | `preflight.ts` | Startup checks — scoreboards, the train structure, every gun/ammo item id, every hardcoded coordinate — one combined `error()` if anything's wrong. |
@@ -91,6 +92,7 @@ problem — the label just describes most of the folder, not a strict rule every
 | `jail.ts` | Picks the active jail site; a first capture jails an outlaw, a second eliminates them. |
 | `jailbreak.ts` | The lockpick/rescue minigame for freeing a jailed outlaw. |
 | `liveconfig.ts` | The one `/rae:config` custom command (typed alone it opens the editor; list/get/set/reset typed) that edits `core/configoverrides.ts`'s registry live, operator-gated and autocompleted by the engine itself. |
+| `melee.ts` | The melee weapons' event glue and nothing else: the one `beforeEvents.entityHurt` hook (sets a weapon's damage, begins the axe's attack, writes the machete's finishing number, cancels an axe hit in its cooldown), the after-hurt event (starts a bleed, rolls a stun, takes the axe's sweep, checks that the game dealt what was set), left-click swings (the axe's sweep a tick later, the sledgehammer's break now), and `rae:melee_debug`. |
 | `menu.ts` | The in-game menu item: start or reset the game, teleport to the key places. |
 | `npcprobe.ts` | Measurement spike, not a feature: how the real game treats a vanilla NPC (`rae:npc_probe`). Does a click reach a script, does `cancel` stop the game's dialogue, can a script point an NPC at a dialogue scene, what does a scene's button report, does a spawned NPC keep its mark. See `docs/test-cards/NPC-PROBE.md`. |
 | `probe.ts` | Measurement spike, not a feature: measures whether stacked `applyDamage` calls add up (`rae:probe_damage`). |
@@ -119,6 +121,7 @@ condition, in separate files. None of this needs fixing — it's just what's act
 | `bearing.ts` | Compass direction math and display. |
 | `blockclass.ts` | What kind of block a type id is (door, trapdoor, gate, container, button, lever, plate, tripwire, item frame, other), by suffix, for the robbery framework. |
 | `lockpick.ts` | The pick lock's rules (a hidden target, hot/cold pings, hits to open, a jam after too many misses), with the random source and the tick passed in. |
+| `melee.ts` | The melee weapons' pure rules: which item is a weapon, the knife's bleed as a ledger (add a stack, what is due now), whether a target is within the machete's finishing range, the baton's stun roll (the dice are an argument), the axe's cone, the cooldown as a step function (ready, same click, cooling) and the seconds label. |
 | `robbery.ts` | A robbery as data: elements (door, chest, item frame, switch), locks (pick, key, pay), requirements, effects (say, pay out, spawn mobs, end), settings; immutable edits that validate the whole result; the saved short-key form; `parse` never throws. |
 | `robberymeta.ts` | The builder's forms as data (a field list builds a form and reads its answers back into the validators) and the plain-language summaries of what was built. |
 | `route.ts` | The train's track math: smoothing, distance, heading, speed, steering. |
@@ -127,7 +130,7 @@ condition, in separate files. None of this needs fixing — it's just what's act
 | `start.ts` | The rules of the start sequence: a camera shot is two marks (where the camera is and the way it faces), its saved text and parse (`parse` never throws), which shots a Start plays (picked at random, never opening with last time's, an injected random), how the intro's seconds are shared, and the operator's list of start commands with its edits (clean, add, edit, remove, capped, immutable). Its numbers are `config/balance.ts`'s `START`. |
 | `telemetry.ts` | What a telemetry line holds: the stamp every line carries, the fields of each kind of event (round end, robbery start/element/pick/payout/end, shop open/trade/refuse), `toLine` (compact JSON, texts and lists cut, the biggest fields dropped to fit), `limitStep` (the rate limiter as a step function, the state the caller's), and `tradeFacts` (a deal as the numbers and words of a line). The tool in `tools/telemetry/` reads these lines, so a change here is a change to it. |
 
-All ten hold to "no game imports" exactly as documented, modulo `bearing.ts`/`route.ts` each
+All eleven hold to "no game imports" exactly as documented, modulo `bearing.ts`/`route.ts` each
 importing `Vector3` as a type only (erased at compile time, so it costs nothing at runtime).
 
 ### `rae/src/config/` — numbers and coordinates, mostly
@@ -297,6 +300,26 @@ first tick after a load and every join clears for anyone it is not holding. A sc
 countdown ends is simply answered too late and ignored. The start commands, the shots and the six numbers are all the operator's to change in game:
 the RAE menu's Start sequence screens and `/rae:config`'s group Start sequence; `docs/test-cards/START-SEQUENCE.md` is the run sheet, and records what
 was unmeasured in the real game when this was built (how a pan looks, a screen right after a camera, several players' cameras at once).
+
+### The melee weapons' shape
+
+Five plain items and one listener on the game's hurt event. `systems/melee.ts` is glue; the engine calls and the state are in `core/melee.ts`, the rules in
+`logic/melee.ts`, the numbers in `config/balance.ts`'s `MELEE`, and the live copies of the numbers in `core/configoverrides.ts` (group **Melee**).
+
+```
+swing (left-click) ---> sledgehammer: block ray, list, robbery check (core/robberystore.boundAt), cooldown ---> setblock destroy
+                  `--> axe, a tick later: same click as a hit? ---> sweep (everything alive in 3 blocks, in the half circle in front)
+hurt, BEFORE (restricted) ---> a player's melee hit: write the weapon's damage; machete finishing number; axe cooldown cancel
+                               (reads only: every world change waits for the after event or a timeout)
+hurt, AFTER ---> compare what was dealt with what was set (one warning); knife: start a bleed; baton: roll a stun; axe: sweep the others
+tick (only while someone bleeds) ---> the knife's bleed, ONE override hit per target
+```
+
+What keeps it honest: **nothing restricted runs in the before event**; a hit is melee only when a PLAYER's attack with one of the five in the main hand
+(the script's own bleed uses another cause so it is never rewritten); **the hammer asks the robbery store itself**, because a script that destroys a block
+bypasses the break and explosion protection in `systems/robberyrun.ts`; **the stun never lets go of a player the start sequence holds**; and every bit of
+state (numbers waiting for the game's answer, bleeds, stuns, cooldowns, follow-up kills) is cleared by the registered reset, so a round starts clean.
+Nothing about how the real game answers has been measured: `docs/test-cards/MELEE.md` lists each question first, and `rae:melee_debug` shows the answer.
 
 ## `main.ts`: what it wires
 

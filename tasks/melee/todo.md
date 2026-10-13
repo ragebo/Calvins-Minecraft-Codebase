@@ -119,25 +119,26 @@ the game shows (no spike): every engine behavior that is not measured has a fall
   - Files: `rae/src/logic/melee.ts`, `rae/src/core/melee.ts`, `rae/src/systems/melee.ts`, `rae/src/config/balance.ts`, `rae/test/melee-sledgehammer.test.mjs`
 
 ### Checkpoint 1: the weapons
-- [ ] all green; every weapon's rule has a test and deliberate breaks of it; each fallback has a test
+- [x] all green; every weapon's rule has a test and deliberate breaks of it; each fallback has a test (1685 tests; 364 deliberate breaks across Tasks 2 to 8, each caught; the fallbacks are `killWithoutHurtEvent` (machete), the ignored-cancel warning (axe) and the item's own `minecraft:damage`)
 
 ## Phase 2: Making it yours
 
-- [ ] **Task 8: Live numbers, docs and the test card** (M)
+- [x] **Task 8: Live numbers, docs and the test card** (M) - done
   `core/configoverrides.ts` registers the melee numbers (the five damages, the bleed's stack cap, the stun chance and length, the axe's reach and cooldown, the sledgehammer's cooldown) in a
   group **Melee**, so the config editor and `/rae:config` change them live (and a changed damage also changes what the hook sets; the item component stays the shipped default). `docs/test-cards/MELEE.md`
   (numbered in-game steps for each weapon, with `rae:melee_debug on`; **"what only the real game can answer" first**, each answer naming the function to change). README and ARCHITECTURE.md rows
   (named here because the rules normally forbid editing them), and the sprites' credit beside the revolver's.
   - Acceptance:
-    - [ ] each number is a registered setting with a range, changes the next hit, and resets to its default
-    - [ ] the card has every step the owner needs, and says what is unmeasured and where each fix would go
-    - [ ] README and ARCHITECTURE.md say where melee lives; the credit is there
+    - [x] each number is a registered setting with a range, changes the next hit, and resets to its default
+    - [x] the card has every step the owner needs, and says what is unmeasured and where each fix would go
+    - [x] README and ARCHITECTURE.md say where melee lives; the credit is there
   - Verification: check, test, check:legacy
+  - Result: group Melee in the config editor: the five damages, the bleed stack cap, the baton's chance and length, the axe's reach and cooldown, the sledgehammer's cooldown (11 settings with ranges; each read at the next hit/swing/stun; reset to default); docs/test-cards/MELEE.md with 12 real-game questions first (each naming the line to change) then 41 numbered steps; README (credits, layout, systems row, Melee weapons section) and ARCHITECTURE.md (core, systems and logic rows, the melee shape). 1685 tests (+10 for the config), 27-break mutation run all caught.
   - Dependencies: Tasks 3 to 7
   - Files: `rae/src/core/configoverrides.ts`, `rae/test/melee-config.test.mjs`, `docs/test-cards/MELEE.md`, `README.md`, `ARCHITECTURE.md`
 
 ### Checkpoint: complete
-- [ ] every acceptance box above is ticked
+- [x] every acceptance box above is ticked
 - [ ] the owner has run `docs/test-cards/MELEE.md` in the real game with `rae:melee_debug on`; what it shows is fixed in a follow-up round
 
 - [ ] **Task 9: Release** (S; only when the owner asks)

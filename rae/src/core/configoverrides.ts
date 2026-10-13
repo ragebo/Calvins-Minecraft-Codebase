@@ -1,5 +1,5 @@
 import type { Player, Vector3 } from "@minecraft/server";
-import { AIM, BOAT, COMPASS, ECONOMY, FORT, HARMING, HORSE, JAILBREAK, RAIDS, RANCH, ROBBERY, SHOP, START, TELEMETRY, TRAIN, TUMBLEWEED } from "../config/balance.js";
+import { AIM, BOAT, COMPASS, ECONOMY, FORT, HARMING, HORSE, JAILBREAK, MELEE, RAIDS, RANCH, ROBBERY, SHOP, START, TELEMETRY, TRAIN, TUMBLEWEED } from "../config/balance.js";
 import { GUNS } from "../config/guns.js";
 import {
     BOAT_NPC, BOAT_WIN_TELEPORT, BRIDGE_AREA, FORT_AREA, FORT_REWARD_CHEST, FORT_SPAWNS,
@@ -511,6 +511,22 @@ function registerBalanceFields(): void {
     numeric("start.pickSeconds", "Start: how long law players have to choose a spawn, in seconds (then they get a random one)", GROUP, "integer", () => START.pickSeconds, (v) => { START.pickSeconds = v; }, { min: 1, max: 300 });
     numeric("start.flyDownSeconds", "Start: how long the outlaws' camera takes to fly down to their spawn, in seconds (play waits for it)", GROUP, "float", () => START.flyDownSeconds, (v) => { START.flyDownSeconds = v; }, { min: 0, max: 10 });
     numeric("start.flyDownHeight", "Start: how many blocks above their spawn the outlaws' fly-down starts", GROUP, "integer", () => START.flyDownHeight, (v) => { START.flyDownHeight = v; }, { min: 1, max: 200 });
+
+    // The melee weapons' numbers (systems/melee.ts and core/melee.ts read each one at the hit, the swing or the stun, so a change is for the NEXT one).
+    // Damage is in health points, as the game counts them (2 is one heart). The sledgehammer's list of breakable blocks is not here: the editor
+    // takes numbers and switches, so that list is edited in config/balance.ts. A weapon item's own minecraft:damage stays the shipped number.
+    const MELEE_GROUP = "Melee";
+
+    for (const [key, weapon] of Object.entries(MELEE.weapons)) {
+        numeric(`melee.${key}Damage`, `Melee: ${weapon.name.toLowerCase()} damage per hit, in health points (2 is one heart)`, MELEE_GROUP, "float", () => weapon.damage, (v) => { weapon.damage = v; }, { min: 0, max: 100 });
+    }
+
+    numeric("melee.bleedMaxStacks", "Melee: the most bleed stacks the knife can put on one target (each hit adds one: 1 damage a second for 2 seconds)", MELEE_GROUP, "integer", () => MELEE.bleed.maxStacks, (v) => { MELEE.bleed.maxStacks = v; }, { min: 1, max: 50 });
+    numeric("melee.stunChance", "Melee: the chance a baton hit stuns, from 0 (never) to 1 (always)", MELEE_GROUP, "float", () => MELEE.baton.stunChance, (v) => { MELEE.baton.stunChance = v; }, { min: 0, max: 1 });
+    numeric("melee.stunTicks", "Melee: how long a baton stun lasts, in ticks (20 is one second)", MELEE_GROUP, "integer", () => MELEE.baton.stunTicks, (v) => { MELEE.baton.stunTicks = v; }, { min: 1, max: 200 });
+    numeric("melee.axeReach", "Melee: how far an axe attack reaches, in blocks", MELEE_GROUP, "float", () => MELEE.axe.reach, (v) => { MELEE.axe.reach = v; }, { min: 0.5, max: 8 });
+    numeric("melee.axeCooldownTicks", "Melee: how long the axe waits between attacks, in ticks (20 is one second, 0 is no wait)", MELEE_GROUP, "integer", () => MELEE.axe.cooldownTicks, (v) => { MELEE.axe.cooldownTicks = v; }, { min: 0, max: 600 });
+    numeric("melee.hammerCooldownTicks", "Melee: how long the sledgehammer waits between block breaks, in ticks (20 is one second, 0 is no wait)", MELEE_GROUP, "integer", () => MELEE.sledgehammer.cooldownTicks, (v) => { MELEE.sledgehammer.cooldownTicks = v; }, { min: 0, max: 600 });
 }
 
 registerGunFields();
