@@ -141,7 +141,7 @@ the game shows (no spike): every engine behavior that is not measured has a fall
 - [x] every acceptance box above is ticked
 - [ ] the owner has run `docs/test-cards/MELEE.md` in the real game with `rae:melee_debug on`; what it shows is fixed in a follow-up round
 
-- [ ] **Task 9: Release** (S; only when the owner asks)
+- [x] **Task 9: Release** (S; only when the owner asks) - done 2026-10-13 on "deploy" (BP 0.2.8 first, with the game at a menu and every world closed; RP 1.0.28 once the game was quit): both packs byte-verified against the repo (BP 116 files, RP 37), all four world pins read as JSON at 0.2.8 / 1.0.28, rollback copies hold 0.2.7 / 1.0.27. Not pushed.
   Both packs change (the sprites are an RP change): bump the BP in four places and the RP in its manifest (header and module), gate, clean build, `deploy.ps1` for the BP and `deploy-rp.ps1` for the RP **with the game
   fully closed**, byte-verify both, read the four worlds' pins for both as JSON, tell the owner to launch fresh. No push unless asked.
   - Dependencies: all of the above.

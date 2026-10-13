@@ -14,8 +14,8 @@ Everything that does not depend on the real game is covered by the tests (`test/
 rules, each caught). **What the tests cannot say is how the real game answers the questions below**: the code was built on the typings and carries a fallback
 and a log line for each, so a wrong guess costs a line of code, not a rebuild. This card is the measurement.
 
-- **Built, not deployed yet.** The release is a separate step because the sprites are a resource-pack change: the game has to be **quit completely** and
-  launched fresh (Behavior packs are read per world, resource packs only at launch). Until it is deployed none of this is in the game.
+- **Deployed 2026-10-13 as behavior pack 0.2.8 and resource pack 1.0.28** (0.2.8 also fixes buying a tame horse when the game spawns a foal). Launch the game fresh:
+  resource packs are read only at launch, so the sprites and the five items need a game that was started after the deploy, not one that was already running.
 - Items: `/give @s bountysys:knife`, `bountysys:machete`, `bountysys:baton`, `bountysys:axe`, `bountysys:sledgehammer` (also in the creative inventory,
   Equipment tab). **They work at any time, not only in a round.**
 - **Turn the log on first: `/scriptevent rae:melee_debug on`**, and watch the content log. It writes one `[melee]` line for each step (examples below). `off` stops it.
