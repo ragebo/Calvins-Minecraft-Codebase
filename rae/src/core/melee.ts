@@ -5,6 +5,7 @@ import { lock, unlock } from "./cinematic.js";
 import { onDeath } from "./events.js";
 import { info, warn } from "./log.js";
 import { registerSystem } from "./registry.js";
+import { boundAt } from "./robberystore.js";
 import { isPhase } from "./round.js";
 import { isHeld } from "./startsequence.js";
 import { onTick, type TickContext } from "./tick.js";
@@ -264,11 +265,11 @@ function beginAxe(player: Player, now: number): AxeAttack {
     return attack;
 }
 
-function showAxeCooldown(player: Player, left: number): void {
+function showCooldown(player: Player, weapon: string, left: number): void {
     try {
-        setActionBar(player, "melee:axe", `§7Axe ready in §f${formatSeconds(left)}s`, { priority: ACTION_BAR_PRIORITY.tool, ttlTicks: 15 });
+        setActionBar(player, "melee:cooldown", `§7${weapon} ready in §f${formatSeconds(left)}s`, { priority: ACTION_BAR_PRIORITY.tool, ttlTicks: 15 });
     } catch (err) {
-        reportOnce("the axe cooldown message", err);
+        reportOnce("a cooldown message", err);
     }
 }
 
@@ -308,7 +309,7 @@ export function axeHit(attacker: Player, target: Entity, now: number): { readonl
         const left = attack.until - now;
         meleeTrace(`axe: cooling, ${left} ticks left, the hit on ${target.typeId} is cancelled`);
         system.run(() => {
-            if (attacker.isValid) showAxeCooldown(attacker, left);
+            if (attacker.isValid) showCooldown(attacker, "Axe", left);
         });
         return { cancel: true, sweep: false };
     }
@@ -376,12 +377,70 @@ export function axeSwung(player: Player): void {
 
     if (status === "cooling" && attack) {
         meleeTrace(`axe: cooling, ${attack.until - now} ticks left`);
-        showAxeCooldown(player, attack.until - now);
+        showCooldown(player, "Axe", attack.until - now);
         return;
     }
 
     beginAxe(player, now);
     sweepAxe(player, now);
+}
+
+// ---------------------------------------------------------------------------------------------------------
+// The sledgehammer
+// ---------------------------------------------------------------------------------------------------------
+
+/** The tick each swinger's sledgehammer is ready again. */
+const hammerReady = new Map<string, number>();
+
+/**
+ * A swing with the sledgehammer, in a left-click's after event (so nothing here is restricted). If it was a swing at a block on the list, within
+ * reach, with nothing living nearer, that no robbery has bound, in a chunk that is loaded, by a player who may build, and the hammer is ready, the
+ * block is destroyed as if mined and the hammer waits. Anything else costs nothing and changes nothing. A swing at a mob is the hurt hook's (8 damage).
+ */
+export function hammerSwung(player: Player): void {
+    try {
+        if (["adventure", "spectator"].includes(modeOf(player))) return;
+
+        const found = player.getBlockFromViewDirection({ maxDistance: MELEE.sledgehammer.reach });
+        const block = found?.block;
+        if (!found || !block || !MELEE.sledgehammer.breakable.includes(block.typeId)) return;
+
+        const at = block.location;
+        const eye = player.getHeadLocation();
+        const distance = Math.hypot(at.x + found.faceLocation.x - eye.x, at.y + found.faceLocation.y - eye.y, at.z + found.faceLocation.z - eye.z);
+        if (distance > MELEE.sledgehammer.reach) return;
+
+        if (player.getEntitiesFromViewDirection({ maxDistance: MELEE.sledgehammer.reach }).some((seen) => seen.distance < distance && livingTarget(seen.entity))) {
+            meleeTrace("sledgehammer: something living is nearer than the block, so the swing is its hit");
+            return;
+        }
+
+        const dimension = block.dimension;
+        if (boundAt(dimension.id, at.x, at.y, at.z)) {
+            meleeTrace(`sledgehammer: ${block.typeId} at ${at.x} ${at.y} ${at.z} belongs to a robbery, so it is kept`);
+            return;
+        }
+        if (!dimension.isChunkLoaded(at)) return;
+
+        const now = system.currentTick;
+        const ready = hammerReady.get(player.id) ?? 0;
+        if (now < ready) {
+            meleeTrace(`sledgehammer: cooling, ${ready - now} ticks left`);
+            showCooldown(player, "Sledgehammer", ready - now);
+            return;
+        }
+
+        hammerReady.set(player.id, now + MELEE.sledgehammer.cooldownTicks);
+
+        try {
+            dimension.runCommand(`setblock ${at.x} ${at.y} ${at.z} air destroy`);
+            meleeTrace(`sledgehammer: broke ${block.typeId} at ${at.x} ${at.y} ${at.z}`);
+        } catch (err) {
+            reportOnce("a hammer break", err);
+        }
+    } catch (err) {
+        reportOnce("a hammer swing", err);
+    }
 }
 
 // ---------------------------------------------------------------------------------------------------------
@@ -480,6 +539,7 @@ registerSystem({
         setNumbers.clear();
         axeAttacks.clear();
         ownSweep.clear();
+        hammerReady.clear();
         finishing.clear();
         stopBleeding();
         endAllStuns();

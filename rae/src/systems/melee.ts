@@ -3,7 +3,7 @@ import { honored } from "../logic/melee.js";
 import { onScriptEvent } from "../core/events.js";
 import { warn } from "../core/log.js";
 import { MELEE } from "../config/balance.js";
-import { axeHit, axeSwung, beginFinish, finishLanded, finishReading, heldWeapon, meleeTrace, noteSet, reportOnce, rollBatonStun, setMeleeDebug, startBleed, stun, sweepAxe, takeSet } from "../core/melee.js";
+import { axeHit, axeSwung, beginFinish, finishLanded, finishReading, hammerSwung, heldWeapon, meleeTrace, noteSet, reportOnce, rollBatonStun, setMeleeDebug, startBleed, stun, sweepAxe, takeSet } from "../core/melee.js";
 import { format, tell } from "../core/ui.js";
 
 /**
@@ -114,12 +114,20 @@ listen("the hurt event, after", () => world.afterEvents.entityHurt.subscribe((ev
     }
 }));
 
-// A left-click swing with an axe. A tick later (so the hit that goes with it can have come first) the swing is looked at.
+// A left-click swing. With the sledgehammer it may break a block now. With an axe, a tick later (so the hit that goes with it can have come
+// first) the swing is looked at.
 listen("swings", () => world.afterEvents.playerSwingStart.subscribe((event) => {
-    if (event.swingSource !== EntitySwingSource.Attack || heldWeapon(event.player)?.key !== "axe") return;
+    const source = event.swingSource;
+    if (source !== EntitySwingSource.Attack && source !== EntitySwingSource.Mine) return;
 
-    const player = event.player;
-    system.runTimeout(() => axeSwung(player), MELEE.axe.swingDelayTicks);
+    const held = heldWeapon(event.player)?.key;
+
+    if (held === "sledgehammer") {
+        hammerSwung(event.player);
+    } else if (held === "axe" && source === EntitySwingSource.Attack) {
+        const player = event.player;
+        system.runTimeout(() => axeSwung(player), MELEE.axe.swingDelayTicks);
+    }
 }));
 
 onScriptEvent("rae:melee_debug", (player, message) => {

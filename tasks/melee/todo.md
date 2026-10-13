@@ -103,17 +103,18 @@ the game shows (no spike): every engine behavior that is not measured has a fall
   - Dependencies: Task 2
   - Files: `rae/src/logic/melee.ts`, `rae/src/core/melee.ts`, `rae/src/systems/melee.ts`, `rae/test/melee-axe.test.mjs`
 
-- [ ] **Task 7: The sledgehammer's blocks and cooldown** (L)
+- [x] **Task 7: The sledgehammer's blocks and cooldown** (L) - done
   A sledgehammer swing at a block from the configured list breaks it (`setblock ... destroy`, so it drops as when mined) once per 1.5 seconds; it never breaks a block a robbery has bound or
   protected, or one outside the list; it hits entities for 8 as in Task 2.
   - Acceptance:
-    - [ ] a block on the list is broken and drops; one off the list is left alone
-    - [ ] every block a robbery has bound (door, chest, switch, frame) and every protected one survives a swing, with the robbery running and not; an operator is held to the same
-    - [ ] the cooldown: a second swing inside 1.5 seconds breaks nothing; after it, it does
-    - [ ] a swing at an entity deals 8 and does not break the block behind it
-    - [ ] nothing is broken in an unloaded chunk or across a dimension; the list is read from the config at the swing
-    - [ ] the break runs after the event (never inside a restricted callback)
+    - [x] a block on the list is broken and drops; one off the list is left alone
+    - [x] every block a robbery has bound (door, chest, switch, frame) and every protected one survives a swing, with the robbery running and not; an operator is held to the same
+    - [x] the cooldown: a second swing inside 1.5 seconds breaks nothing; after it, it does
+    - [x] a swing at an entity deals 8 and does not break the block behind it
+    - [x] nothing is broken in an unloaded chunk or across a dimension; the list is read from the config at the swing
+    - [x] the break runs after the event (never inside a restricted callback)
   - Verification: check, test, check:legacy; deliberate breaks of the list, the protection and the cooldown
+  - Result: a Mine/Attack swing with the sledgehammer at a block on MELEE.sledgehammer.breakable (95 real block ids: wood, glass, hay; read at the swing) within 4 blocks of where the ray hit, with nothing living nearer, in a loaded chunk, by a survival/creative player, runs setblock destroy and starts a 30-tick per-player cooldown (action bar when cooling); never breaks a block any robbery has bound (door halves, chest, switch; protect on or off, running or not, operator or not; the dimension is part of the key); entity hits are the hurt hook's 8. 1675 tests (+24), 57-break mutation run all caught.
   - Dependencies: Task 2
   - Files: `rae/src/logic/melee.ts`, `rae/src/core/melee.ts`, `rae/src/systems/melee.ts`, `rae/src/config/balance.ts`, `rae/test/melee-sledgehammer.test.mjs`
 

@@ -442,6 +442,10 @@ export const START = {
     ] as string[]
 };
 
+// The woods and glass colors the sledgehammer's list is built from. Oak's door, gate and trapdoor have older names in the game and are listed by hand.
+const WOODS = ["spruce", "birch", "jungle", "acacia", "dark_oak", "mangrove", "cherry", "pale_oak", "bamboo", "crimson", "warped"];
+const GLASS_COLORS = ["white", "orange", "magenta", "light_blue", "yellow", "lime", "pink", "gray", "light_gray", "cyan", "purple", "blue", "brown", "green", "red", "black"];
+
 /**
  * The melee weapons (the plan is tasks/melee/plan.md). The ids live here once, so the script and the item files agree on them
  * (test/assets.test.mjs checks that they do, and that each has its own sprite in the resource pack). The sprites came from the
@@ -490,7 +494,26 @@ export const MELEE = {
      * axe waits `cooldownTicks`. A hit and a swing that arrive within `sameAttackTicks` of each other are one click, and a swing is looked at
      * `swingDelayTicks` after it arrives, so the hit that goes with it has had its chance to come first.
      */
-    axe: { reach: 3, coneHalfAngleDegrees: 90, cooldownTicks: 20, sameAttackTicks: 2, swingDelayTicks: 1 }
+    axe: { reach: 3, coneHalfAngleDegrees: 90, cooldownTicks: 20, sameAttackTicks: 2, swingDelayTicks: 1 },
+
+    /**
+     * The sledgehammer: a swing at a block whose id is in `breakable`, no further than `reach` blocks away, breaks it (as if mined, so it drops
+     * what it drops) and then waits `cooldownTicks`. The list is wood, glass and hay: planks, fences, gates, doors, trapdoors, plain and stained
+     * glass and their panes. It never breaks a block a robbery has bound, whatever this list says. It is read at every swing, and it is edited
+     * here (the config editor takes numbers and switches, not lists). Every id must be a real block: test/melee-hammer.test.mjs checks them against
+     * the game's own list.
+     */
+    sledgehammer: {
+        reach: 4,
+        cooldownTicks: 30,
+        breakable: [
+            "minecraft:glass", "minecraft:glass_pane",
+            ...GLASS_COLORS.flatMap((color) => [`minecraft:${color}_stained_glass`, `minecraft:${color}_stained_glass_pane`]),
+            "minecraft:oak_planks", "minecraft:oak_fence", "minecraft:fence_gate", "minecraft:wooden_door", "minecraft:trapdoor",
+            ...WOODS.flatMap((wood) => [`minecraft:${wood}_planks`, `minecraft:${wood}_fence`, `minecraft:${wood}_fence_gate`, `minecraft:${wood}_door`, `minecraft:${wood}_trapdoor`]),
+            "minecraft:hay_block"
+        ] as string[]
+    }
 };
 
 /**
