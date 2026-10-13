@@ -149,3 +149,68 @@ test("the stun roll: below the chance stuns, at it or above does not, and the ra
     check("about a quarter over 20000 rolls", rate > 0.24 && rate < 0.26, String(rate));
     done();
 });
+
+// ---------------------------------------------------------------------------------------------------------
+// The axe
+// ---------------------------------------------------------------------------------------------------------
+
+const { inCone, cooldownStatus, formatSeconds } = await load("logic/melee.js");
+
+test("the cone: in front and to either side counts, behind does not, and exactly 90 degrees is decided as inside", () => {
+    const { check, done } = checks();
+    // Facing +z (0, 1); the half circle in front is z >= 0.
+    check("straight ahead", inCone(0, 5, 0, 1, 90));
+    check("to the right", inCone(5, 0, 0, 1, 90));
+    check("to the left", inCone(-5, 0, 0, 1, 90));
+    check("diagonally ahead", inCone(3, 3, 0, 1, 90));
+    check("89 degrees off", inCone(Math.sin(89 * Math.PI / 180), Math.cos(89 * Math.PI / 180), 0, 1, 90));
+    check("91 degrees off is out", !inCone(Math.sin(91 * Math.PI / 180), Math.cos(91 * Math.PI / 180), 0, 1, 90));
+    check("straight behind", !inCone(0, -5, 0, 1, 90));
+    check("behind and to the side", !inCone(5, -0.5, 0, 1, 90));
+    done();
+});
+
+test("the cone follows the facing and the half angle it is given, whatever the length of the vectors", () => {
+    const { check, done } = checks();
+    check("facing east, east is ahead", inCone(2, 0, 1, 0, 90));
+    check("facing east, west is behind", !inCone(-2, 0, 1, 0, 90));
+    check("a facing that is not a unit vector", inCone(0, 1, 0, 40, 90) && !inCone(0, -1, 0, 40, 90));
+    check("a narrower cone: 45 degrees off is the edge, 60 is out", inCone(1, 1, 0, 1, 45) && !inCone(Math.sin(60 * Math.PI / 180), Math.cos(60 * Math.PI / 180), 0, 1, 45));
+    check("a full circle takes everything", inCone(0, -5, 0, 1, 180));
+    check("a facing between the axes", inCone(1, 0, 1, 1, 90) && inCone(0, 1, 1, 1, 90) && !inCone(-1, -1, 1, 1, 90));
+    done();
+});
+
+test("with no direction to measure, everything counts: on top of the wielder, or looking straight up or down", () => {
+    const { check, done } = checks();
+    check("on top of them", inCone(0, 0, 0, 1, 90));
+    check("a hair away (the same thing)", inCone(1e-9, 0, 0, 1, 90));
+    check("looking straight down, one way", inCone(0, -3, 0, 0, 90));
+    check("looking straight down, the other", inCone(3, 3, 0, 0, 90));
+    done();
+});
+
+test("a cooldown is a step function: ready, then 'same click' for a couple of ticks, then cooling until it ends", () => {
+    const { check, done } = checks();
+    check("no attack yet", cooldownStatus(undefined, 0, 100, 2) === "ready");
+    check("the tick it begins", cooldownStatus(120, 100, 100, 2) === "same");
+    check("2 ticks in", cooldownStatus(120, 100, 102, 2) === "same");
+    check("3 ticks in", cooldownStatus(120, 100, 103, 2) === "cooling");
+    check("a tick before the end", cooldownStatus(120, 100, 119, 2) === "cooling");
+    check("the tick it ends", cooldownStatus(120, 100, 120, 2) === "ready");
+    check("long after", cooldownStatus(120, 100, 500, 2) === "ready");
+    check("a window longer than the cooldown still ends with it", cooldownStatus(120, 100, 120, 50) === "ready");
+    done();
+});
+
+test("ticks as seconds: to a tenth, rounded up so a cooldown never reads as over early", () => {
+    const { check, done } = checks();
+    check("20 ticks", formatSeconds(20) === "1.0");
+    check("10 ticks", formatSeconds(10) === "0.5");
+    check("11 ticks", formatSeconds(11) === "0.6");
+    check("1 tick", formatSeconds(1) === "0.1");
+    check("30 ticks", formatSeconds(30) === "1.5");
+    check("nothing left", formatSeconds(0) === "0.0");
+    check("less than nothing", formatSeconds(-4) === "0.0");
+    done();
+});

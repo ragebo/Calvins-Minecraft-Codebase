@@ -31,6 +31,36 @@ export function rollStun(random: number, chance: number): boolean {
     return random < chance;
 }
 
+/**
+ * Whether something is in the cone in front of someone: `to` is the way from them to it and `facing` the way they look, both on the flat
+ * (x and z). Within `halfAngleDegrees` either side counts, exactly on the edge included. With no direction to measure (it is on top of
+ * them, or they look straight up or down) it counts, so a swing straight down still hits what is around the feet.
+ */
+export function inCone(toX: number, toZ: number, facingX: number, facingZ: number, halfAngleDegrees: number): boolean {
+    const toLength = Math.hypot(toX, toZ);
+    const facingLength = Math.hypot(facingX, facingZ);
+    if (toLength < 1e-6 || facingLength < 1e-6) return true;
+
+    const cosine = (toX * facingX + toZ * facingZ) / (toLength * facingLength);
+    return cosine >= Math.cos((halfAngleDegrees * Math.PI) / 180) - 1e-9;
+}
+
+export type CooldownStatus = "ready" | "same" | "cooling";
+
+/**
+ * Where an attack with a cooldown stands at `now`: "ready" when there is no attack or its cooldown (until the tick `until`) is over, "same"
+ * when the last attack began within `sameAttackTicks` ago (so this is the same click), "cooling" otherwise.
+ */
+export function cooldownStatus(until: number | undefined, attackTick: number, now: number, sameAttackTicks: number): CooldownStatus {
+    if (until === undefined || now >= until) return "ready";
+    return now - attackTick <= sameAttackTicks ? "same" : "cooling";
+}
+
+/** Ticks as seconds to a tenth, rounded up so a cooldown never reads as over before it is: 10 ticks is "0.5", 11 is "0.6". */
+export function formatSeconds(ticks: number): string {
+    return (Math.ceil(Math.max(0, ticks) / 2) / 10).toFixed(1);
+}
+
 /** Whether the game dealt the number a hit was set to. A hair of tolerance, because the engine keeps health in floats. */
 export function honored(set: number, dealt: number): boolean {
     return Math.abs(set - dealt) < 0.001;

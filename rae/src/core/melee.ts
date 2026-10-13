@@ -1,6 +1,6 @@
 import { EntityDamageCause, EquipmentSlot, system, type Entity, type Player } from "@minecraft/server";
 import { MELEE } from "../config/balance.js";
-import { addStack, dueNow, isFinishable, rollStun, weaponForItem, type BleedStack, type MeleeWeapon } from "../logic/melee.js";
+import { addStack, cooldownStatus, dueNow, formatSeconds, inCone, isFinishable, rollStun, weaponForItem, type BleedStack, type MeleeWeapon } from "../logic/melee.js";
 import { lock, unlock } from "./cinematic.js";
 import { onDeath } from "./events.js";
 import { info, warn } from "./log.js";
@@ -8,6 +8,7 @@ import { registerSystem } from "./registry.js";
 import { isPhase } from "./round.js";
 import { isHeld } from "./startsequence.js";
 import { onTick, type TickContext } from "./tick.js";
+import { ACTION_BAR_PRIORITY, setActionBar } from "./ui.js";
 
 /**
  * What the melee weapons remember (systems/melee.ts listens to the game; logic/melee.ts holds the rules; the plan is tasks/melee/plan.md).
@@ -60,6 +61,10 @@ export interface SetNumber {
     readonly tick: number;
     /** The machete's finishing blow: the number is a huge one that the game is expected to cap, so it is not checked against what was dealt. */
     readonly finish?: boolean;
+    /** The axe began an attack with this hit: once it lands, the sweep takes the others in the cone. */
+    readonly sweep?: boolean;
+    /** The hit was cancelled (an axe in its cooldown). If the game reports a hurt for it anyway, it ignored the cancel. */
+    readonly cancelled?: boolean;
 }
 
 const setNumbers = new Map<string, SetNumber>();
@@ -230,6 +235,156 @@ function finishUp(targetId: string): void {
 }
 
 // ---------------------------------------------------------------------------------------------------------
+// The axe
+// ---------------------------------------------------------------------------------------------------------
+
+interface AxeAttack {
+    /** The tick the cooldown ends. */
+    readonly until: number;
+    /** The tick this attack began: a hit or a swing within `sameAttackTicks` of it is the same click. */
+    readonly tick: number;
+    /** Who this attack has already dealt with, so nothing is hit twice for one click. */
+    readonly done: Set<string>;
+}
+
+const axeAttacks = new Map<string, AxeAttack>();
+
+/** Targets the sweep itself is about to hurt, by the tick it did: the hurt hook lets those through instead of taking them for a player's click. */
+const ownSweep = new Map<string, number>();
+const OWN_SWEEP_TICKS = 2;
+
+function axeStatus(playerId: string, now: number): { readonly attack: AxeAttack | undefined; readonly status: ReturnType<typeof cooldownStatus> } {
+    const attack = axeAttacks.get(playerId);
+    return { attack, status: cooldownStatus(attack?.until, attack?.tick ?? 0, now, MELEE.axe.sameAttackTicks) };
+}
+
+function beginAxe(player: Player, now: number): AxeAttack {
+    const attack: AxeAttack = { until: now + MELEE.axe.cooldownTicks, tick: now, done: new Set<string>() };
+    axeAttacks.set(player.id, attack);
+    return attack;
+}
+
+function showAxeCooldown(player: Player, left: number): void {
+    try {
+        setActionBar(player, "melee:axe", `§7Axe ready in §f${formatSeconds(left)}s`, { priority: ACTION_BAR_PRIORITY.tool, ttlTicks: 15 });
+    } catch (err) {
+        reportOnce("the axe cooldown message", err);
+    }
+}
+
+/** A living thing an axe can hurt: it has health left, and is not a creative or spectator player. */
+function livingTarget(entity: Entity): boolean {
+    try {
+        if (entity.typeId === "minecraft:player" && ["creative", "spectator"].includes(modeOf(entity as Player))) return false;
+        const health = entity.getComponent("minecraft:health");
+        return health !== undefined && health.currentValue > 0;
+    } catch {
+        return false;
+    }
+}
+
+/**
+ * What the hurt hook does with an axe hit: let it through (at the axe's number), or cancel it. A hit while the cooldown runs is cancelled, and
+ * says how long is left. A hit that begins an attack asks for the sweep once it lands. A hit on something the sweep already dealt with is the same
+ * click arriving late: cancelled, since the sweep took it. The sweep's own hits, announced as hurts, are not clicks at all and pass.
+ * Restricted-execution safe: the message is sent a tick later.
+ */
+export function axeHit(attacker: Player, target: Entity, now: number): { readonly cancel: boolean; readonly sweep: boolean } {
+    const own = ownSweep.get(target.id);
+    if (own !== undefined && now - own <= OWN_SWEEP_TICKS) {
+        ownSweep.delete(target.id);
+        return { cancel: false, sweep: false };
+    }
+
+    const { attack, status } = axeStatus(attacker.id, now);
+
+    if (status === "ready") {
+        beginAxe(attacker, now).done.add(target.id);
+        meleeTrace(`axe: a hit on ${target.typeId} begins an attack`);
+        return { cancel: false, sweep: true };
+    }
+
+    if (status === "cooling" && attack) {
+        const left = attack.until - now;
+        meleeTrace(`axe: cooling, ${left} ticks left, the hit on ${target.typeId} is cancelled`);
+        system.run(() => {
+            if (attacker.isValid) showAxeCooldown(attacker, left);
+        });
+        return { cancel: true, sweep: false };
+    }
+
+    if (attack?.done.has(target.id)) {
+        meleeTrace(`axe: the sweep already dealt ${target.typeId} its hit, so the game's is cancelled`);
+        return { cancel: true, sweep: false };
+    }
+
+    attack?.done.add(target.id);
+    return { cancel: false, sweep: false };
+}
+
+/** The attack's sweep: every living thing in reach and in the cone that this attack has not dealt with takes the axe's number as a hit of its own. */
+export function sweepAxe(attacker: Player, now: number): number {
+    const attack = axeAttacks.get(attacker.id);
+    if (!attack) return 0;
+
+    for (const [id, tick] of ownSweep) if (now - tick > OWN_SWEEP_TICKS) ownSweep.delete(id);
+
+    let hits = 0;
+
+    try {
+        const origin = attacker.location;
+        const facing = attacker.getViewDirection();
+
+        for (const target of attacker.dimension.getEntities({ location: origin, maxDistance: MELEE.axe.reach })) {
+            if (target.id === attacker.id || attack.done.has(target.id) || !livingTarget(target)) continue;
+
+            const at = target.location;
+            const dx = at.x - origin.x;
+            const dz = at.z - origin.z;
+            if (Math.hypot(dx, at.y - origin.y, dz) > MELEE.axe.reach) continue;
+            if (!inCone(dx, dz, facing.x, facing.z, MELEE.axe.coneHalfAngleDegrees)) continue;
+
+            attack.done.add(target.id);
+            ownSweep.set(target.id, now);
+            try {
+                target.applyDamage(MELEE.weapons.axe.damage, { cause: EntityDamageCause.entityAttack, damagingEntity: attacker });
+                hits++;
+            } catch (err) {
+                reportOnce("an axe sweep hit", err);
+            }
+        }
+    } catch (err) {
+        reportOnce("an axe sweep", err);
+    }
+
+    meleeTrace(`axe: swept ${hits}`);
+    return hits;
+}
+
+/**
+ * A left-click swing with an axe, looked at `swingDelayTicks` after it arrived. If a hit began the attack meanwhile, this is the same click and
+ * there is nothing to do. In the cooldown it only says how long is left. Otherwise it is a swing at the air (or at something the game did not
+ * report as a hit): it begins the attack and sweeps everything in front.
+ */
+export function axeSwung(player: Player): void {
+    if (heldWeapon(player)?.key !== "axe") return;
+
+    const now = system.currentTick;
+    const { attack, status } = axeStatus(player.id, now);
+
+    if (status === "same") return;
+
+    if (status === "cooling" && attack) {
+        meleeTrace(`axe: cooling, ${attack.until - now} ticks left`);
+        showAxeCooldown(player, attack.until - now);
+        return;
+    }
+
+    beginAxe(player, now);
+    sweepAxe(player, now);
+}
+
+// ---------------------------------------------------------------------------------------------------------
 // The baton's stun
 // ---------------------------------------------------------------------------------------------------------
 
@@ -323,6 +478,8 @@ registerSystem({
     name: "melee",
     reset() {
         setNumbers.clear();
+        axeAttacks.clear();
+        ownSweep.clear();
         finishing.clear();
         stopBleeding();
         endAllStuns();

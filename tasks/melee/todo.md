@@ -88,17 +88,18 @@ the game shows (no spike): every engine behavior that is not measured has a fall
   - Dependencies: Task 2
   - Files: `rae/src/logic/melee.ts`, `rae/src/core/melee.ts`, `rae/src/systems/melee.ts`, `rae/test/melee-baton.test.mjs`
 
-- [ ] **Task 6: The axe's cone and cooldown** (M)
+- [x] **Task 6: The axe's cone and cooldown** (M) - done
   An axe swing hits every living thing within `reach` (3 blocks) whose direction from the player is within 90 degrees of where they look, except the wielder, for 6 damage
   each, each as its own hit; then a 1 second cooldown during which a swing does nothing (shown on the action bar). A hit and a swing in the same tick count once.
   - Acceptance:
-    - [ ] the cone test: in front and to either side (within 90 degrees) hits; behind does not; exactly 90 degrees is decided one way and tested; out of reach does not
-    - [ ] items on the ground, the wielder and anything that cannot be hurt are skipped
-    - [ ] each target takes 6, none lost to the hit window (separate targets have separate windows)
-    - [ ] during the cooldown the cone does nothing, a single-target hit is cancelled in the hurt hook (the game may ignore the cancel: logged), and the action bar says how long is left; after it, it works again
-    - [ ] the cooldown is per player and a round reset clears it; two players with axes do not share one
-    - [ ] a swing at the air still sweeps; an axe hit on a single target is not doubled by the cone
+    - [x] the cone test: in front and to either side (within 90 degrees) hits; behind does not; exactly 90 degrees is decided one way and tested; out of reach does not
+    - [x] items on the ground, the wielder and anything that cannot be hurt are skipped
+    - [x] each target takes 6, none lost to the hit window (separate targets have separate windows)
+    - [x] during the cooldown the cone does nothing, a single-target hit is cancelled in the hurt hook (the game may ignore the cancel: logged), and the action bar says how long is left; after it, it works again
+    - [x] the cooldown is per player and a round reset clears it; two players with axes do not share one
+    - [x] a swing at the air still sweeps; an axe hit on a single target is not doubled by the cone
   - Verification: check, test, check:legacy; deliberate breaks of the angle, the reach and the cooldown
+  - Result: an axe attack hits every living thing within 3 blocks (3-D, feet to feet) and within 90 degrees either side of the facing (edge included; straight up/down = all around) for 6 as its own entityAttack hit naming the wielder, then a 20-tick cooldown; a click that hits is ONE attack (the game's own hit is the primary, the sweep takes the rest, a swing is looked at 1 tick later, a late hit on what the sweep dealt is cancelled); in the cooldown a swing/hit does nothing and the action bar says how long is left; per player, cleared on reset; an ignored cancel is warned once. 1651 tests (+24), 77-break mutation run all caught.
   - Dependencies: Task 2
   - Files: `rae/src/logic/melee.ts`, `rae/src/core/melee.ts`, `rae/src/systems/melee.ts`, `rae/test/melee-axe.test.mjs`
 

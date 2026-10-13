@@ -482,7 +482,15 @@ export const MELEE = {
      * `slownessAmplifier` (255, the largest the engine takes) on anything, and a movement lock as well on a player. A stun is not refreshed
      * while it lasts, and none starts while a game is starting.
      */
-    baton: { stunChance: 0.25, stunTicks: 10, slownessAmplifier: 255 }
+    baton: { stunChance: 0.25, stunTicks: 10, slownessAmplifier: 255 },
+
+    /**
+     * The axe: an attack hits every living thing within `reach` blocks of the wielder (measured in three dimensions between their feet)
+     * that is within `coneHalfAngleDegrees` either side of where they look, 90 being the half circle in front of them. After an attack the
+     * axe waits `cooldownTicks`. A hit and a swing that arrive within `sameAttackTicks` of each other are one click, and a swing is looked at
+     * `swingDelayTicks` after it arrives, so the hit that goes with it has had its chance to come first.
+     */
+    axe: { reach: 3, coneHalfAngleDegrees: 90, cooldownTicks: 20, sameAttackTicks: 2, swingDelayTicks: 1 }
 };
 
 /**
