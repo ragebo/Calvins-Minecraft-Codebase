@@ -533,8 +533,9 @@ const MELEE_SPRITES = {
     knife: { from: "wood_sword", sha256: "901843f4abd7f1d312cf2bb92c5036a1a629cbaf3c037f254395912db01a5b83" },
     machete: { from: "iron_sword", sha256: "8efdc979e9f4450a6b1883833f0207bb4917426ff1a9b0084f0405029c69b872" },
     baton: { from: "diamond_sword", sha256: "e3d978591b8ef239e4ddc080e24b8e6dbc7d439470242d86db46e92dbcd8e86f" },
-    axe: { from: "spear/diamond_spear", sha256: "21860cefc1e6d17c0807f72530fafb3e3fabb825bd60c95a75b765a10d2e702d" },
-    sledgehammer: { from: "spear/netherite_spear", sha256: "a5971166d3c54256e02e5f513823c5353c045724944b005a136e7c36edc16e9b" }
+    // The owner swapped these two on 2026-10-13: the netherite spear drawing is the axe, the diamond spear drawing the sledgehammer.
+    axe: { from: "spear/netherite_spear", sha256: "a5971166d3c54256e02e5f513823c5353c045724944b005a136e7c36edc16e9b" },
+    sledgehammer: { from: "spear/diamond_spear", sha256: "21860cefc1e6d17c0807f72530fafb3e3fabb825bd60c95a75b765a10d2e702d" }
 };
 
 test("the five melee weapons are the config's: each item's id, icon, name and sprite agree across both packs", async () => {
