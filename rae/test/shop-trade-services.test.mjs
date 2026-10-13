@@ -483,3 +483,88 @@ test("one deal does all four services in order, and a customer ends up where the
     assert.equal(spawned().length, 1);
     assert.equal(p.location.x, -251.5);
 });
+
+// ---------------------------------------------------------------------------------------------------------
+// A foal cannot be tamed
+// ---------------------------------------------------------------------------------------------------------
+
+// The game spawns about one horse in five as a FOAL (measured in the content log, 2026-10-12: "horse cannot be tamed"), and the component that
+// makes a horse tameable, minecraft:tamemount, is only added when it grows up. Here every horse the shop spawns is a foal until the event that
+// grows it is triggered on it, which is what the game's own typings do to get an adult horse.
+function foals({ growsUp = true, canTrigger = true } = {}) {
+    const dim = fake.dimension("overworld");
+    const real = dim.spawnEntity;
+    const events = [];
+
+    dim.spawnEntity = (typeId, location) => {
+        const horse = real.call(dim, typeId, location);
+        const realGet = horse.getComponent.bind(horse);
+        let grown = false;
+        horse.getComponent = (id) => (id === "minecraft:tamemount" && !grown ? undefined : realGet(id));
+        horse.triggerEvent = (name) => {
+            events.push(name);
+            if (!canTrigger) throw new Error("no such event");
+            if (name === "minecraft:ageable_grow_up" && growsUp) grown = true;
+        };
+        return horse;
+    };
+
+    return { events, restore: () => { dim.spawnEntity = real; } };
+}
+
+test("a foal is grown up and then tamed: the buyer gets their horse, not an error", () => {
+    const p = setup();
+    const { check, done } = checks();
+    const foal = foals();
+
+    try {
+        const result = trade.carryOutTrade(p, deal(L.mountDeal("minecraft:horse", 35)));
+        const [horse] = spawned();
+
+        check("it goes through", result.ok === true && result.summary === "Bought Tame Horse for 35 coins.", JSON.stringify(result));
+        check("the foal was grown up, once", JSON.stringify(foal.events) === JSON.stringify(["minecraft:ageable_grow_up"]), JSON.stringify(foal.events));
+        check("one horse, tamed to the buyer", spawned().length === 1 && horse?.tamed === true && horse.tamedBy === p);
+        check("35 coins gone", coinsOf(p) === 65);
+    } finally { foal.restore(); }
+    done();
+});
+
+test("a horse that is already grown is not asked to grow", () => {
+    const p = setup();
+    const { check, done } = checks();
+    const dim = fake.dimension("overworld");
+    const real = dim.spawnEntity;
+    const events = [];
+    dim.spawnEntity = (typeId, location) => {
+        const horse = real.call(dim, typeId, location);
+        horse.triggerEvent = (name) => { events.push(name); };
+        return horse;
+    };
+
+    try {
+        const result = trade.carryOutTrade(p, deal(L.mountDeal("minecraft:horse", 35)));
+        check("it goes through", result.ok === true);
+        check("no event was triggered", events.length === 0, JSON.stringify(events));
+    } finally { dim.spawnEntity = real; }
+    done();
+});
+
+test("a foal that will not grow, or an animal with no such event, is undone like any other that cannot be tamed", () => {
+    const { check, done } = checks();
+
+    for (const [label, options] of [["the event does nothing", { growsUp: false }], ["the event does not exist", { canTrigger: false }]]) {
+        const p = setup();
+        const foal = foals(options);
+        const reported = [];
+        const original = console.error;
+        console.error = (...args) => reported.push(args.join(" "));
+        try {
+            const result = trade.carryOutTrade(p, deal(L.mountDeal("minecraft:horse", 35)));
+            check(`${label}: refused, nothing charged`, result.ok === false && /nothing was charged/.test(result.reason), JSON.stringify(result));
+            check(`${label}: and the log says why, in the usual words`, reported.some((line) => /horse cannot be tamed/.test(line)), reported.join(" | "));
+            check(`${label}: the foal is gone again`, spawned().length === 0);
+            check(`${label}: the coins are back`, coinsOf(p) === 100);
+        } finally { foal.restore(); console.error = original; }
+    }
+    done();
+});

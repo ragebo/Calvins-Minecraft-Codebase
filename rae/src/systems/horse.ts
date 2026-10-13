@@ -5,7 +5,8 @@ import { registerSystem } from "../core/registry.js";
 
 function standardizeHorse(horse: Entity): void {
 
-    if (!horse || horse.typeId !== "minecraft:horse") return;
+    // It is checked a tick after it spawned, and a horse the shop's mount service took back by then (an undone deal) is already gone.
+    if (!horse?.isValid || horse.typeId !== "minecraft:horse") return;
 
     try {
 

@@ -120,7 +120,17 @@ function prepareMount(player: Player, reward: MountReward): Preparation {
             try {
                 spawned = player.dimension.spawnEntity(type.id, spotBefore(player, S.mountSpawnDistance));
 
-                const mount = spawned.getComponent("minecraft:tamemount");
+                let mount = spawned.getComponent("minecraft:tamemount");
+
+                // The game spawns about one horse in five as a foal, and a foal only gets this component when it grows up (measured in the content
+                // log, 2026-10-12). So a spawned animal that cannot be tamed is grown up once and looked at again; one with no such event, or
+                // that still cannot be tamed, is a cow and is refused as before.
+                if (!mount) {
+                    try {
+                        spawned.triggerEvent("minecraft:ageable_grow_up");
+                    } catch { /* not an animal that grows up */ }
+                    mount = spawned.getComponent("minecraft:tamemount");
+                }
 
                 if (!mount) throw new Error(`${plain(reward.entity)} cannot be tamed`);
 
