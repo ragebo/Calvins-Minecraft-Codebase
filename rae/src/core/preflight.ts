@@ -2,11 +2,12 @@ import { ItemTypes, world, type Vector3 } from "@minecraft/server";
 import { BUILD_VERSION } from "../config/build.js";
 import { AMMO, GUNS } from "../config/guns.js";
 import {
-    BOAT_NPC, BOAT_WIN_TELEPORT, BRIDGE_AREA, FORT_AREA, FORT_REWARD_CHEST, FORT_SPAWNS,
+    BRIDGE_AREA, FORT_AREA, FORT_REWARD_CHEST, FORT_SPAWNS,
     JAIL_SITES, LAW_SPAWNS, OUTLAW_SPAWNS, OVERWORLD_Y_BOUNDS, RANCH_AREA, RANCH_LOWER_SPAWNS,
     RANCH_SAFE_TRIGGER, RANCH_UPPER_SPAWNS, TRAIN_END, TRAIN_START, TRAIN_STRUCTURE, TRAIN_VAULT_CHEST
 } from "../config/world.js";
 import { ensureScoreboards, missingScoreboards } from "./economy.js";
+import { listEndings } from "./endingstore.js";
 import { error } from "./log.js";
 
 /**
@@ -92,10 +93,31 @@ function worldCoordinatePoints(): { label: string; at: Vector3 }[] {
     points.push({ label: "Bridge area (min)", at: BRIDGE_AREA.min });
     points.push({ label: "Bridge area (max)", at: BRIDGE_AREA.max });
 
-    points.push({ label: "Boat NPC", at: BOAT_NPC });
-    points.push({ label: "Boat win teleport", at: BOAT_WIN_TELEPORT });
-
     return points;
+}
+
+/**
+ * The places of every ending an operator has made (or the default boat), named by the ending, and a note for any that cannot be read. An ending's place is
+ * data in the world and not config, so it is read here at the time of the check. Only the bounds are checked, as for every other point: whether the area
+ * is loaded right now says nothing about whether the place is wrong.
+ */
+function endingProblems(): string[] {
+
+    const points: { label: string; at: Vector3 }[] = [];
+    const unreadable: string[] = [];
+
+    for (const stored of listEndings()) {
+
+        if (!stored.ok) {
+            unreadable.push(`Ending ${stored.id} cannot be read (${stored.problem}): delete it from the Endings screen`);
+            continue;
+        }
+
+        points.push({ label: `Ending ${stored.value.name} (place)`, at: stored.value.place });
+        if (stored.value.winSpot) points.push({ label: `Ending ${stored.value.name} (win spot)`, at: stored.value.winSpot });
+    }
+
+    return [...unreadable, ...checkCoordinateBounds(points)];
 }
 
 // ---------------------------------------------------------------------------
@@ -154,6 +176,7 @@ export function runPreflightChecks(): { readonly ok: boolean; readonly problems:
     problems.push(...missingStructures());
     problems.push(...missingItems());
     problems.push(...checkCoordinateBounds(worldCoordinatePoints()));
+    problems.push(...endingProblems());
 
     const ok = problems.length === 0;
 

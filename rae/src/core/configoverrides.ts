@@ -1,8 +1,8 @@
 import type { Player, Vector3 } from "@minecraft/server";
-import { AIM, BOAT, COMPASS, ECONOMY, FORT, HARMING, HORSE, JAILBREAK, MELEE, RAIDS, RANCH, ROBBERY, SHOP, START, TELEMETRY, TRAIN, TUMBLEWEED } from "../config/balance.js";
+import { AIM, COMPASS, ECONOMY, FORT, HARMING, HORSE, JAILBREAK, MELEE, RAIDS, RANCH, ROBBERY, SHOP, START, TELEMETRY, TRAIN, TUMBLEWEED } from "../config/balance.js";
 import { GUNS } from "../config/guns.js";
 import {
-    BOAT_NPC, BOAT_WIN_TELEPORT, BRIDGE_AREA, FORT_AREA, FORT_REWARD_CHEST, FORT_SPAWNS,
+    BRIDGE_AREA, FORT_AREA, FORT_REWARD_CHEST, FORT_SPAWNS,
     JAIL_SITES, LAW_SPAWNS, OUTLAW_SPAWNS, RANCH_AREA, RANCH_LOWER_SPAWNS, RANCH_SAFE_TRIGGER,
     RANCH_UPPER_SPAWNS, TRAIN_VAULT_CHEST
 } from "../config/world.js";
@@ -387,8 +387,6 @@ function registerWorldFields(): void {
     vector3("world.bridgeArea.min", "Bridge area (min corner)", "World", BRIDGE_AREA.min);
     vector3("world.bridgeArea.max", "Bridge area (max corner)", "World", BRIDGE_AREA.max);
 
-    vector3("world.boatNpc", "Boat escape NPC", "World", BOAT_NPC);
-    vector3("world.boatWinTeleport", "Boat win teleport", "World", BOAT_WIN_TELEPORT);
 }
 
 // ---------------------------------------------------------------------------
@@ -402,9 +400,6 @@ function registerBalanceFields(): void {
     numeric("economy.villagerBountyGain", "Economy: bounty gain per villager", "Economy", "integer", () => ECONOMY.villagerBountyGain, (v) => { ECONOMY.villagerBountyGain = v; }, { min: 0 });
     numeric("economy.deathCoinsKept", "Economy: coin fraction kept on death", "Economy", "float", () => ECONOMY.deathCoinsKept, (v) => { ECONOMY.deathCoinsKept = v; }, { min: 0, max: 1 });
     numeric("economy.goldIngotValue", "Economy: coins per gold ingot", "Economy", "integer", () => ECONOMY.goldIngotValue, (v) => { ECONOMY.goldIngotValue = v; }, { min: 0 });
-    numeric("economy.boatEscapePerOutlaw", "Economy: boat escape cost per outlaw", "Economy", "integer", () => ECONOMY.boatEscapePerOutlaw, (v) => { ECONOMY.boatEscapePerOutlaw = v; }, { min: 0 });
-
-    numeric("boat.escapeRadius", "Boat: gather radius", "Boat Escape", "float", () => BOAT.escapeRadius, (v) => { BOAT.escapeRadius = v; }, { min: 0 });
 
     numeric("jailbreak.hitsToUnlock", "Jailbreak: hits to unlock", "Jailbreak", "integer", () => JAILBREAK.hitsToUnlock, (v) => { JAILBREAK.hitsToUnlock = v; }, { min: 1 });
     numeric("jailbreak.sweetSpotTolerance", "Jailbreak: sweet spot tolerance", "Jailbreak", "integer", () => JAILBREAK.sweetSpotTolerance, (v) => { JAILBREAK.sweetSpotTolerance = v; }, { min: 0, max: 100 });

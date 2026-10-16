@@ -138,21 +138,22 @@ Deliberate-break (mutation) runs on every new rule. Nothing is deployed or pushe
   - Dependencies: Task 7
   - Files: `rae/src/logic/endings.ts`, `rae/src/core/endings.ts`, `rae/src/core/endingforms.ts`, `rae/test/endings-cinematic.test.mjs`
 
-- [ ] **Task 9: Retire the boat config, document it, write the test card** (M)
+- [x] **Task 9: Retire the boat config, document it, write the test card** (M) - done
   Remove the boat's four live-config fields and have preflight check the endings' places instead; a config group **Endings** is not needed (every number is per ending, in the screens).
   `docs/test-cards/ENDINGS.md` (what only the real game can answer first, then numbered steps for a group ending, a solo ending, the mixed round, the cinematic), README and ARCHITECTURE.md
   rows (named here because the rules normally forbid editing them).
   - Acceptance:
-    - [ ] `world.boatNpc`, `world.boatWinTeleport`, `economy.boatEscapePerOutlaw` and `boat.escapeRadius` are gone from the editor and nothing else reads them; the config constants stay as the seed only
-    - [ ] preflight warns about an ending whose place is outside the world or in an unloaded area, naming the ending
-    - [ ] the card has every step the owner needs and says what is unmeasured and where each fix would go
-    - [ ] README and ARCHITECTURE.md say where endings live
+    - [x] `world.boatNpc`, `world.boatWinTeleport`, `economy.boatEscapePerOutlaw` and `boat.escapeRadius` are gone from the editor and nothing else reads them; the config constants stay as the seed only
+    - [x] preflight warns about an ending whose place or win spot is outside the world, naming the ending, and about one that cannot be read (an unloaded area is deliberately NOT checked: preflight never asks whether a chunk is loaded, because a legitimately far place is simply not loaded at startup; see its own comment)
+    - [x] the card has every step the owner needs and says what is unmeasured and where each fix would go
+    - [x] README and ARCHITECTURE.md say where endings live
   - Verification: check, test, check:legacy
+  - Result: The boat's four live-config fields (world.boatNpc, world.boatWinTeleport, economy.boatEscapePerOutlaw, boat.escapeRadius) are gone from the editor; the constants stay as the default boat's seed only (a test fails if anything else reads them). Preflight checks every ending's place and win spot (named by the ending) and reports an unreadable ending with what to do; unloaded areas are deliberately not checked, as everywhere in preflight. docs/test-cards/ENDINGS.md (real-game questions first, 32 steps, where each fix would go), README and ARCHITECTURE rows and an Endings section. The three config tests that used world.boatNpc as their example now use world.trainVaultChest. 1812 tests, 11 deliberate breaks all caught.
   - Dependencies: Tasks 3 to 8
   - Files: `rae/src/core/configoverrides.ts`, `rae/src/core/preflight.ts`, `docs/test-cards/ENDINGS.md`, `README.md`, `ARCHITECTURE.md`, `rae/test/endings-config.test.mjs`
 
 ### Checkpoint: complete
-- [ ] every acceptance box above is ticked
+- [x] every acceptance box above is ticked
 - [ ] the owner has run `docs/test-cards/ENDINGS.md` in the real game; what it shows is fixed in a follow-up round
 
 - [ ] **Task 10: Release** (S; only when the owner asks)

@@ -13,7 +13,7 @@ const C = await load("core/configforms.js");
 const O = await load("core/configoverrides.js");
 const { ECONOMY, ROBBERY } = await load("config/balance.js");
 const { GUNS } = await load("config/guns.js");
-const { BOAT_NPC } = await load("config/world.js");
+const { TRAIN_VAULT_CHEST } = await load("config/world.js");
 
 const operator = () => fake.makePlayer("Op", { permission: PlayerPermissionLevel.Operator, location: { x: 10.7, y: 70.2, z: -3.2 } });
 const bodyOf = (form) => strip(String(form.calls.find((c) => c[0] === "body")?.[1] ?? ""));
@@ -145,28 +145,28 @@ test("a position is three boxes and a switch to use the block she is standing on
     setup();
     const { check, done } = checks();
     const op = operator();
-    const before = { ...BOAT_NPC };
+    const before = { ...TRAIN_VAULT_CHEST };
 
-    script(press("World"), press("Boat escape NPC"), fill({ "X": "5", "Y": "66", "Z": "7" }), close);
+    script(press("World"), press("Train vault chest"), fill({ "X": "5", "Y": "66", "Z": "7" }), close);
     await C.openConfigEditor(op);
 
     check("three boxes then the switch", controls(ui.shown[2], "textField").length === 3 && controls(ui.shown[2], "toggle").length === 1);
-    check("the position was saved", BOAT_NPC.x === 5 && BOAT_NPC.y === 66 && BOAT_NPC.z === 7, JSON.stringify(BOAT_NPC));
-    check("and the next screen says from where to where", /Boat escape NPC: .* -> 5, 66, 7\./.test(bodyOf(ui.shown[3])), bodyOf(ui.shown[3]));
+    check("the position was saved", TRAIN_VAULT_CHEST.x === 5 && TRAIN_VAULT_CHEST.y === 66 && TRAIN_VAULT_CHEST.z === 7, JSON.stringify(TRAIN_VAULT_CHEST));
+    check("and the next screen says from where to where", /Train vault chest: .* -> 5, 66, 7\./.test(bodyOf(ui.shown[3])), bodyOf(ui.shown[3]));
 
     ui.shown.length = 0;
-    script(press("World"), press("Boat escape NPC"), fill({ "Use the block": true }), close);
+    script(press("World"), press("Train vault chest"), fill({ "Use the block": true }), close);
     await C.openConfigEditor(op);
-    check("the switch takes the middle of her block", BOAT_NPC.x === 10.5 && BOAT_NPC.y === 70 && BOAT_NPC.z === -3.5, JSON.stringify(BOAT_NPC));
+    check("the switch takes the middle of her block", TRAIN_VAULT_CHEST.x === 10.5 && TRAIN_VAULT_CHEST.y === 70 && TRAIN_VAULT_CHEST.z === -3.5, JSON.stringify(TRAIN_VAULT_CHEST));
 
     ui.shown.length = 0;
-    script(press("World"), press("Boat escape NPC"), fill({ "X": "oops" }), close);
+    script(press("World"), press("Train vault chest"), fill({ "X": "oops" }), close);
     await C.openConfigEditor(op);
     check("a position that is not three numbers is refused with what it takes", /^Not saved: type x, y, z/.test(titleText(ui.shown[3])), titleText(ui.shown[3]));
     check("with what was typed kept", controls(ui.shown[3], "textField")[0][3].defaultValue === "oops");
 
     cleanUp(op);
-    check("(the test put it back)", BOAT_NPC.x === before.x && BOAT_NPC.y === before.y && BOAT_NPC.z === before.z);
+    check("(the test put it back)", TRAIN_VAULT_CHEST.x === before.x && TRAIN_VAULT_CHEST.y === before.y && TRAIN_VAULT_CHEST.z === before.z);
     done();
 });
 

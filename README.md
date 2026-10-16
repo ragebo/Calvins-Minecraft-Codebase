@@ -54,7 +54,7 @@ rae/                    TypeScript source. This is what you edit.
                          economy.ts    the only file that touches coins/bounty
                          raid.ts       shared wave-spawn engine (used by the fort raid)
                          round.ts      round lifecycle state machine (IDLE/SETUP/ACTIVE/ENDING/ENDED);
-                                       core/game.ts drives it, endgame.ts and boat.ts gate their win on it
+                                       core/game.ts drives it, endgame.ts and endings.ts gate their win on it
                          persist.ts    contract for state that survives a reload (nothing registers yet)
                          melee.ts      what the melee weapons remember: bleeds, stuns, cooldowns, finishing blows
                                        (see "Melee weapons" below)
@@ -106,7 +106,7 @@ and fails if a count goes up.
 | `train.ts` | Train robbery: movement, bridge demolition/rebuild, vault, guards |
 | `aimprobe.ts` | Measurements for the planned gun controls (left-click fire, held right-click aim with zoom and a scope overlay, off-hand-swap reload): logs what the game reports, drives the zoom and the overlay; changes no gun |
 | `transit.ts` | The scripted train: route recorder and a rideable car driven along the route (slice 1, a spike; the robbery moves onto it in a later slice) |
-| `boat.ts` | Outlaw win condition (gang escapes by boat) |
+| `endings.ts` | The ways an outlaw gets out: a group ending (the gang gathers and pays, the round ends) and a solo one (one outlaw leaves alone, the round goes on) — see "Endings" below. Replaces `boat.ts` |
 | `economy-rules.ts` | Death coin loss/inventory drop, villager robbery |
 | `horse.ts` | Horse speed standardization |
 | `gold.ts` | Gold item → coins conversion |
@@ -144,14 +144,25 @@ law choosing a spawn: see "Start sequence" below), then `ACTIVE` once every law 
 and the outlaws' fly-down is over, or the countdown ends. `core/startsequence.ts` is the only
 caller of `beginActive`.
 
-`endgame.ts` (the law win) and `boat.ts` (the outlaw win) each call `endRound(reason)` when they
-detect their condition — it only succeeds once, from `ACTIVE`, so the two can never double-announce
-a win between them, and `boat.ts` additionally refuses an escape attempt outright when no round is
-`ACTIVE` (closing a real edge case: without it, an eliminated outlaw calling the escape after law
-had already won found zero survivors, and the "everyone's gathered" and "can afford it" checks
-both passed vacuously on that empty set, announcing an escape with nobody in it). Each system keeps
-its own announcement text and winner-tagging — they aren't interchangeable (boat's message includes
-the coin total) — so `round.ts` is the shared guard, not a shared announcer.
+`endgame.ts` (the law win) and `endings.ts` (the outlaw win) each reach `endRound(reason)` through `core/endings.ts`'s
+"is the round over" check — it only succeeds once, from `ACTIVE`, so the two can never double-announce
+a win between them, and an escape attempt is refused outright when no round is `ACTIVE` (closing a real
+edge case: without it, an eliminated outlaw calling the escape after law had already won found zero
+survivors, and the "everyone's gathered" and "can afford it" checks both passed vacuously on that empty
+set, announcing an escape with nobody in it). `round.ts` is the shared guard, not a shared announcer.
+
+### Endings
+
+An ending is a way out of the game, made in game rather than written into the code. Two kinds, picked when an operator adds one:
+
+- **Group**: every outlaw still in play stands within its radius of its place and the gang pays its price **per member** between them. It ends the round as an outlaw win, announces the headline and detail, and takes the winners to its win spot.
+- **Solo**: ONE outlaw stands at the place with the coins and/or the item it asks for. They are announced, taken to the win spot, made a spectator and marked `escaped` (a flag on their record, not the outlaw tag), which every "who is in play" question honors. The round goes on and everyone else keeps every option.
+
+The round ends when no outlaw is left in play: all escaped is an outlaw win, the rest jailed or eliminated (whoever escaped before) is the law's win. The end of a round says "N escaped, M captured" when anyone escaped. A new world has one ending, **the boat**, built from the old boat config and edited like any other; the first thing saved makes it a real record.
+
+An ending can also have a **cinematic**: a camera pan (two marks, a length, every player or only the winners) played after the announcement through the start sequence's safety, so a reset or a player leaving never leaves anyone locked. It never delays the round's end.
+
+Operators make and change endings from the RAE menu's **Endings** button (place and win spot by standing there, the item from the hand, the messages, delete, undo). Players try one with `/scriptevent rae:ending <id>` (an NPC's button or a command block); `bounty:escape` still tries the boat. Telemetry: `round.end` names the group ending that ended the round and a solo escape writes an `ending.escape` line. The run sheet is `docs/test-cards/ENDINGS.md`.
 
 ### Gun system
 
@@ -315,6 +326,7 @@ is no permission check.
 - **Send everyone to their spawns** is `bounty:teleport`.
 - **Start sequence** (operators only; the button is not there for anyone else) is where the start commands and the camera shots are edited: see
   "Start sequence" below.
+- **Endings** (operators only too) is where the ways out are made and changed: see "Endings" above.
 
 The old script events (`bounty:start_round`, `rae:reset`, `bounty:teleport`) are unchanged, so a
 physical button still works. The game's own actions live in `core/game.ts`, shared by both, and

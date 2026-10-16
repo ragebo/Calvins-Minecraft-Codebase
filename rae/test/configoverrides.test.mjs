@@ -12,7 +12,7 @@ const { PlayerPermissionLevel } = fakeApi;
 const configoverrides = await load("core/configoverrides.js");
 const persist = await load("core/persist.js");
 const { GUNS } = await load("config/guns.js");
-const { BOAT_NPC, OVERWORLD_Y_BOUNDS } = await load("config/world.js");
+const { TRAIN_VAULT_CHEST, OVERWORLD_Y_BOUNDS } = await load("config/world.js");
 const { RANCH } = await load("config/balance.js");
 
 function scene() {
@@ -51,19 +51,19 @@ test("setOverride mutates the real GUNS object in place, not a copy", () => {
 
 test("a vector3 field's set keeps the same object identity, only x/y/z change", () => {
     scene();
-    clean("world.boatNpc");
-    const before = { ...BOAT_NPC };
+    clean("world.trainVaultChest");
+    const before = { ...TRAIN_VAULT_CHEST };
 
-    const result = configoverrides.setOverride(operator(), "world.boatNpc", { x: 1, y: 65, z: 2 });
+    const result = configoverrides.setOverride(operator(), "world.trainVaultChest", { x: 1, y: 65, z: 2 });
 
     const { check, done } = checks();
     check("setOverride reports ok", result.ok === true, JSON.stringify(result));
-    check("BOAT_NPC itself was mutated (same export, new coordinates)", BOAT_NPC.x === 1 && BOAT_NPC.y === 65 && BOAT_NPC.z === 2, JSON.stringify(BOAT_NPC));
+    check("TRAIN_VAULT_CHEST itself was mutated (same export, new coordinates)", TRAIN_VAULT_CHEST.x === 1 && TRAIN_VAULT_CHEST.y === 65 && TRAIN_VAULT_CHEST.z === 2, JSON.stringify(TRAIN_VAULT_CHEST));
     done();
 
-    configoverrides.resetOverride(operator(), "world.boatNpc");
-    if (BOAT_NPC.x !== before.x || BOAT_NPC.y !== before.y || BOAT_NPC.z !== before.z) {
-        throw new Error("cleanup failed to restore world.boatNpc");
+    configoverrides.resetOverride(operator(), "world.trainVaultChest");
+    if (TRAIN_VAULT_CHEST.x !== before.x || TRAIN_VAULT_CHEST.y !== before.y || TRAIN_VAULT_CHEST.z !== before.z) {
+        throw new Error("cleanup failed to restore world.trainVaultChest");
     }
 });
 
@@ -122,15 +122,15 @@ test("validation enforces a field's declared min/max", () => {
 
 test("validation rejects a coordinate outside the Overworld build limit, reusing preflight's own check", () => {
     scene();
-    clean("world.boatNpc");
-    const before = { ...BOAT_NPC };
+    clean("world.trainVaultChest");
+    const before = { ...TRAIN_VAULT_CHEST };
 
-    const result = configoverrides.setOverride(operator(), "world.boatNpc", { x: 0, y: OVERWORLD_Y_BOUNDS.max + 50, z: 0 });
+    const result = configoverrides.setOverride(operator(), "world.trainVaultChest", { x: 0, y: OVERWORLD_Y_BOUNDS.max + 50, z: 0 });
 
     const { check, done } = checks();
     check("refused", result.ok === false, JSON.stringify(result));
     check("reason mentions the build limit", /build limit/.test(result.reason ?? ""), JSON.stringify(result));
-    check("unchanged", BOAT_NPC.x === before.x && BOAT_NPC.y === before.y && BOAT_NPC.z === before.z);
+    check("unchanged", TRAIN_VAULT_CHEST.x === before.x && TRAIN_VAULT_CHEST.y === before.y && TRAIN_VAULT_CHEST.z === before.z);
     done();
 });
 

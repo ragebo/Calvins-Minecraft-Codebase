@@ -13,7 +13,7 @@ await load("systems/liveconfig.js");
 const { getField, hasOverride, resetOverride } = await load("core/configoverrides.js");
 const { listSystems, resetAllSystems } = await load("core/registry.js");
 const { GUNS } = await load("config/guns.js");
-const { BOAT_NPC } = await load("config/world.js");
+const { TRAIN_VAULT_CHEST } = await load("config/world.js");
 
 const operator = () => fake.makePlayer("Op", { permission: PlayerPermissionLevel.Operator, location: { x: 10.7, y: 70.2, z: -3.2 } });
 const member = () => fake.makePlayer("Mem", { permission: PlayerPermissionLevel.Member });
@@ -43,7 +43,7 @@ test("registration builds ONE command, operator-gated, with the actions and ever
     check("the actions", ["list", "get", "set", "reset", "help"].every((a) => actions.includes(a)), String(actions));
 
     const ids = registry.enums.get("rae:config_field");
-    check("the list of ids holds a number, a switch and a position", ["revolver.fireRateTicks", "revolver.aim.scope", "world.boatNpc"].every((id) => ids.includes(id)));
+    check("the list of ids holds a number, a switch and a position", ["revolver.fireRateTicks", "revolver.aim.scope", "world.trainVaultChest"].every((id) => ids.includes(id)));
     check("and one entry for every registered setting", ids.length > 100, String(ids.length));
     done();
 });
@@ -116,27 +116,27 @@ test("set takes on or off for a switch, and refuses anything else", () => {
 test("set takes a position as three numbers, as here, or as ~ ~ ~, and applies it in place", () => {
     const registry = startUp();
     const op = operator();
-    const before = { ...BOAT_NPC };
+    const before = { ...TRAIN_VAULT_CHEST };
 
     const { check, done } = checks();
 
-    const typed = type(registry, originOf(op), "set", "world.boatNpc", "1 65 2");
-    check("three numbers", typed.status === CustomCommandStatus.Success && BOAT_NPC.x === 1 && BOAT_NPC.y === 65 && BOAT_NPC.z === 2, JSON.stringify(BOAT_NPC));
+    const typed = type(registry, originOf(op), "set", "world.trainVaultChest", "1 65 2");
+    check("three numbers", typed.status === CustomCommandStatus.Success && TRAIN_VAULT_CHEST.x === 1 && TRAIN_VAULT_CHEST.y === 65 && TRAIN_VAULT_CHEST.z === 2, JSON.stringify(TRAIN_VAULT_CHEST));
 
-    const commas = type(registry, originOf(op), "set", "world.boatNpc", "3,66,4");
-    check("or with commas", commas.status === CustomCommandStatus.Success && BOAT_NPC.x === 3 && BOAT_NPC.z === 4, JSON.stringify(BOAT_NPC));
+    const commas = type(registry, originOf(op), "set", "world.trainVaultChest", "3,66,4");
+    check("or with commas", commas.status === CustomCommandStatus.Success && TRAIN_VAULT_CHEST.x === 3 && TRAIN_VAULT_CHEST.z === 4, JSON.stringify(TRAIN_VAULT_CHEST));
 
-    const here = type(registry, originOf(op), "set", "world.boatNpc", "here");
-    check("here is the middle of the block she stands in", here.status === CustomCommandStatus.Success && BOAT_NPC.x === 10.5 && BOAT_NPC.y === 70 && BOAT_NPC.z === -3.5, JSON.stringify(BOAT_NPC));
+    const here = type(registry, originOf(op), "set", "world.trainVaultChest", "here");
+    check("here is the middle of the block she stands in", here.status === CustomCommandStatus.Success && TRAIN_VAULT_CHEST.x === 10.5 && TRAIN_VAULT_CHEST.y === 70 && TRAIN_VAULT_CHEST.z === -3.5, JSON.stringify(TRAIN_VAULT_CHEST));
 
-    const relative = type(registry, originOf(op), "set", "world.boatNpc", "~ ~1 ~-2");
-    check("~ is relative to the same spot (the middle of her block), so ~ ~1 ~-2 is one up and two back from it", relative.status === CustomCommandStatus.Success && BOAT_NPC.x === 10.5 && BOAT_NPC.y === 71 && BOAT_NPC.z === -5.5, JSON.stringify(BOAT_NPC));
+    const relative = type(registry, originOf(op), "set", "world.trainVaultChest", "~ ~1 ~-2");
+    check("~ is relative to the same spot (the middle of her block), so ~ ~1 ~-2 is one up and two back from it", relative.status === CustomCommandStatus.Success && TRAIN_VAULT_CHEST.x === 10.5 && TRAIN_VAULT_CHEST.y === 71 && TRAIN_VAULT_CHEST.z === -5.5, JSON.stringify(TRAIN_VAULT_CHEST));
 
-    const two = type(registry, originOf(op), "set", "world.boatNpc", "1 2");
+    const two = type(registry, originOf(op), "set", "world.trainVaultChest", "1 2");
     check("two numbers are refused with what a position is", two.status === CustomCommandStatus.Failure && /x, y, z/.test(two.message), JSON.stringify(two));
 
-    resetOverride(op, "world.boatNpc");
-    check("reset restores the position", BOAT_NPC.x === before.x && BOAT_NPC.y === before.y && BOAT_NPC.z === before.z, JSON.stringify(BOAT_NPC));
+    resetOverride(op, "world.trainVaultChest");
+    check("reset restores the position", TRAIN_VAULT_CHEST.x === before.x && TRAIN_VAULT_CHEST.y === before.y && TRAIN_VAULT_CHEST.z === before.z, JSON.stringify(TRAIN_VAULT_CHEST));
     done();
 });
 
