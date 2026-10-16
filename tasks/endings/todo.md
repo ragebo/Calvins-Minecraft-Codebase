@@ -89,19 +89,20 @@ Deliberate-break (mutation) runs on every new rule. Nothing is deployed or pushe
   - Dependencies: Task 4
   - Files: `rae/src/core/endings.ts`, `rae/src/systems/endgame.ts`, `rae/test/endings-solo.test.mjs`
 
-- [ ] **Task 6: The tally and the telemetry** (S)
+- [x] **Task 6: The tally and the telemetry** (S) - done
   The round-end announcement says how many escaped and how many were captured. `round.end` telemetry carries the ending's id (when a group ending ended the round), and a solo escape writes its
   own event.
   - Acceptance:
-    - [ ] a round ending with escapes and captures announces "N escaped, M captured" with the right numbers; a round with none says nothing extra
-    - [ ] the telemetry line for a round ended by an ending names it; a solo escape writes one line with the ending id and the coins or item given
-    - [ ] the telemetry format stays versioned and the reader tool still accepts old lines
+    - [x] a round ending with escapes and captures announces "N escaped, M captured" with the right numbers; a round with none says nothing extra
+    - [x] the telemetry line for a round ended by an ending names it; a solo escape writes one line with the ending id and the coins or item given
+    - [x] the telemetry format stays versioned and the reader tool still accepts old lines
   - Verification: check, test, check:legacy
+  - Result: A round's end now says "N escaped, M captured" when anyone escaped (law win, all escaped, or a group ending after a solo escape; a group ending with no earlier solo escape says only what the boat always said; a jailed gang member counts as gang). round.end carries `ending` (the group ending's id) and a solo escape writes an ending.escape line (id, player, coins, item+count only when taken). Version stays 1; the reader takes old and new lines. 1772 tests, 21 deliberate breaks all caught.
   - Dependencies: Task 5
   - Files: `rae/src/core/telemetry.ts`, `rae/src/logic/telemetry.ts`, `rae/src/core/endings.ts`, `rae/test/endings-telemetry.test.mjs`
 
 ### Checkpoint 2: both kinds of ending work by script event
-- [ ] all green; an operator can save a solo and a group ending as records and see them play out, one round to the end
+- [x] all green; an operator can save a solo and a group ending as records and see them play out, one round to the end
 
 ## Phase 3: Making it yours
 

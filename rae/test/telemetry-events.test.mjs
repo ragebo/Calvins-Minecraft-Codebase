@@ -17,6 +17,7 @@ const event = (k, fields = {}) => ({ ...STAMP, k, ...fields });
 const FIELDS = {
     "boot": {},
     "round.end": { reason: "law_win", dur: 4800, kills: 5, deaths: 4, lawKills: 3, outlawKills: 2, coins: 640 },
+    "ending.escape": { id: "tower", p: "-4294967295", coins: 100, item: "minecraft:diamond", count: 2 },
     "robbery.start": { id: "bank", r: 1, test: false, p: "-4294967295", role: "outlaw", inside: 3 },
     "robbery.element": { id: "bank", r: 1, el: "e2", name: "Vault door", kind: "door", locks: ["pick"], after: 640, p: "-4294967295" },
     "robbery.pick": { id: "bank", r: 1, el: "e2", name: "Vault door", result: "jammed", hits: 1, misses: 3, p: "-4294967295" },

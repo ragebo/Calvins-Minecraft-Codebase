@@ -53,6 +53,17 @@ export interface EventFields {
         readonly outlawKills: number;
         /** The gang's combined coins when it ended. */
         readonly coins: number;
+        /** The id of the group ending that ended it (core/endings.ts); absent when the law won or an operator ended it. */
+        readonly ending?: string;
+    };
+    /** One outlaw left the game alone through a solo ending: which one, who, and what it cost them. The round goes on. */
+    "ending.escape": {
+        readonly id: string;
+        readonly p: string;
+        readonly coins: number;
+        /** The item taken and how many; absent when the ending took none. */
+        readonly item?: string;
+        readonly count?: number;
     };
     "robbery.start": {
         readonly id: string;
@@ -189,6 +200,7 @@ type Reserved = keyof Stamp | "k" | "cut";
 const KINDS: { readonly [K in EventKind]: [Extract<keyof EventFields[K], Reserved>] extends [never] ? true : never } = {
     "boot": true,
     "round.end": true,
+    "ending.escape": true,
     "robbery.start": true,
     "robbery.element": true,
     "robbery.pick": true,

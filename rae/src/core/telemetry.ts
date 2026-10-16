@@ -74,7 +74,7 @@ function totalCoinsNow(): number {
 
 /** Records the round in progress and clears it. A no-op if none was actually in progress (a
  *  stray phase change before the first round, or one already recorded). */
-function pushRecord(reason: EndReason | "aborted"): void {
+function pushRecord(reason: EndReason | "aborted", ending?: string): void {
 
     if (startedAtTick === null) return;
 
@@ -103,7 +103,8 @@ function pushRecord(reason: EndReason | "aborted"): void {
         deaths: record.deaths,
         lawKills: record.lawKills,
         outlawKills: record.outlawKills,
-        coins: record.totalCoinsAtEnd
+        coins: record.totalCoinsAtEnd,
+        ...(ending !== undefined ? { ending } : {})
     });
 
     totals.kills += roundKills;
@@ -148,7 +149,7 @@ onPhase("ACTIVE", () => {
 // practice. The fallback exists only because PhaseChange.reason is typed optional; it should
 // never actually be needed on this path.
 onPhase("ENDED", (change) => {
-    pushRecord(change.reason ?? "aborted");
+    pushRecord(change.reason ?? "aborted", change.detail);
 });
 
 // resetRound() can drop straight to IDLE from any phase, bypassing ENDING/ENDED entirely. Only

@@ -6,6 +6,7 @@ import { getEnding, listEndings } from "./endingstore.js";
 import { endRound, isPhase } from "./round.js";
 import { aliveOutlaws, everyOutlaw, lawPlayers } from "./players.js";
 import { enterSpectator } from "./spectate.js";
+import { emit } from "./telemetryevents.js";
 import { ESCAPED, getRecord, isEscaped, setFlag, update, type PlayerRecord } from "./state.js";
 import { bagOf, countOf, takeFrom } from "./shopitems.js";
 
@@ -29,6 +30,11 @@ function say(player: Player, text: string): void {
 
 function announce(text: string): void {
     if (text.length > 0) world.sendMessage(text);
+}
+
+/** Who got away and who was caught, said after a round's end, only when someone got away: a round nobody escaped says nothing extra. */
+function announceTally(escaped: number, captured: number): void {
+    if (escaped > 0) announce(`§7${escaped} escaped, ${captured} captured.`);
 }
 
 /** A player's try at the ending with this id. Every refusal says why, to the player alone or to everyone, as the boat did. */
@@ -97,12 +103,19 @@ function attemptGroup(player: Player, ending: Ending): void {
         if (payer) takeCoins(payer, charge.take);
     }
 
+    // Counted before the gang is marked: whoever escaped alone earlier, and whoever was eliminated, are already known to the record. A jailed outlaw
+    // is in the gang (the boat always took them), so jail does not make someone captured here.
+    const alone = tally(everyOutlaw().map((outlaw) => ({ ...standingOf(getRecord(outlaw)), inJail: false })));
+
     // The round was active a moment ago and nothing in between can change that (script code runs to the end), so this is only ever false on a genuine
     // same-tick race with another ending or the law's win. It is checked rather than assumed.
     if (!endRound("outlaw_win", ending.id)) return;
 
     announce(ending.texts.headline);
     announce(fillText(ending.texts.detail, { coins: verdict.owed, count: survivors.length }));
+
+    // A gang with nobody who got away alone before it keeps the two lines it always had.
+    if (alone.escaped > 0) announceTally(alone.escaped + survivors.length, alone.captured);
 
     for (const outlaw of survivors) update(outlaw, { winner: true });
 
@@ -143,6 +156,13 @@ function attemptSolo(player: Player, ending: Ending, record: Readonly<PlayerReco
     announce(fillText(ending.texts.headline, { coins: verdict.takeCoins, player: player.name, count: 1 }));
     announce(fillText(ending.texts.detail, { coins: verdict.takeCoins, player: player.name, count: 1 }));
 
+    emit("ending.escape", {
+        id: ending.id,
+        p: player.id,
+        coins: verdict.takeCoins,
+        ...(verdict.takeItem > 0 && ending.item ? { item: ending.item.id, count: verdict.takeItem } : {})
+    });
+
     if (ending.winSpot) player.teleport({ x: ending.winSpot.x, y: ending.winSpot.y, z: ending.winSpot.z });
 
     enterSpectator(player);
@@ -158,21 +178,26 @@ const standingOf = (record: Readonly<PlayerRecord>): Standing => ({ escaped: isE
  */
 export function checkRoundOver(): void {
 
-    const verdict = roundVerdict(everyOutlaw().map((outlaw) => standingOf(getRecord(outlaw))));
+    const everyone = everyOutlaw().map((outlaw) => standingOf(getRecord(outlaw)));
+    const verdict = roundVerdict(everyone);
 
     if (verdict === "running") return;
 
     // False if no round is active, or one already ended (someone else's win, or this same check running again): nothing left to announce.
     if (!endRound(verdict)) return;
 
+    const standings = tally(everyone);
+
     if (verdict === "law_win") {
         world.sendMessage("§9§lTHE LAW HAS WON!");
         world.sendMessage("§7Every outlaw is captured or eliminated — no one is left to break them out.");
 
         for (const player of lawPlayers()) update(player, { winner: true });
+        announceTally(standings.escaped, standings.captured);
         return;
     }
 
     announce(E.allEscaped.headline);
-    announce(fillText(E.allEscaped.detail, { count: tally(everyOutlaw().map((outlaw) => standingOf(getRecord(outlaw)))).escaped }));
+    announce(fillText(E.allEscaped.detail, { count: standings.escaped }));
+    announceTally(standings.escaped, standings.captured);
 }
