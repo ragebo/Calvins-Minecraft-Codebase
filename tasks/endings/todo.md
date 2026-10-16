@@ -23,17 +23,18 @@ Deliberate-break (mutation) runs on every new rule. Nothing is deployed or pushe
   - Dependencies: None
   - Files: `rae/src/logic/endings.ts`, `rae/src/config/balance.ts`, `rae/test/endings-logic.test.mjs`
 
-- [ ] **Task 2: Where endings live, with the boat seeded** (S-M)
+- [x] **Task 2: Where endings live, with the boat seeded** (S-M) - done
   `core/endingstore.ts` on `core/recordstore.ts` (`rae:ending:<id>`, a cap of `ENDINGS.maxEndings`, one undo). Never saved means the boat ending, built from today's `BOAT_NPC`,
   `BOAT_WIN_TELEPORT`, `ECONOMY.boatEscapePerOutlaw`, `BOAT.escapeRadius` and the boat's messages as they read now; saved empty means no endings; a damaged record is listed and never
   quietly replaced by the default.
   - Acceptance:
-    - [ ] a fresh world has exactly one ending, `boat`, whose place, radius, price, win spot and texts equal the old config and chat lines
-    - [ ] after any save, the default is no longer offered (the operator can delete the boat ending and it stays deleted)
-    - [ ] a saved empty list means no endings; an unreadable record means no ending from it, and the reason is available to a screen and never overwritten
-    - [ ] the cap is enforced with a reason; an id is made from the name the way shops and shots are, and not reused at once
-    - [ ] one undo restores the last version
+    - [x] a fresh world has exactly one ending, `boat`, whose place, radius, price, win spot and texts equal the old config and chat lines
+    - [x] after any save, the default is no longer offered (the operator can delete the boat ending and it stays deleted)
+    - [x] a saved empty list means no endings; an unreadable record means no ending from it, and the reason is available to a screen and never overwritten
+    - [x] the cap is enforced with a reason; an id is made from the name the way shops and shots are, and not reused at once
+    - [x] one undo restores the last version
   - Verification: check, test, check:legacy; deliberate breaks of the seed values and the "never saved" rule
+  - Result: core/endingstore.ts on the record store (rae:ending:<id>, cap 12, one undo): a world that never saved has the boat, built live from BOAT_NPC/BOAT_WIN_TELEPORT/BOAT.escapeRadius/ECONOMY.boatEscapePerOutlaw and ENDINGS.texts.boat, written nothing; the first save or delete makes it a real record (marker rae:endings-seeded, so deleting all stays deleted and an edit of the boat can be undone to the default); a damaged save is listed and never replaced by the default or overwritten. 1717 tests (+13), 32-break mutation run all caught.
   - Dependencies: Task 1
   - Files: `rae/src/core/endingstore.ts`, `rae/test/endings-store.test.mjs`
 
