@@ -219,19 +219,20 @@ test("an ending run from an NPC's dialogue button finds the player who pressed i
     done();
 });
 
-test("a solo ending is not run by the group engine (it has its own, later)", () => {
+test("a solo ending is not a group one: it takes one outlaw and neither pools coins nor ends the round", () => {
     scene();
     const { check, done } = checks();
     const made = L.newEnding("solo", "tower", "Tower", PIER);
     assert.ok(made.ok);
     assert.equal(store.saveEnding(made.value).ok, true);
-    const [a] = cast(["A", { tags: ["outlaw"], location: at(PIER.x, PIER.z) }]);
+    const [a, b] = cast(["A", { tags: ["outlaw"], location: at(PIER.x, PIER.z) }], ["B", { tags: ["outlaw"], location: at(PIER.x, PIER.z) }]);
     fake.setScore("coins", "A", 1000);
+    fake.setScore("coins", "B", 1000);
 
     ending(a, "tower");
 
-    check("nothing is taken and nobody wins", coinsOf("A") === 1000 && !a.tags.has("winner") && !ended());
-    check("the player is told", a.messages.map(strip).some((m) => /not ready/.test(m)), JSON.stringify(a.messages));
+    check("only the one who tried paid, and only the solo price", coinsOf("A") === 1000 - made.value.price && coinsOf("B") === 1000, `${coinsOf("A")} ${coinsOf("B")}`);
+    check("the round did not end and the other is no winner", !ended() && !b.tags.has("winner"));
     done();
 });
 

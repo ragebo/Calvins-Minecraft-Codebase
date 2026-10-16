@@ -70,21 +70,22 @@ Deliberate-break (mutation) runs on every new rule. Nothing is deployed or pushe
     - [x] jail and elimination behave exactly as before (the jail tests unchanged) and an escaped player's spectator mode is given back by a reset
     - [x] the flag survives a script reload and is cleared by a round reset
   - Verification: check, test, check:legacy; deliberate breaks of each query
-  - Result: an escaped flag in the state record (state.ESCAPED / isEscaped) that core/players.ts honors in alivePlayers, outlaws, aliveOutlaws and freeOutlaws (so the law win, raids and robberies ignore an escaper); enterSpectator/leaveSpectator lifted from systems/jail.ts into core/spectate.ts with wasPutInSpectator, jail behavior unchanged (jail tests unchanged). 1748 tests, 28-break mutation run all caught.
+  - Result: an escaped flag in the state record (state.ESCAPED / isEscaped) that core/players.ts honors in alivePlayers, outlaws, aliveOutlaws and freeOutlaws (so the law win, raids and robberies ignore an escaper); enterSpectator/leaveSpectator lifted from systems/jail.ts into core/spectate.ts with wasPutInSpectator, jail behavior unchanged (jail tests unchanged). 1747 tests, 28-break (the commit message says 1748: a slip) mutation run all caught.
   - Dependencies: Task 3
   - Files: `rae/src/core/players.ts`, `rae/src/core/spectate.ts`, `rae/src/systems/jail.ts`, `rae/src/systems/endgame.ts`, `rae/test/endings-escaped.test.mjs`
 
-- [ ] **Task 5: The solo ending and the round-over rule** (L)
+- [x] **Task 5: The solo ending and the round-over rule** (L) - done
   `attempt(player, id)` for a solo ending: the checks, the money or item taken, the player marked escaped and announced, taken to the win spot if there is one, put in spectator, and the
   round-over rule run afterwards: all outlaws escaped ends the round as `outlaw_win`; the law win check runs on those left in play. The round does not end for a solo escape otherwise.
   - Acceptance:
-    - [ ] a solo escape with the coins taken, with the item taken (consumed or kept as the ending says), and with both, each ends with the player escaped, announced and a spectator
-    - [ ] the round continues, other outlaws can still use a group ending, and they are no longer asked to include the escaper
-    - [ ] the last free outlaw escaping ends the round `outlaw_win`; escaping while the rest are jailed or eliminated ends it `law_win`; escaping while another is free does not end it
-    - [ ] a jailed or eliminated outlaw, a law player and a player already escaped cannot use it; each is told why
-    - [ ] a short purse or a missing item says which, and takes nothing
-    - [ ] two outlaws attempting the same solo ending in the same tick: both may win if each qualifies (a solo ending is not used up), and the order never decides the round
+    - [x] a solo escape with the coins taken, with the item taken (consumed or kept as the ending says), and with both, each ends with the player escaped, announced and a spectator
+    - [x] the round continues, other outlaws can still use a group ending, and they are no longer asked to include the escaper
+    - [x] the last free outlaw escaping ends the round `outlaw_win`; escaping while the rest are jailed or eliminated ends it `law_win`; escaping while another is free does not end it
+    - [x] a jailed or eliminated outlaw, a law player and a player already escaped cannot use it; each is told why
+    - [x] a short purse or a missing item says which, and takes nothing
+    - [x] two outlaws attempting the same solo ending in the same tick: both may win if each qualifies (a solo ending is not used up), and the order never decides the round
   - Verification: check, test, check:legacy; deliberate breaks of every check, the item consumption and the round-over rule
+  - Result: a SOLO ending in core/endings.ts: an outlaw in play, at the place, with the coins and/or item (consumed or kept) escapes: price taken, announced in the ending's words with {player}, flagged escaped + winner, taken to the win spot (alone), put in spectator; the round goes on. checkRoundOver (shared with systems/endgame.ts on every death and spawn) ends it: all outlaws escaped = outlaw_win (ENDINGS.allEscaped text), the outlaws left in play all jailed/eliminated = law_win with the old announcement. Refusals: law, prisoner, eliminated, already escaped, far, short purse, missing item. players.everyOutlaw added. 1761 tests, 49-break mutation run all caught.
   - Dependencies: Task 4
   - Files: `rae/src/core/endings.ts`, `rae/src/systems/endgame.ts`, `rae/test/endings-solo.test.mjs`
 

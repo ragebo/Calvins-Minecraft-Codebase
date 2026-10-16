@@ -69,6 +69,11 @@ export function lawPlayers(): readonly Player[] {
     return ask("law", (r) => r.role === "law" && !r.eliminated);
 }
 
+/** Every outlaw as the round dealt them: free, jailed, eliminated and escaped. The round's end is judged from this. */
+export function everyOutlaw(): readonly Player[] {
+    return ask("everyOutlaw", (r) => r.role === "outlaw");
+}
+
 /** Every outlaw, including jailed and eliminated ones, but not one who escaped. */
 export function outlaws(): readonly Player[] {
     return ask("outlaws", (r) => r.role === "outlaw" && !isEscaped(r));

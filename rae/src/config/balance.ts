@@ -52,6 +52,12 @@ export const ENDINGS = {
     /** What a new solo ending asks for until its operator changes it (a solo ending must ask for something). */
     defaultSoloPrice: 100,
 
+    /** Said when the last outlaw in play escapes and the round ends because of it. {count} is how many escaped. */
+    allEscaped: {
+        headline: "§6§lEVERY OUTLAW HAS ESCAPED!",
+        detail: "§eNobody is left for the law to catch."
+    },
+
     /** What an ending says until its operator changes it. {coins}, {player} and {count} are filled in. */
     texts: {
         group: {

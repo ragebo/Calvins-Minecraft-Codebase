@@ -1,19 +1,26 @@
 import { world, type Player } from "@minecraft/server";
-import { fillText, groupVerdict, type Ending } from "../logic/endings.js";
+import { ENDINGS as E } from "../config/balance.js";
+import { fillText, groupVerdict, roundVerdict, soloVerdict, tally, type Ending, type Standing } from "../logic/endings.js";
 import { getCoins, takeCoins } from "./economy.js";
 import { getEnding, listEndings } from "./endingstore.js";
 import { endRound, isPhase } from "./round.js";
-import { getRecord, update } from "./state.js";
-import { aliveOutlaws } from "./players.js";
+import { aliveOutlaws, everyOutlaw, lawPlayers } from "./players.js";
+import { enterSpectator } from "./spectate.js";
+import { ESCAPED, getRecord, isEscaped, setFlag, update, type PlayerRecord } from "./state.js";
+import { bagOf, countOf, takeFrom } from "./shopitems.js";
 
 /**
  * Running an ending (logic/endings.ts is what one is and when it is met, core/endingstore.ts keeps them; the plan is tasks/endings/plan.md).
  *
  * `attemptEnding` is what a player's try becomes: the script event `rae:ending <id>` (run by an NPC's button or a command block), or `bounty:escape`,
  * which is the boat's. It checks in the order the boat always has (who, then whether a round is running, then the gathering, then the money), says what
- * is wrong in the ending's own words, and on success takes the coins, ends the round and announces it.
+ * is wrong in the ending's own words, and on success takes the price, announces it and acts:
+ *   - a GROUP ending ends the round as an outlaw win and takes every outlaw in play to the win spot;
+ *   - a SOLO ending takes ONE outlaw out of the game for good (a flag on their record, which every "who is in play" question honors), makes them a
+ *     spectator and a winner for themselves, and the round goes on.
+ * After either, and after every death or spawn, `checkRoundOver` asks whether any outlaw is left in play.
  *
- * Nothing is kept between attempts: whether a round has already ended is core/round.ts's job, so two attempts in one tick cannot both win.
+ * Nothing is kept between attempts: whether a round has already ended is core/round.ts's job, so two attempts in one tick cannot both end it.
  */
 
 function say(player: Player, text: string): void {
@@ -45,7 +52,9 @@ export function attemptEnding(player: Player, id: string): void {
         return;
     }
 
-    if (getRecord(player).role !== "outlaw") {
+    const record = getRecord(player);
+
+    if (record.role !== "outlaw") {
         say(player, ending.texts.outlawsOnly);
         return;
     }
@@ -57,8 +66,13 @@ export function attemptEnding(player: Player, id: string): void {
         return;
     }
 
+    if (isEscaped(record)) {
+        say(player, "§cYou have already escaped.");
+        return;
+    }
+
     if (ending.kind === "group") attemptGroup(player, ending);
-    else say(player, "§cThat ending is not ready yet.");
+    else attemptSolo(player, ending, record);
 }
 
 function attemptGroup(player: Player, ending: Ending): void {
@@ -95,4 +109,70 @@ function attemptGroup(player: Player, ending: Ending): void {
     if (ending.winSpot) {
         world.getDimension("overworld").runCommand(`tp @a[tag=winner] ${ending.winSpot.x} ${ending.winSpot.y} ${ending.winSpot.z}`);
     }
+}
+
+function attemptSolo(player: Player, ending: Ending, record: Readonly<PlayerRecord>): void {
+
+    if (record.eliminated) {
+        say(player, "§cYou are out of the game.");
+        return;
+    }
+
+    if (record.inJail) {
+        say(player, "§cYou cannot escape from jail.");
+        return;
+    }
+
+    const bag = bagOf(player);
+    const itemCount = ending.item && bag ? countOf(bag, { type: ending.item.id, amount: 1 }) : 0;
+    const verdict = soloVerdict(ending, { coins: getCoins(player), at: player.location, itemCount });
+
+    if (!verdict.ok) {
+        if (verdict.why === "far") say(player, ending.texts.gather);
+        else if (verdict.why === "poor") say(player, `§cYou need §e${verdict.need} coins§c to escape (you have §e${verdict.have}§c).`);
+        else say(player, `§cYou need §e${verdict.need}§c of ${ending.item?.id.replace(/^[a-z0-9_.-]+:/, "").replace(/_/g, " ") ?? "the item"} to escape (you have §e${verdict.have}§c).`);
+        return;
+    }
+
+    takeCoins(player, verdict.takeCoins);
+    if (verdict.takeItem > 0 && ending.item && bag) takeFrom(bag, { type: ending.item.id, amount: verdict.takeItem });
+
+    setFlag(player, ESCAPED, true);
+    update(player, { winner: true });
+
+    announce(fillText(ending.texts.headline, { coins: verdict.takeCoins, player: player.name, count: 1 }));
+    announce(fillText(ending.texts.detail, { coins: verdict.takeCoins, player: player.name, count: 1 }));
+
+    if (ending.winSpot) player.teleport({ x: ending.winSpot.x, y: ending.winSpot.y, z: ending.winSpot.z });
+
+    enterSpectator(player);
+
+    checkRoundOver();
+}
+
+const standingOf = (record: Readonly<PlayerRecord>): Standing => ({ escaped: isEscaped(record), eliminated: record.eliminated, inJail: record.inJail });
+
+/**
+ * Whether any outlaw is left in play, asked after every death, every spawn and every escape. When none is, the round ends: as the law's win when the
+ * outlaws still in play are all jailed or eliminated (whoever escaped before), or as the outlaws' win when every one of them escaped.
+ */
+export function checkRoundOver(): void {
+
+    const verdict = roundVerdict(everyOutlaw().map((outlaw) => standingOf(getRecord(outlaw))));
+
+    if (verdict === "running") return;
+
+    // False if no round is active, or one already ended (someone else's win, or this same check running again): nothing left to announce.
+    if (!endRound(verdict)) return;
+
+    if (verdict === "law_win") {
+        world.sendMessage("§9§lTHE LAW HAS WON!");
+        world.sendMessage("§7Every outlaw is captured or eliminated — no one is left to break them out.");
+
+        for (const player of lawPlayers()) update(player, { winner: true });
+        return;
+    }
+
+    announce(E.allEscaped.headline);
+    announce(fillText(E.allEscaped.detail, { count: tally(everyOutlaw().map((outlaw) => standingOf(getRecord(outlaw)))).escaped }));
 }

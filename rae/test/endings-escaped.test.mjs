@@ -61,7 +61,7 @@ test("an escaped player appears in none of the in-play queries; everyone else is
 test("every query core/players.ts offers is accounted for here, so a new one cannot forget the flag", () => {
     const { check, done } = checks();
     const queries = Object.keys(P).filter((name) => typeof P[name] === "function").sort();
-    check("the known set", queries.join() === "aliveOutlaws,alivePlayers,freeOutlaws,isOperator,lawPlayers,outlaws,players,prisoners,spectators", queries.join());
+    check("the known set", queries.join() === "aliveOutlaws,alivePlayers,everyOutlaw,freeOutlaws,isOperator,lawPlayers,outlaws,players,prisoners,spectators", queries.join());
     done();
 });
 
@@ -109,7 +109,7 @@ test("with an outlaw still free the law has not won, escaped or not", () => {
     done();
 });
 
-test("when every outlaw has escaped the law's check does not fire on an empty gang (the round-over rule is a later task)", () => {
+test("when every outlaw has escaped, the check ends the round for the outlaws, not the law", () => {
     scene();
     const { check, done } = checks();
     const [law, a, b] = cast(["Law", { tags: ["law"] }], ["A", { tags: ["outlaw"] }], ["B", { tags: ["outlaw"] }]);
@@ -118,7 +118,7 @@ test("when every outlaw has escaped the law's check does not fire on an empty ga
     escape(b);
     spawn(law);
 
-    check("no law win from nobody", round.getPhase() === "ACTIVE", round.getPhase());
+    check("an outlaw win, not a law win", round.getPhase() === "ENDED" && round.lastEnd() === "outlaw_win", `${round.getPhase()} ${round.lastEnd()}`);
     done();
 });
 
