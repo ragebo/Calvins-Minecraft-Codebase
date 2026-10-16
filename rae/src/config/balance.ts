@@ -29,6 +29,53 @@ export const BOAT = {
     escapeRadius: 16
 };
 
+/**
+ * The endings (logic/endings.ts is their rules, core/endings.ts runs them; the plan is tasks/endings/plan.md). The endings themselves are saved in the
+ * world, built by an operator in game: a place, a price, an optional item, the words it says. What is here is the numbers around them and the default
+ * words. The boat escape is the first ending a world has, made from BOAT, ECONOMY.boatEscapePerOutlaw and the boat's spots in config/world.ts until the
+ * endings are first saved.
+ */
+export const ENDINGS = {
+    /** At most this many endings. */
+    maxEndings: 12,
+    /** A saved ending longer than this many characters is refused. The longest a valid one can be (every character of every text needing a backslash) is about 1700. */
+    maxChars: 2000,
+    maxName: 40,
+    /** The longest one of an ending's texts. */
+    maxText: 160,
+    maxRadius: 200,
+    maxPrice: 1_000_000,
+    maxItemId: 60,
+    maxItemCount: 64,
+    /** A new ending's radius, in blocks. */
+    defaultRadius: 16,
+    /** What a new solo ending asks for until its operator changes it (a solo ending must ask for something). */
+    defaultSoloPrice: 100,
+
+    /** What an ending says until its operator changes it. {coins}, {player} and {count} are filled in. */
+    texts: {
+        group: {
+            headline: "§6§lTHE OUTLAWS HAVE ESCAPED!",
+            detail: "§eThe gang pooled {coins} coins and escaped!",
+            gather: "§cAll surviving outlaws must gather at the escape point!",
+            outlawsOnly: "§cOnly outlaws can escape."
+        },
+        solo: {
+            headline: "§6§l{player} HAS ESCAPED!",
+            detail: "§e{player} slipped away alone.",
+            gather: "§cYou have to be at the escape point.",
+            outlawsOnly: "§cOnly outlaws can escape."
+        },
+        /** The boat's own words, as they were before it became an ending. */
+        boat: {
+            headline: "§6§lTHE OUTLAWS HAVE ESCAPED!",
+            detail: "§eThe gang pooled {coins} coins and escaped by boat!",
+            gather: "§cAll surviving outlaws must gather at the escape boat!",
+            outlawsOnly: "§cOnly outlaws can use the escape boat."
+        }
+    } as Record<"group" | "solo" | "boat", { headline: string; detail: string; gather: string; outlawsOnly: string }>
+};
+
 export const JAILBREAK = {
     /** Correct slider hits needed to open the lock. */
     hitsToUnlock: 2,

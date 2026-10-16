@@ -5,20 +5,21 @@ Deliberate-break (mutation) runs on every new rule. Nothing is deployed or pushe
 
 ## Phase 1: The engine, with the boat as the first ending
 
-- [ ] **Task 1: The ending record and its rules, pure** (M)
+- [x] **Task 1: The ending record and its rules, pure** (M) - done
   `logic/endings.ts`: the record `{version, id, name, kind: "group" | "solo", enabled, place, radius, pricePerMember (group) / price (solo), item?, consumeItem, winSpot?, message, announce,
   cinematic?}` with `parse` (never throws, refuses what it cannot read with a reason), `serialize`, `validate` (a reason an operator can read), and immutable edit operations. The
   verdicts as plain functions on plain snapshots: the group verdict (who is missing, what is owed, how the cost is split across the gathered members in order), the solo verdict (distance,
   coins, item), the round tally (escaped, captured, still in play), and "is the round over". `config/balance.ts` gets `ENDINGS` (the caps and the shipped boat defaults, copied from the
   old boat constants).
   - Acceptance:
-    - [ ] a record round-trips through serialize and parse; garbage, a missing field, a wrong type, a newer version and an oversized text are refused with a reason and never throw
-    - [ ] validate refuses: no place, a radius of 0 or less, a negative price, a solo ending with neither coins nor item, an empty id, an id with characters the store cannot keep
-    - [ ] the group verdict: everyone present and enough pooled coins passes; one absent member names them; a short purse says how many coins are missing; zero members passes nothing
-    - [ ] the cost split takes from the gathered members in the order given and never takes more than the total owed (a test with uneven purses)
-    - [ ] the solo verdict: at the radius edge in, a hair outside out; coins only, item only, both; a short purse and a missing item each give their own reason
-    - [ ] the tally and "is the round over" for: none escaped, some escaped and some captured, all escaped, nobody assigned (not over)
+    - [x] a record round-trips through serialize and parse; garbage, a missing field, a wrong type, a newer version and an oversized text are refused with a reason and never throw
+    - [x] validate refuses: no place, a radius of 0 or less, a negative price, a solo ending with neither coins nor item, an empty id, an id with characters the store cannot keep
+    - [x] the group verdict: everyone present and enough pooled coins passes; one absent member names them; a short purse says how many coins are missing; zero members passes nothing
+    - [x] the cost split takes from the gathered members in the order given and never takes more than the total owed (a test with uneven purses)
+    - [x] the solo verdict: at the radius edge in, a hair outside out; coins only, item only, both; a short purse and a missing item each give their own reason
+    - [x] the tally and "is the round over" for: none escaped, some escaped and some captured, all escaped, nobody assigned (not over)
   - Verification: check, test, check:legacy; deliberate breaks on every comparison and the split
+  - Result: logic/endings.ts: the ending record (group or solo; place, radius, price, item, win spot, four texts) with parse/serialize that never throw, validate with readable reasons, new/edit/id-from-name, the group verdict (gather before money, cost taken in order), the solo verdict (place, coins, item), the tally and the round verdict (all escaped = outlaw win, law judged on those left in play). ENDINGS in config/balance.ts. 1704 tests (+13), 109-break mutation run all caught.
   - Dependencies: None
   - Files: `rae/src/logic/endings.ts`, `rae/src/config/balance.ts`, `rae/test/endings-logic.test.mjs`
 
