@@ -60,16 +60,17 @@ Deliberate-break (mutation) runs on every new rule. Nothing is deployed or pushe
 
 ## Phase 2: Solo escapes and the round rule
 
-- [ ] **Task 4: An escaped outlaw is not an outlaw any more** (M)
+- [x] **Task 4: An escaped outlaw is not an outlaw any more** (M) - done
   A per-player flag `escaped` (in the record's `flags`) and `core/players.ts` excluding it from `outlaws()`, `aliveOutlaws()`, `freeOutlaws()` and `alivePlayers()`; `core/spectate.ts` lifted
   out of `systems/jail.ts` (jail uses it, no change in behavior). The law win ignores escaped outlaws.
   - Acceptance:
-    - [ ] an escaped player appears in none of the four queries; a non-escaped player is unchanged
-    - [ ] the law win with one outlaw escaped and the rest jailed or eliminated fires; with one still free it does not
-    - [ ] a raid and a robbery do not count or target an escaped outlaw; the harming level counts one fewer
-    - [ ] jail and elimination behave exactly as before (the jail tests unchanged) and an escaped player's spectator mode is given back by a reset
-    - [ ] the flag survives a script reload and is cleared by a round reset
+    - [x] an escaped player appears in none of the four queries; a non-escaped player is unchanged
+    - [x] the law win with one outlaw escaped and the rest jailed or eliminated fires; with one still free it does not
+    - [x] a raid and a robbery do not count or target an escaped outlaw; the harming level counts one fewer
+    - [x] jail and elimination behave exactly as before (the jail tests unchanged) and an escaped player's spectator mode is given back by a reset
+    - [x] the flag survives a script reload and is cleared by a round reset
   - Verification: check, test, check:legacy; deliberate breaks of each query
+  - Result: an escaped flag in the state record (state.ESCAPED / isEscaped) that core/players.ts honors in alivePlayers, outlaws, aliveOutlaws and freeOutlaws (so the law win, raids and robberies ignore an escaper); enterSpectator/leaveSpectator lifted from systems/jail.ts into core/spectate.ts with wasPutInSpectator, jail behavior unchanged (jail tests unchanged). 1748 tests, 28-break mutation run all caught.
   - Dependencies: Task 3
   - Files: `rae/src/core/players.ts`, `rae/src/core/spectate.ts`, `rae/src/systems/jail.ts`, `rae/src/systems/endgame.ts`, `rae/test/endings-escaped.test.mjs`
 

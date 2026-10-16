@@ -4,6 +4,7 @@ import { registerSystem } from "../core/registry.js";
 import { onDeath, onScriptEvent, onSpawn } from "../core/events.js";
 import { addCoins, getBounty, clearBounty } from "../core/economy.js";
 import { error } from "../core/log.js";
+import { enterSpectator, leaveSpectator, wasPutInSpectator } from "../core/spectate.js";
 import { getRecord, recordOf, getJailSite, setJailSite, syncTags, update, updateById } from "../core/state.js";
 import { players, prisoners } from "../core/players.js";
 
@@ -46,50 +47,6 @@ export function assignJailForNewPrisoner(): Vector3 {
  */
 function nameOf(player: Player, identity: ScoreboardIdentity): string {
     return player.isValid ? player.name : identity.displayName;
-}
-
-/** Remembers what game mode an eliminated player was in, so a new round can give it back (a world property, so it outlives a reload). */
-const BEFORE_SPECTATOR = "rae:gamemode_before_spectator";
-
-/** The game mode a `/gamemode` command knows, from what the engine reports ("Survival" becomes "survival"). */
-function modeNow(player: Player): string {
-    try {
-        return String(player.getGameMode()).toLowerCase();
-    } catch {
-        return "survival";
-    }
-}
-
-function enterSpectator(player: Player): void {
-
-    if (!player.isValid) return;
-
-    const before = modeNow(player);
-
-    // Already a spectator (eliminated twice, or sent here by hand): keep what was remembered the first time.
-    if (before !== "spectator" && player.getDynamicProperty(BEFORE_SPECTATOR) === undefined) player.setDynamicProperty(BEFORE_SPECTATOR, before);
-
-    player.runCommand("gamemode spectator @s");
-}
-
-/** Gives an eliminated player their game mode back. Nothing happens to a player who was never put in spectator by the round. */
-function leaveSpectator(player: Player): void {
-
-    if (!player.isValid) return;
-
-    const before = player.getDynamicProperty(BEFORE_SPECTATOR);
-
-    if (typeof before !== "string") return;
-
-    try {
-        player.runCommand(`gamemode ${before === "spectator" ? "survival" : before} @s`);
-    } catch (err) {
-        // What was remembered is kept, so the next reset or spawn tries again instead of leaving them a spectator with no memory of why.
-        error("jail", `could not give a player their game mode back: ${err instanceof Error ? err.message : String(err)}`);
-        return;
-    }
-
-    player.setDynamicProperty(BEFORE_SPECTATOR, undefined);
 }
 
 onDeath("jail:capture", 100, (ctx) => {
@@ -185,7 +142,7 @@ onSpawn("jail:spawn", 100, (ctx) => {
     }
 
     // Eliminated in an earlier round and offline when it was reset: the reset could not reach them, so they are let out now.
-    if (player.getDynamicProperty(BEFORE_SPECTATOR) !== undefined) system.run(() => leaveSpectator(player));
+    if (wasPutInSpectator(player)) system.run(() => leaveSpectator(player));
 });
 
 // scriptevent bounty:test_capture — instantly captures YOU. Skips

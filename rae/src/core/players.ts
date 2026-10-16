@@ -1,5 +1,5 @@
 import { world, system, PlayerPermissionLevel, type Player } from "@minecraft/server";
-import { recordOf, stateVersion, type PlayerRecord } from "./state.js";
+import { isEscaped, recordOf, stateVersion, type PlayerRecord } from "./state.js";
 
 /**
  * Cached answers to "which players are ...?", read from core/state records.
@@ -59,9 +59,9 @@ export function isOperator(player: Player): boolean {
     return player.playerPermissionLevel === PlayerPermissionLevel.Operator;
 }
 
-/** Everyone still in the round, whatever their role (or none yet). */
+/** Everyone still in the round, whatever their role (or none yet). An outlaw who escaped is out of it. */
 export function alivePlayers(): readonly Player[] {
-    return ask("alive", (r) => !r.eliminated);
+    return ask("alive", (r) => !r.eliminated && !isEscaped(r));
 }
 
 /** Law players who are still in the round. */
@@ -69,19 +69,19 @@ export function lawPlayers(): readonly Player[] {
     return ask("law", (r) => r.role === "law" && !r.eliminated);
 }
 
-/** Every outlaw, including jailed and eliminated ones. */
+/** Every outlaw, including jailed and eliminated ones, but not one who escaped. */
 export function outlaws(): readonly Player[] {
-    return ask("outlaws", (r) => r.role === "outlaw");
+    return ask("outlaws", (r) => r.role === "outlaw" && !isEscaped(r));
 }
 
 /** Outlaws who are still in the round (jailed or free). */
 export function aliveOutlaws(): readonly Player[] {
-    return ask("aliveOutlaws", (r) => r.role === "outlaw" && !r.eliminated);
+    return ask("aliveOutlaws", (r) => r.role === "outlaw" && !r.eliminated && !isEscaped(r));
 }
 
 /** Outlaws who are in the round and not in jail. */
 export function freeOutlaws(): readonly Player[] {
-    return ask("freeOutlaws", (r) => r.role === "outlaw" && !r.eliminated && !r.inJail);
+    return ask("freeOutlaws", (r) => r.role === "outlaw" && !r.eliminated && !r.inJail && !isEscaped(r));
 }
 
 /** Eliminated players, now spectating. */

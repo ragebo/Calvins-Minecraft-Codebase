@@ -67,6 +67,11 @@ export interface PlayerRecord {
 
 export type RecordPatch = Partial<Omit<PlayerRecord, "id" | "ammo" | "flags">>;
 
+/** The flag that says an outlaw escaped (tasks/endings): out of the game for good, and counted as neither free, jailed nor eliminated. */
+export const ESCAPED = "escaped";
+
+export const isEscaped = (record: Readonly<PlayerRecord>): boolean => record.flags[ESCAPED] === true;
+
 // The tags a record is mirrored to. `jailed` means captures >= 1.
 const TAG = {
     law: "law",
