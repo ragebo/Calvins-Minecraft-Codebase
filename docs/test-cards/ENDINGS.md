@@ -7,7 +7,7 @@ outlaws' win; the rest jailed or eliminated (whoever escaped earlier) is the law
 can have a camera pan (a **cinematic**) played after its announcement. Everything that does not depend on the real game is covered by the tests
 (`test/endings-*.test.mjs`: 121 tests, and about 400 deliberate breaks of the code, each caught). What they cannot say is how the real game behaves: that is this card.
 
-- **Built on branch `v2`, not deployed** (the live pack is 0.2.8). When it is deployed, quit the game completely and launch it fresh. The resource pack is unchanged.
+- **Deployed as behavior pack 0.2.9**. When it is deployed, quit the game completely and launch it fresh. The resource pack is unchanged.
 - **Three accounts are best** (one law, two outlaws). Alone you can run steps 1 to 12.
 - You edit it all from the RAE menu (`/give @s bountysys:game_menu`, right-click, **Endings**, which only operators see). There is no new command.
   Players try an ending with `/scriptevent rae:ending <id>` (an NPC's dialogue button or a command block runs the same line); `bounty:escape` still tries the boat.

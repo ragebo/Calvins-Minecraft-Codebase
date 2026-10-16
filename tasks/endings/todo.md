@@ -156,7 +156,7 @@ Deliberate-break (mutation) runs on every new rule. Nothing is deployed or pushe
 - [x] every acceptance box above is ticked
 - [ ] the owner has run `docs/test-cards/ENDINGS.md` in the real game; what it shows is fixed in a follow-up round
 
-- [ ] **Task 10: Release** (S; only when the owner asks)
+- [x] **Task 10: Release** (S; only when the owner asks)
   The behavior pack only (no sprite or texture changes): bump the BP in four places (manifest header and both modules, `BUILD_VERSION`), gate, clean build, `deploy.ps1` with no world open,
   byte-verify, read the four worlds' pins as JSON, tell the owner to launch fresh. No push unless asked.
   - Dependencies: all of the above.
