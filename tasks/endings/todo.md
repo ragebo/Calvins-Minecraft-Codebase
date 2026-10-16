@@ -56,7 +56,7 @@ Deliberate-break (mutation) runs on every new rule. Nothing is deployed or pushe
   - Files: `rae/src/core/endings.ts`, `rae/src/systems/endings.ts`, `rae/src/systems/boat.ts` (deleted), `rae/src/main.ts`, `rae/src/core/round.ts`, `rae/test/endings-group.test.mjs`
 
 ### Checkpoint 1: the boat is data
-- [ ] all green; the boat tests unchanged; an operator could already change the boat's numbers by saving a new record (the screens come in Task 7)
+- [x] all green; the boat tests unchanged (round-flow, 1735 tests); an operator could already change the boat's numbers by saving a new record (the screens come in Task 7)
 
 ## Phase 2: Solo escapes and the round rule
 
