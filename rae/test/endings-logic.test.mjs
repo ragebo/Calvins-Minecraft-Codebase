@@ -32,7 +32,7 @@ const member = (id, coins, where = PLACE) => ({ id, coins, at: where });
 test("the ending caps and default texts are on the table", () => {
     const { check, done } = checks();
     check("twelve endings at most", ENDINGS.maxEndings === 12);
-    check("a record is capped in characters", ENDINGS.maxChars === 2000);
+    check("a record is capped in characters", ENDINGS.maxChars === 2400);
     check("text caps", ENDINGS.maxName === 40 && ENDINGS.maxText === 160);
     check("a radius cap and a price cap", ENDINGS.maxRadius === 200 && ENDINGS.maxPrice === 1_000_000);
     check("default texts for both kinds", typeof ENDINGS.texts.group.headline === "string" && typeof ENDINGS.texts.solo.headline === "string");

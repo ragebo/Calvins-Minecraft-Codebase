@@ -122,18 +122,19 @@ Deliberate-break (mutation) runs on every new rule. Nothing is deployed or pushe
   - Dependencies: Task 6
   - Files: `rae/src/core/endingforms.ts`, `rae/src/systems/menu.ts`, `rae/test/endings-forms.test.mjs`
 
-- [ ] **Task 8: The cinematic** (L)
+- [x] **Task 8: The cinematic** (L) - done
   An ending's optional pan: a start mark and an end mark taken by standing (look the way the camera should), and seconds. Played after the announcement for `all` players or the `winners`, locking
   them while it plays and handing the camera back; the group ending's winners are taken to the win spot after it. A preview button on the edit screen. Rides the start sequence's safety:
   a generation a reset moves on, one function that releases everyone, and a held player is never released by anything else.
   - Acceptance:
-    - [ ] a group ending with a pan locks and moves every player's camera, hands it back after the seconds, and only then teleports the winners
-    - [ ] a solo ending with the audience `winners` moves only the escaper's camera; `all` moves everyone's
-    - [ ] no cinematic set means no camera, no lock and no delay
-    - [ ] a round reset in the middle, a player leaving, or a failing camera call leaves nobody locked or stuck in a camera (the start sequence's safety net is reused, not copied)
-    - [ ] the preview plays for the operator alone and is refused while a game is starting
-    - [ ] the ending is announced and recorded as ended at once; the cinematic never delays the round's end state
+    - [x] a group ending with a pan locks and moves every player's camera, hands it back after the seconds, and only then teleports the winners
+    - [x] a solo ending with the audience `winners` moves only the escaper's camera; `all` moves everyone's
+    - [x] no cinematic set means no camera, no lock and no delay
+    - [x] a round reset in the middle, a player leaving, or a failing camera call leaves nobody locked or stuck in a camera (the start sequence's safety net is reused, not copied)
+    - [x] the preview plays for the operator alone and is refused while a game is starting
+    - [x] the ending is announced and recorded as ended at once; the cinematic never delays the round's end state
   - Verification: check, test, check:legacy; deliberate breaks of the audience, the lock release and the delay
+  - Result: An ending can hold a cinematic (two camera marks, a length up to 30 s, audience all|winners; validated with the shots' own rules, rounded, saved as `cn`). core/endings.ts plays it AFTER the announcement and the round's end state (never delays them) through a new startsequence.playPan (locks the audience, camera start -> end, hands cameras back, then moves the winners); the start sequence's held list/generation/first-tick unlock are the safety (reset, player leaving, failing camera all tested). Edit screen: Cinematic (mark start, mark end from the camera's eyes, length+audience box, Preview alone, Remove). core/marks.ts shares the mark helpers with the start sequence's shots; previewShot now rides playPan. 1807 tests, 68 deliberate breaks all caught.
   - Dependencies: Task 7
   - Files: `rae/src/logic/endings.ts`, `rae/src/core/endings.ts`, `rae/src/core/endingforms.ts`, `rae/test/endings-cinematic.test.mjs`
 

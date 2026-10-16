@@ -1,12 +1,15 @@
 import type { Player } from "@minecraft/server";
 import { ModalFormData } from "@minecraft/server-ui";
 import { ENDINGS as E } from "../config/balance.js";
-import { edit, newEnding, type Ending, type EndingPatch, type Place, type Result } from "../logic/endings.js";
+import { cinematicShot, edit, newEnding, type Ending, type EndingPatch, type Place, type Result } from "../logic/endings.js";
+import type { Mark } from "../logic/start.js";
 import { getEnding, listEndings, newEndingId, removeEnding, saveEnding, undoAvailable, undoEnding } from "./endingstore.js";
 import { confirmForm, showForm } from "./forms.js";
+import { eyeMark, pendingMark, setPendingMark, where as whereMark } from "./marks.js";
 import { isOperator } from "./players.js";
 import { BACK, createScreens, type Action, type Step } from "./screens.js";
 import { heldStack } from "./shopitems.js";
+import { previewPan } from "./startsequence.js";
 import { format, tell } from "./ui.js";
 
 /**
@@ -41,7 +44,7 @@ function standingPlace(player: Player): Place {
     return { x: Math.floor(at.x) + 0.5, y: Math.floor(at.y), z: Math.floor(at.z) + 0.5 };
 }
 
-const where = (place: Place): string => `${Math.round(place.x)}, ${Math.round(place.y)}, ${Math.round(place.z)}`;
+const where = whereMark;
 
 const kindName = (ending: Ending): string => (ending.kind === "group" ? "Group" : "Solo");
 
@@ -141,6 +144,8 @@ function summary(ending: Ending): string {
             : "Item: none.");
     }
 
+    if (ending.cinematic) lines.push(`A ${ending.cinematic.seconds} second pan plays for ${ending.cinematic.audience === "all" ? "every player" : "the winners"}.`);
+
     lines.push(ending.winSpot ? `Winners are taken to ${where(ending.winSpot)}.` : "Nobody is moved when it succeeds.");
 
     return lines.join("\n");
@@ -159,6 +164,7 @@ async function oneEnding(player: Player, id: string): Promise<void> {
             { label: ending.enabled ? "Turn it off" : "Turn it on", run: () => apply(player, ending, { enabled: !ending.enabled }, ending.enabled ? "It is off." : "It is on.") },
             { label: "Name, radius and price", run: () => details(player, id) },
             { label: "Messages", run: () => messages(player, id) },
+            { label: ending.cinematic ? "Cinematic (set)" : "Cinematic", run: () => cinematicScreen(player, id) },
             { label: "Move the place to where I stand", run: () => apply(player, ending, { place: standingPlace(player) }, "The place is where you stand.") },
             { label: "Set the win spot to where I stand", run: () => apply(player, ending, { winSpot: standingPlace(player) }, "Winners will be taken to where you stand.") }
         ];
@@ -219,6 +225,107 @@ async function deleteOne(player: Player, id: string, called: string): Promise<St
     screens.notify(player, result.ok ? format("ok", `Deleted ${called}.`) : format("warn", `Not deleted: ${result.reason}.`));
 
     return "back";
+}
+
+// ---------------------------------------------------------------------------------------------------------
+// The cinematic
+// ---------------------------------------------------------------------------------------------------------
+
+/** Where an operator's half-made pan is kept: on the operator, apart from the start sequence's camera shots. */
+const PENDING_PAN = "rae:endingpan:mark";
+
+async function cinematicScreen(player: Player, id: string): Promise<void> {
+
+    await screens.run(player, () => {
+
+        const ending = getEnding(id);
+
+        if (!ending) return undefined;
+
+        const pan = ending.cinematic;
+        const pending = pendingMark(player, PENDING_PAN);
+        const actions: Action[] = [];
+
+        if (pending === undefined) {
+            actions.push({ label: pan ? "Mark a new pan: its start here" : "Mark the start of the pan here", run: () => setPendingMark(player, PENDING_PAN, eyeMark(player), "endings") });
+        } else {
+            actions.push({ label: "Mark the end here", run: () => markEnd(player, ending, pending) });
+            actions.push({ label: "Cancel marking", run: () => { setPendingMark(player, PENDING_PAN, undefined, "endings"); screens.notify(player, format("ok", "Marking cancelled.")); } });
+        }
+
+        if (pan) {
+            actions.push({ label: "Length and audience", run: () => lengthAndAudience(player, id) });
+            actions.push({ label: "Preview", run: () => preview(player, ending) });
+            actions.push({ label: "Remove the cinematic", run: () => apply(player, ending, { cinematic: null }, "The cinematic is gone.") });
+        }
+
+        actions.push(BACK);
+
+        const lines = [pan
+            ? `A ${pan.seconds} second pan from ${where(pan.start)} to ${where(pan.end)}, shown to ${pan.audience === "all" ? "every player" : "the winners"} after the announcement.`
+            : "No cinematic: the ending is announced and that is all. A pan is two marks: stand where the camera should start, looking the way it should, and press the button; then go where it should end."];
+
+        if (pending !== undefined) lines.push(`§eStart marked at ${where(pending)}. Go where the pan should end, and press "Mark the end here".`);
+
+        return { title: `Cinematic: ${ending.name}`, body: lines.join("\n"), actions };
+    });
+}
+
+/** The end is taken the moment the button is pressed. A pan that already had a length and an audience keeps them. */
+function markEnd(player: Player, ending: Ending, start: Mark): void {
+
+    const end = eyeMark(player);
+    const before = ending.cinematic;
+    const cinematic = { start, end, seconds: before?.seconds ?? E.defaultCinematicSeconds, audience: before?.audience ?? (ending.kind === "group" ? "all" as const : "winners" as const) };
+
+    const made = edit(ending, { cinematic });
+    const saved = made.ok ? saveEnding(made.value) : made;
+
+    if (!saved.ok) {
+        screens.notify(player, format("warn", `Not saved: ${saved.reason}. Your start mark is kept.`));
+        return;
+    }
+
+    setPendingMark(player, PENDING_PAN, undefined, "endings");
+    screens.notify(player, format("ok", `Saved a ${cinematic.seconds} second pan. Preview it, or change its length and who sees it.`));
+}
+
+function lengthAndAudience(player: Player, id: string): Promise<void> {
+
+    const ending = getEnding(id);
+
+    if (!ending?.cinematic) return Promise.resolve();
+
+    const fields: Field[] = [
+        { label: "Length (seconds)", start: String(ending.cinematic.seconds) },
+        { label: "Show it to every player (off: only the winners)", toggle: ending.cinematic.audience === "all" }
+    ];
+
+    return box(player, id, "The pan's length and audience", fields, (answers, current) => {
+
+        const seconds = numberFrom("length", String(answers[0]));
+        if (!seconds.ok) return seconds;
+        if (!current.cinematic) return { ok: false, reason: "the ending no longer has a cinematic" };
+
+        return { ok: true, value: { cinematic: { ...current.cinematic, seconds: seconds.value, audience: answers[1] === true ? "all" : "winners" } } };
+    });
+}
+
+/** Plays it for the operator alone and closes the menus, so the screen does not come back over the camera. */
+function preview(player: Player, ending: Ending): void {
+
+    const shot = cinematicShot(ending);
+
+    if (!shot || !ending.cinematic) return;
+
+    const refusal = previewPan(player, shot, ending.cinematic.seconds);
+
+    if (refusal !== undefined) {
+        screens.notify(player, format("warn", refusal));
+        return;
+    }
+
+    screens.closeAll(player);
 }
 
 // ---------------------------------------------------------------------------------------------------------

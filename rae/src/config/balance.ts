@@ -38,8 +38,8 @@ export const BOAT = {
 export const ENDINGS = {
     /** At most this many endings. */
     maxEndings: 12,
-    /** A saved ending longer than this many characters is refused. The longest a valid one can be (every character of every text needing a backslash) is about 1700. */
-    maxChars: 2000,
+    /** A saved ending longer than this many characters is refused. The longest a valid one can be (every character of every text needing a backslash, and a cinematic with marks at the edge of the world) is about 1950. */
+    maxChars: 2400,
     maxName: 40,
     /** The longest one of an ending's texts. */
     maxText: 160,
@@ -47,6 +47,9 @@ export const ENDINGS = {
     maxPrice: 1_000_000,
     maxItemId: 60,
     maxItemCount: 64,
+    /** The longest an ending's cinematic may be (seconds), and how long a new one is until its operator changes it. */
+    maxCinematicSeconds: 30,
+    defaultCinematicSeconds: 8,
     /** A new ending's radius, in blocks. */
     defaultRadius: 16,
     /** What a new solo ending asks for until its operator changes it (a solo ending must ask for something). */

@@ -3,7 +3,7 @@ import { ModalFormData } from "@minecraft/server-ui";
 import { START as S } from "../config/balance.js";
 import { addCommand, editCommand, makeShot, nextShotId, removeCommand, type Mark, type Result, type Shot } from "../logic/start.js";
 import { confirmForm, showForm } from "./forms.js";
-import { warn } from "./log.js";
+import { eyeMark, pendingMark as readPending, setPendingMark as writePending, where } from "./marks.js";
 import { isOperator } from "./players.js";
 import { BACK, createScreens, type Action, type Step } from "./screens.js";
 import { previewShot } from "./startsequence.js";
@@ -179,44 +179,8 @@ async function putDefaultsBack(player: Player): Promise<void> {
 /** Where an operator's pending start is kept: on the operator, so it survives a screen closing and does not belong to a game. */
 const PENDING_MARK = "rae:start:mark";
 
-function pendingMark(player: Player): Mark | undefined {
-
-    try {
-        const raw = player.getDynamicProperty(PENDING_MARK);
-
-        if (typeof raw !== "string") return undefined;
-
-        const list: unknown = JSON.parse(raw);
-
-        // A damaged one is ignored, as if none were made.
-        if (!Array.isArray(list) || list.length !== 5 || !list.every((n) => typeof n === "number" && Number.isFinite(n))) return undefined;
-
-        return { x: list[0] as number, y: list[1] as number, z: list[2] as number, pitch: list[3] as number, yaw: list[4] as number };
-    } catch {
-        return undefined;
-    }
-}
-
-function setPendingMark(player: Player, mark: Mark | undefined): void {
-
-    try {
-        player.setDynamicProperty(PENDING_MARK, mark === undefined ? undefined : JSON.stringify([mark.x, mark.y, mark.z, mark.pitch, mark.yaw]));
-    } catch (err) {
-        warn("start", `Could not keep a start mark for ${player.name}: ${err}`);
-    }
-}
-
-/** Where the operator's camera would be if it were their eyes, and the way they face. */
-function eyeMark(player: Player): Mark {
-
-    const head = player.getHeadLocation();
-    const view = player.getRotation();
-
-    return { x: head.x, y: head.y, z: head.z, pitch: view.x, yaw: view.y };
-}
-
-/** A place as three whole numbers, which is all an operator reading a screen needs. */
-const where = (mark: Mark): string => `${Math.round(mark.x)}, ${Math.round(mark.y)}, ${Math.round(mark.z)}`;
+const pendingMark = (player: Player): Mark | undefined => readPending(player, PENDING_MARK);
+const setPendingMark = (player: Player, mark: Mark | undefined): void => writePending(player, PENDING_MARK, mark, "start");
 
 function shotsBody(count: number, pending: Mark | undefined): string {
 

@@ -1,4 +1,5 @@
 import { ENDINGS as E } from "../config/balance.js";
+import { START_VERSION, makeShot, markList, readMark, type Mark, type Shot } from "./start.js";
 
 /**
  * The pure rules of the endings (core/endings.ts runs them, core/endingstore.ts keeps them; the plan is tasks/endings/plan.md).
@@ -35,6 +36,17 @@ export interface Texts {
     readonly outlawsOnly: string;
 }
 
+/** Who sees a cinematic: every player online, or only the ones the ending made winners (the gang; the one who escaped alone). */
+export type Audience = "all" | "winners";
+
+/** A camera pan played after an ending is announced: from where one mark is to where the other is over `seconds`. The marks are the shots' own (logic/start.ts). */
+export interface Cinematic {
+    readonly start: Mark;
+    readonly end: Mark;
+    readonly seconds: number;
+    readonly audience: Audience;
+}
+
 export interface Item {
     readonly id: string;
     readonly count: number;
@@ -59,6 +71,8 @@ export interface Ending {
     /** Where the winners are taken, if anywhere. */
     readonly winSpot?: Place;
     readonly texts: Texts;
+    /** A pan played after the announcement; absent means no camera, no lock and no delay. */
+    readonly cinematic?: Cinematic;
 }
 
 export type Result<T> = { readonly ok: true; readonly value: T } | { readonly ok: false; readonly reason: string };
@@ -119,6 +133,16 @@ export function whyNotUsable(ending: Ending): string | undefined {
 
     if (ending.kind === "solo" && ending.price === 0 && !ending.item) return "a solo ending has to ask for coins or an item, or anyone could walk out";
 
+    if (ending.cinematic) {
+        const { start, end, seconds, audience } = ending.cinematic;
+
+        if (typeof seconds !== "number" || !Number.isFinite(seconds) || seconds <= 0 || seconds > E.maxCinematicSeconds) return `the cinematic must last more than 0 and at most ${E.maxCinematicSeconds} seconds`;
+        if (audience !== "all" && audience !== "winners") return "the cinematic is for all players or for the winners";
+
+        const shot = makeShot("c", "", start, end);
+        if (!shot.ok) return `the cinematic: ${shot.reason}`;
+    }
+
     for (const [which, text] of Object.entries(ending.texts)) {
         if (typeof text !== "string") return `the ${which} text must be text`;
         if (text.length > E.maxText) return `a text is at most ${E.maxText} characters (the ${which} one is ${text.length})`;
@@ -169,6 +193,13 @@ export interface EndingPatch {
     readonly consumeItem?: boolean;
     readonly winSpot?: Place | null;
     readonly texts?: Partial<Texts>;
+    /** `null` takes the cinematic away. */
+    readonly cinematic?: Cinematic | null;
+}
+
+/** The ending's cinematic as the camera shot the start sequence plays (its id is the ending's), or undefined when it has none. */
+export function cinematicShot(ending: Ending): Shot | undefined {
+    return ending.cinematic ? { version: START_VERSION, id: ending.id, name: ending.name, start: ending.cinematic.start, end: ending.cinematic.end } : undefined;
 }
 
 /** The ending with this change made, or why it cannot be (the ending itself is left as it was). */
@@ -187,6 +218,17 @@ export function edit(ending: Ending, patch: EndingPatch): Result<Ending> {
     if (patch.winSpot === null) delete next.winSpot;
     else if (patch.winSpot !== undefined) next.winSpot = { x: round2(patch.winSpot.x), y: round2(patch.winSpot.y), z: round2(patch.winSpot.z) };
     if (patch.texts !== undefined) next.texts = { ...ending.texts, ...patch.texts };
+    if (patch.cinematic === null) delete next.cinematic;
+    else if (patch.cinematic !== undefined) {
+        // The shots' own rounding of the marks; a mark that cannot be a shot's is left as given, for the check below to refuse with its reason.
+        const shot = makeShot("c", "", patch.cinematic.start, patch.cinematic.end);
+        next.cinematic = {
+            start: shot.ok ? shot.value.start : patch.cinematic.start,
+            end: shot.ok ? shot.value.end : patch.cinematic.end,
+            seconds: round2(patch.cinematic.seconds),
+            audience: patch.cinematic.audience
+        };
+    }
 
     return checked(next);
 }
@@ -236,7 +278,8 @@ export function serializeEnding(ending: Ending): string {
         ...(ending.item ? { i: { id: ending.item.id, n: ending.item.count } } : {}),
         ic: ending.consumeItem,
         ...(ending.winSpot ? { w: ending.winSpot } : {}),
-        t: [ending.texts.headline, ending.texts.detail, ending.texts.gather, ending.texts.outlawsOnly]
+        t: [ending.texts.headline, ending.texts.detail, ending.texts.gather, ending.texts.outlawsOnly],
+        ...(ending.cinematic ? { cn: { a: markList(ending.cinematic.start), b: markList(ending.cinematic.end), s: ending.cinematic.seconds, au: ending.cinematic.audience } } : {})
     });
 }
 
@@ -289,6 +332,20 @@ export function parseEnding(text: string | undefined): Result<Ending> {
     const lines = raw["t"];
     if (!Array.isArray(lines) || lines.length !== 4 || lines.some((line) => typeof line !== "string")) return bad("the saved texts are not four lines of text");
 
+    let cinematic: Cinematic | undefined;
+    if (raw["cn"] !== undefined) {
+        const found = raw["cn"];
+        if (!isRecord(found) || typeof found["s"] !== "number" || (found["au"] !== "all" && found["au"] !== "winners")) return bad("the saved cinematic is not a start, an end, a length and an audience");
+
+        const start = readMark(found["a"], "cinematic start");
+        if (!start.ok) return start;
+
+        const end = readMark(found["b"], "cinematic end");
+        if (!end.ok) return end;
+
+        cinematic = { start: start.value, end: end.value, seconds: found["s"], audience: found["au"] };
+    }
+
     return checked({
         version: ENDING_VERSION,
         id: raw["id"],
@@ -301,7 +358,8 @@ export function parseEnding(text: string | undefined): Result<Ending> {
         ...(item ? { item } : {}),
         consumeItem: raw["ic"] !== false,
         ...(winSpot ? { winSpot } : {}),
-        texts: { headline: lines[0] as string, detail: lines[1] as string, gather: lines[2] as string, outlawsOnly: lines[3] as string }
+        texts: { headline: lines[0] as string, detail: lines[1] as string, gather: lines[2] as string, outlawsOnly: lines[3] as string },
+        ...(cinematic ? { cinematic } : {})
     });
 }
 

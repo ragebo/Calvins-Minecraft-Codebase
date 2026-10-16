@@ -90,13 +90,13 @@ export function makeShot(id: string, name: string, start: Mark, end: Mark): Resu
     return good({ version: START_VERSION, id, name: clean, start: first.value, end: last.value });
 }
 
-const markList = (mark: Mark): number[] => [mark.x, mark.y, mark.z, mark.pitch, mark.yaw];
+export const markList = (mark: Mark): number[] => [mark.x, mark.y, mark.z, mark.pitch, mark.yaw];
 
 export function serializeShot(shot: Shot): string {
     return JSON.stringify({ v: shot.version, id: shot.id, nm: shot.name, a: markList(shot.start), b: markList(shot.end) });
 }
 
-function readMark(raw: unknown, label: string): Result<Mark> {
+export function readMark(raw: unknown, label: string): Result<Mark> {
 
     if (!Array.isArray(raw) || raw.length !== 5 || !raw.every((n) => typeof n === "number")) return bad(`the saved ${label} is not five numbers`);
 

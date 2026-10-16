@@ -1,11 +1,12 @@
 import { world, type Player } from "@minecraft/server";
 import { ENDINGS as E } from "../config/balance.js";
-import { fillText, groupVerdict, roundVerdict, soloVerdict, tally, type Ending, type Standing } from "../logic/endings.js";
+import { cinematicShot, fillText, groupVerdict, roundVerdict, soloVerdict, tally, type Ending, type Standing } from "../logic/endings.js";
 import { getCoins, takeCoins } from "./economy.js";
 import { getEnding, listEndings } from "./endingstore.js";
 import { endRound, isPhase } from "./round.js";
-import { aliveOutlaws, everyOutlaw, lawPlayers } from "./players.js";
+import { aliveOutlaws, everyOutlaw, lawPlayers, players } from "./players.js";
 import { enterSpectator } from "./spectate.js";
+import { playPan } from "./startsequence.js";
 import { emit } from "./telemetryevents.js";
 import { ESCAPED, getRecord, isEscaped, setFlag, update, type PlayerRecord } from "./state.js";
 import { bagOf, countOf, takeFrom } from "./shopitems.js";
@@ -35,6 +36,23 @@ function announce(text: string): void {
 /** Who got away and who was caught, said after a round's end, only when someone got away: a round nobody escaped says nothing extra. */
 function announceTally(escaped: number, captured: number): void {
     if (escaped > 0) announce(`§7${escaped} escaped, ${captured} captured.`);
+}
+
+/**
+ * What an ending does once it is announced and the round has been told: play its cinematic, if it has one, for the players it is for, and only then
+ * `then` (moving the winners). With no cinematic there is no camera, no lock and no delay: `then` runs at once. The round's own state never waits for
+ * this; a reset in the middle lets everyone go and `then` never runs (core/startsequence.ts holds the safety).
+ */
+function celebrate(ending: Ending, winners: readonly Player[], then: () => void): void {
+
+    const shot = cinematicShot(ending);
+
+    if (!ending.cinematic || !shot) {
+        then();
+        return;
+    }
+
+    playPan(ending.cinematic.audience === "all" ? players() : winners, shot, ending.cinematic.seconds, then);
 }
 
 /** A player's try at the ending with this id. Every refusal says why, to the player alone or to everyone, as the boat did. */
@@ -119,9 +137,11 @@ function attemptGroup(player: Player, ending: Ending): void {
 
     for (const outlaw of survivors) update(outlaw, { winner: true });
 
-    if (ending.winSpot) {
-        world.getDimension("overworld").runCommand(`tp @a[tag=winner] ${ending.winSpot.x} ${ending.winSpot.y} ${ending.winSpot.z}`);
-    }
+    const spot = ending.winSpot;
+
+    celebrate(ending, survivors, () => {
+        if (spot) world.getDimension("overworld").runCommand(`tp @a[tag=winner] ${spot.x} ${spot.y} ${spot.z}`);
+    });
 }
 
 function attemptSolo(player: Player, ending: Ending, record: Readonly<PlayerRecord>): void {
@@ -163,7 +183,11 @@ function attemptSolo(player: Player, ending: Ending, record: Readonly<PlayerReco
         ...(verdict.takeItem > 0 && ending.item ? { item: ending.item.id, count: verdict.takeItem } : {})
     });
 
-    if (ending.winSpot) player.teleport({ x: ending.winSpot.x, y: ending.winSpot.y, z: ending.winSpot.z });
+    const spot = ending.winSpot;
+
+    celebrate(ending, [player], () => {
+        if (spot && player.isValid) player.teleport({ x: spot.x, y: spot.y, z: spot.z });
+    });
 
     enterSpectator(player);
 

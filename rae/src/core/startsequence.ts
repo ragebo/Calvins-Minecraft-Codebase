@@ -129,42 +129,74 @@ export function startIntro(playing: readonly Player[], then: () => void): void {
     step();
 }
 
-/** Which preview a player's camera belongs to, so a second preview is not cut short by the end of the first. */
-const previews = new Map<string, number>();
-let previewCount = 0;
+const STARTING = "A game is starting: try again in a moment.";
+
+/** Which pan a player's camera belongs to, so a second pan is not cut short by the end of the first. */
+const pans = new Map<string, number>();
+let panCount = 0;
+
+/**
+ * Plays one pan for these players, locked in place, and hands every camera back after `seconds`, then calls `then`. It is the start sequence's own safety that holds
+ * them (the `held` list a cancel lets go, the first-tick unlock, the unlock on joining), which is why a pan lives here: a round reset or another Start in the
+ * middle lets them all go at once and `then` is never called. A player who left is skipped; with nobody left to see it `then` is called at once. Used by an
+ * ending's cinematic (core/endings.ts) and by the previews below.
+ */
+export function playPan(audience: readonly Player[], shot: Shot, seconds: number, then?: () => void): void {
+
+    const token = generation;
+    const mine = ++panCount;
+    const watching = audience.filter((player) => player.isValid);
+
+    if (watching.length === 0) {
+        then?.();
+        return;
+    }
+
+    for (const player of watching) {
+        pans.set(player.id, mine);
+        held.set(player.id, player);
+        lock(player);
+        playShot(player, shot, seconds);
+    }
+
+    system.runTimeout(() => {
+
+        if (token !== generation) return;
+
+        for (const player of watching) {
+            if (pans.get(player.id) !== mine) continue;
+
+            pans.delete(player.id);
+            held.delete(player.id);
+            unlock(player);
+            clearCamera(player);
+        }
+
+        then?.();
+    }, Math.max(1, Math.round(seconds * TICKS_PER_SECOND)));
+}
+
+/** Plays a pan for one player alone, for an operator checking what they marked. Refused, with the reason, while a start is under way (those players are the sequence's). */
+export function previewPan(player: Player, shot: Shot, seconds: number): string | undefined {
+
+    if (isPhase("SETUP")) return STARTING;
+
+    playPan([player], shot, seconds);
+
+    return undefined;
+}
 
 /**
  * Plays one shot for one player alone, the way a start would play it (the same share of the intro's seconds), and hands their camera back
- * after: for an operator checking what they marked. Refused, with the reason, while a start is under way (those players are the sequence's)
- * and when the intro has no length. A round reset or a Start in the middle lets the player go at once, as it does for anyone the sequence holds.
+ * after: for an operator checking what they marked. Refused, with the reason, while a start is under way and when the intro has no length.
  */
 export function previewShot(player: Player, shot: Shot): string | undefined {
-
-    if (isPhase("SETUP")) return "A game is starting: try again in a moment.";
 
     const seconds = secondsPerShot(S.introSeconds, S.shotsPerStart);
 
     if (seconds <= 0) return "There is no intro to preview: its length, or the number of shots a start plays, is 0.";
 
-    const token = generation;
-    const mine = ++previewCount;
-
-    previews.set(player.id, mine);
-    held.set(player.id, player);
-    lock(player);
-    playShot(player, shot, seconds);
-
-    system.runTimeout(() => {
-
-        if (token !== generation || previews.get(player.id) !== mine) return;
-
-        previews.delete(player.id);
-        held.delete(player.id);
-        unlock(player);
-        clearCamera(player);
-    }, Math.max(1, Math.round(seconds * TICKS_PER_SECOND)));
-
-    return undefined;
+    return previewPan(player, shot, seconds);
 }
 
 // ---------------------------------------------------------------------------------------------------------
