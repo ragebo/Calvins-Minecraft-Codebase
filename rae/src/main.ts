@@ -16,7 +16,7 @@ import "./systems/jail.js";
 import "./systems/jailbreak.js";
 import "./systems/raids.js";
 import "./systems/train.js";
-import "./systems/boat.js";
+import "./systems/endings.js";
 import "./systems/economy-rules.js";
 import "./systems/horse.js";
 import "./systems/gold.js";

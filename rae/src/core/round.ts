@@ -26,6 +26,8 @@ export interface PhaseChange {
     readonly to: Phase;
     /** Set on the ENDING and ENDED changes of a round that finished. */
     readonly reason?: EndReason;
+    /** Which ending ended the round (its id), when one did: the law's win has none. */
+    readonly detail?: string;
 }
 
 type Listener = (change: PhaseChange) => void;
@@ -40,6 +42,7 @@ const LEGAL: Readonly<Record<Phase, readonly Phase[]>> = {
 
 let phase: Phase = "IDLE";
 let lastEndReason: EndReason | null = null;
+let lastEndingId: string | null = null;
 const listeners: { readonly on: Phase | "*"; readonly fn: Listener }[] = [];
 
 export function getPhase(): Phase {
@@ -55,6 +58,11 @@ export function lastEnd(): EndReason | null {
     return lastEndReason;
 }
 
+/** The id of the ending that ended the most recent round, or null when none did (the law's win) or no round has finished. */
+export function lastEndDetail(): string | null {
+    return lastEndingId;
+}
+
 /** Runs `fn` whenever the round enters `on` (or any phase with "*"). Returns an unsubscribe function. */
 export function onPhase(on: Phase | "*", fn: Listener): () => void {
     const entry = { on, fn };
@@ -65,11 +73,11 @@ export function onPhase(on: Phase | "*", fn: Listener): () => void {
     };
 }
 
-function transition(to: Phase, reason?: EndReason): boolean {
+function transition(to: Phase, reason?: EndReason, detail?: string): boolean {
 
     if (!LEGAL[phase].includes(to)) return false;
 
-    const change: PhaseChange = { from: phase, to, reason };
+    const change: PhaseChange = { from: phase, to, reason, detail };
     phase = to;
 
     for (const listener of [...listeners]) {
@@ -90,6 +98,7 @@ function transition(to: Phase, reason?: EndReason): boolean {
 /** IDLE or ENDED -> SETUP. False if a round is already running. */
 export function startRound(): boolean {
     lastEndReason = null;
+    lastEndingId = null;
     return transition("SETUP");
 }
 
@@ -103,13 +112,14 @@ export function beginActive(): boolean {
  * ENDED fires that work has run. Returns false if no round is active, so a second
  * "someone won" signal in the same tick is ignored rather than announced twice.
  */
-export function endRound(reason: EndReason): boolean {
+export function endRound(reason: EndReason, detail?: string): boolean {
 
     if (!isPhase("ACTIVE")) return false;
 
     lastEndReason = reason;
-    transition("ENDING", reason);
-    transition("ENDED", reason);
+    lastEndingId = detail ?? null;
+    transition("ENDING", reason, detail);
+    transition("ENDED", reason, detail);
 
     return true;
 }
@@ -127,6 +137,7 @@ export function resetRound(): void {
     }
 
     lastEndReason = null;
+    lastEndingId = null;
     resetAllSystems();
 }
 

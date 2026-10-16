@@ -38,7 +38,7 @@ test("main.js loads under the fake game API and registers every system", () => {
     const names = systems.map((s) => s.name);
     check("system names are unique", new Set(names).size === names.length, names.join(","));
     check("every system can reset", systems.every((s) => typeof s.reset === "function"));
-    check("core systems are registered", ["roles", "jail", "jailbreak", "raids", "train", "transit", "aimprobe", "menu", "tumbleweed", "boat", "guns", "compass", "endgame"].every((n) => names.includes(n)), names.join(","));
+    check("core systems are registered", ["roles", "jail", "jailbreak", "raids", "train", "transit", "aimprobe", "menu", "tumbleweed", "endings", "guns", "compass", "endgame"].every((n) => names.includes(n)), names.join(","));
     check("the robbery framework's parts are registered", ["robbery", "robberyedit", "robberyglue", "robberybuilder", "robberyprobe", "robberyteller", "robbery-holdup"].every((n) => names.includes(n)), names.join(","));
     check("the NPC shops' parts are registered", ["npcprobe", "shoptalk", "shopbuilder"].every((n) => names.includes(n)), names.join(","));
     done();

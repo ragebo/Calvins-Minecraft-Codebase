@@ -38,19 +38,20 @@ Deliberate-break (mutation) runs on every new rule. Nothing is deployed or pushe
   - Dependencies: Task 1
   - Files: `rae/src/core/endingstore.ts`, `rae/test/endings-store.test.mjs`
 
-- [ ] **Task 3: The group engine; the boat becomes an ending** (L)
+- [x] **Task 3: The group engine; the boat becomes an ending** (L) - done
   `core/endings.ts` with `attempt(player, id)` for a group ending, `systems/endings.ts` for the glue (`rae:ending <id>`, and `bounty:escape` as an alias of `boat`), and `systems/boat.ts`
   removed. The behavior must be identical for the boat: same checks in the same order, same messages, same coin taking, same winner tags and teleport. `core/round.ts` is untouched
   except that `endRound` may carry the ending's id for telemetry (an optional second argument).
   - Acceptance:
-    - [ ] every existing "boat win" test in `test/round-flow.test.mjs` passes UNCHANGED (this is the characterization; edit the code, not those tests)
-    - [ ] a second group ending with a different place, radius, price and message works the same way, and the two do not interfere
-    - [ ] a disabled ending, a deleted ending and an unknown id each say so to the player and do nothing
-    - [ ] the price is per member and follows the number of outlaws in play at the moment of the attempt
-    - [ ] only an outlaw, only in an ACTIVE round, may attempt one; the messages for the others are the boat's
-    - [ ] two endings fired in the same tick: the first wins, the second is refused without taking coins
-    - [ ] a round reset leaves nothing behind in the engine
+    - [x] every existing "boat win" test in `test/round-flow.test.mjs` passes UNCHANGED (this is the characterization; edit the code, not those tests)
+    - [x] a second group ending with a different place, radius, price and message works the same way, and the two do not interfere
+    - [x] a disabled ending, a deleted ending and an unknown id each say so to the player and do nothing
+    - [x] the price is per member and follows the number of outlaws in play at the moment of the attempt
+    - [x] only an outlaw, only in an ACTIVE round, may attempt one; the messages for the others are the boat's
+    - [x] two endings fired in the same tick: the first wins, the second is refused without taking coins
+    - [x] a round reset leaves nothing behind in the engine
   - Verification: check, test, check:legacy; deliberate breaks of each check and of the coin taking
+  - Result: core/endings.ts attemptEnding runs a GROUP ending in the boat's order (who, round, gathering, money) with the ending's own words, takes the coins in order, ends the round as outlaw_win carrying the ending id (round.ts: endRound(reason, detail), PhaseChange.detail, lastEndDetail), marks every survivor a winner and tp's them to the win spot if there is one; systems/endings.ts replaces systems/boat.ts (rae:ending <id>, an NPC button finds its player, bounty:escape = the boat). The boat tests in round-flow pass UNCHANGED. 1735 tests (+18), 52-break mutation run all caught.
   - Dependencies: Task 2
   - Files: `rae/src/core/endings.ts`, `rae/src/systems/endings.ts`, `rae/src/systems/boat.ts` (deleted), `rae/src/main.ts`, `rae/src/core/round.ts`, `rae/test/endings-group.test.mjs`
 
