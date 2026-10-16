@@ -273,6 +273,7 @@ export function createRecordStore<T>(options: RecordStoreOptions<T>): RecordStor
         },
 
         forget() {
+            undoSlots.clear();
             entries.clear();
             loaded = false;
             version++;

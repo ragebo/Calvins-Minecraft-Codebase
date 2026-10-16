@@ -2,6 +2,7 @@ import { world, type Player } from "@minecraft/server";
 import { ActionFormData, ModalFormData } from "@minecraft/server-ui";
 import { TELEPORT_TARGETS } from "../config/world.js";
 import { toggleTumbleweeds, tumbleweedsEnabled } from "../core/ambience.js";
+import { openEndingsEditor } from "../core/endingforms.js";
 import { onScriptEvent } from "../core/events.js";
 import { showForm } from "../core/forms.js";
 import { resetGame, sendEveryoneToSpawns, startChosenRound, startRandomRound, type Choice } from "../core/game.js";
@@ -164,8 +165,8 @@ async function mainMenu(player: Player): Promise<void> {
         .button("Send everyone to their spawns")
         .button(tumbleweedsEnabled() ? "Turn tumbleweeds off" : "Turn tumbleweeds on");
 
-    // The start sequence's settings are the operator's: the button is not there for anyone else (and the screens refuse them too).
-    if (isOperator(player)) form.button("Start sequence");
+    // The start sequence's and the endings' settings are the operator's: the buttons are not there for anyone else (and the screens refuse them too).
+    if (isOperator(player)) form.button("Start sequence").button("Endings");
 
     const response = await showForm(player, form);
     if (!response || response.canceled) return;
@@ -184,6 +185,7 @@ async function mainMenu(player: Player): Promise<void> {
             break;
         }
         case 5: await openStartEditor(player); break;
+        case 6: await openEndingsEditor(player); break;
         default: break;
     }
 }

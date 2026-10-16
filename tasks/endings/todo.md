@@ -106,18 +106,19 @@ Deliberate-break (mutation) runs on every new rule. Nothing is deployed or pushe
 
 ## Phase 3: Making it yours
 
-- [ ] **Task 7: The operator's screens** (L)
+- [x] **Task 7: The operator's screens** (L) - done
   `core/endingforms.ts` and an operator-only **Endings** button in the RAE menu: the list (name, type, on or off), add (pick the type), and an edit screen for every field: name, on/off, the place
   (taken by standing there), the radius, the price (per member or for the one), the item (hold it, then take it), whether it is consumed, the win spot (by standing), the messages, delete, undo. A
   refused value brings the form back with what was typed and the reason, as the other editors do.
   - Acceptance:
-    - [ ] a non-operator never sees the button and cannot open the screens by any path
-    - [ ] an ending can be added, every field edited, turned off and deleted; the change is what the next attempt reads
-    - [ ] the place and win spot are taken from where the operator stands (rounded to the block); the item is taken from the hand and a bare hand says so
-    - [ ] a refused value (a negative price, a radius of 0, no place) shows the reason and keeps what was typed; nothing is saved
-    - [ ] closing a screen mid-edit saves nothing half-done; a player who leaves mid-edit leaves no state behind
-    - [ ] the list says when an ending cannot be read and why, and offers nothing that would overwrite it
+    - [x] a non-operator never sees the button and cannot open the screens by any path
+    - [x] an ending can be added, every field edited, turned off and deleted; the change is what the next attempt reads
+    - [x] the place and win spot are taken from where the operator stands (rounded to the block); the item is taken from the hand and a bare hand says so
+    - [x] a refused value (a negative price, a radius of 0, no place) shows the reason and keeps what was typed; nothing is saved
+    - [x] closing a screen mid-edit saves nothing half-done; a player who leaves mid-edit leaves no state behind
+    - [x] the list says when an ending cannot be read and why, and offers nothing that would overwrite it
   - Verification: check, test, check:legacy; deliberate breaks of the operator check and each field
+  - Result: core/endingforms.ts + an operator-only Endings button in the RAE menu: list (name, type, on/off; an unreadable one listed with why and offering only Delete), Add (name + type, placed where the operator stands), and per ending: on/off, move the place / set or clear the win spot to where they stand (middle of the block), settings box (name, radius, price, and for an item: count + taken), take the item from the hand (bare hand says so), ask for no item, messages box (four texts), delete with a confirm, Bring back, Undo. A refused value brings the box back with the reason and what was typed; nothing is saved until a box is accepted; a box submitted after someone else deleted the ending does not bring it back. recordstore.forget() now clears undo slots like a reload. 1790 tests, 50 deliberate breaks all caught.
   - Dependencies: Task 6
   - Files: `rae/src/core/endingforms.ts`, `rae/src/systems/menu.ts`, `rae/test/endings-forms.test.mjs`
 
