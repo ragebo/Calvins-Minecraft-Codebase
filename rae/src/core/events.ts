@@ -74,6 +74,8 @@ export interface SpawnContext {
     readonly player: Player;
     /** Set by a handler that has decided where this player goes (jail, spectator) so the generic respawn skips them. */
     placed: boolean;
+    /** True when the player has just joined the world (as opposed to respawning after a death). */
+    readonly initial: boolean;
 }
 
 export type SpawnHandler = (ctx: SpawnContext) => void;
@@ -93,7 +95,7 @@ export function onSpawn(name: string, order: number, fn: SpawnHandler): void {
 
 world.afterEvents.playerSpawn.subscribe((event) => {
 
-    const ctx: SpawnContext = { player: event.player, placed: false };
+    const ctx: SpawnContext = { player: event.player, placed: false, initial: event.initialSpawn };
 
     for (const handler of spawnHandlers) {
         try {

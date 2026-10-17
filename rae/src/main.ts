@@ -78,6 +78,21 @@ onSpawn("main:respawn-placement", 200, (ctx) => {
 
     if (ctx.placed) return;
 
+    // Joining the world is not a respawn: the player goes to the world's own spawn point, whatever role tag they still carry.
+    if (ctx.initial) {
+        try {
+            const spawn = world.getDefaultSpawnLocation();
+
+            system.run(() => {
+                player.teleport(spawn, { dimension: world.getDimension("overworld") });
+            });
+        } catch (err) {
+            error("main", `Could not send ${player.name} to the world spawn: ${err}`);
+        }
+
+        return;
+    }
+
     if (player.hasTag("law") || player.hasTag("outlaw")) {
 
         try {
