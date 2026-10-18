@@ -643,3 +643,18 @@ test("the menu item's icon in the pack is a proper 16x16 sprite", () => {
     check("it is a 16x16 PNG with an alpha channel, like the other item sprites", info?.width === 16 && info?.height === 16 && ALPHA_COLOR_TYPES.has(info?.colorType), JSON.stringify(info));
     done();
 });
+
+// The bond: a plain item the bank sells (a shop deal names it by id), with a placeholder sprite made by scripts/gen-bond-icon.mjs.
+test("the bond is a plain stackable item with its own sprite and no behavior", () => {
+    const { check, done } = checks();
+    const item = items.find((candidate) => candidate.id === "bountysys:bond");
+    const body = readJson(path.join(BP, "items", "bond.json"))["minecraft:item"];
+
+    check("the item exists", item !== undefined);
+    check("its icon is bond, mapped to textures/items/bond", item?.icon === "bond" && textureMap.bond?.textures === "textures/items/bond", JSON.stringify(textureMap.bond));
+    check("the sprite exists", existsSync(path.join(RP, "textures", "items", "bond.png")));
+    check("it is called Bond", body.components["minecraft:display_name"]?.value === "Bond");
+    check("it stacks to 16", body.components["minecraft:max_stack_size"] === 16);
+    check("it has no use or damage behavior", !("minecraft:damage" in body.components) && !("minecraft:use_modifiers" in body.components) && !("minecraft:food" in body.components));
+    done();
+});

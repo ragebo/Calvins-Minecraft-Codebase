@@ -16,6 +16,7 @@
         "machete": { "textures": "textures/items/machete" },
         "baton": { "textures": "textures/items/baton" },
         "axe": { "textures": "textures/items/axe" },
-        "sledgehammer": { "textures": "textures/items/sledgehammer" }
+        "sledgehammer": { "textures": "textures/items/sledgehammer" },
+        "bond": { "textures": "textures/items/bond" }
     }
 }
