@@ -37,6 +37,9 @@ const items = jsonFiles(path.join(BP, "items")).map((file) => {
 const textureMap = readJson(path.join(RP, "textures", "item_texture.json")).texture_data;
 const textureFiles = (entry) => [entry.textures].flat().map((texture) => path.join(RP, `${texture}.png`));
 
+/** The game's own held-spear model: the axe and the sledgehammer are held out like spears with it, so it is not in this pack. */
+const VANILLA_SPEAR_GEOMETRY = "geometry.spear";
+
 const attachables = jsonFiles(path.join(RP, "attachables")).map((file) => ({ file, body: readJson(file)["minecraft:attachable"] }));
 const geometryIds = jsonFiles(path.join(RP, "models", "entity"))
     .flatMap((file) => (readJson(file)["minecraft:geometry"] ?? []).map((g) => g.description.identifier));
@@ -78,7 +81,7 @@ test("an attachable points at an item, a geometry and textures that exist", () =
         for (const id of Object.keys(body.description.item ?? {})) check(`${where}: item ${id} exists`, itemIds.has(id));
 
         for (const geometry of Object.values(body.description.geometry ?? {})) {
-            check(`${where}: ${geometry} is defined in models/entity`, geometryIds.includes(geometry), `defined: ${geometryIds.join(", ")}`);
+            check(`${where}: ${geometry} is defined in models/entity (or is the game's own spear)`, geometryIds.includes(geometry) || geometry === VANILLA_SPEAR_GEOMETRY, `defined: ${geometryIds.join(", ")}`);
         }
 
         // Only textures in this pack are checked; textures/misc/... belongs to the game.
@@ -656,5 +659,30 @@ test("the bond is a plain stackable item with its own sprite and no behavior", (
     check("it is called Bond", body.components["minecraft:display_name"]?.value === "Bond");
     check("it stacks to 16", body.components["minecraft:max_stack_size"] === 16);
     check("it has no use or damage behavior", !("minecraft:damage" in body.components) && !("minecraft:use_modifiers" in body.components) && !("minecraft:food" in body.components));
+    done();
+});
+
+// The axe and the sledgehammer are held out like spears: an attachable per item with the game's own spear model and a 32x32 texture of its own (the spear's entity
+// texture; the 16x16 sprite is only the inventory icon).
+test("the axe and the sledgehammer are held like spears, with a 32x32 texture each", () => {
+    const { check, done } = checks();
+
+    for (const key of ["axe", "sledgehammer"]) {
+        const found = attachables.find(({ body }) => body.description.identifier === `bountysys:${key}`);
+        check(`${key}: an attachable for bountysys:${key}`, found !== undefined);
+        if (!found) continue;
+
+        const { description } = found.body;
+        check(`${key}: it uses the game's spear model`, description.geometry?.default === VANILLA_SPEAR_GEOMETRY, JSON.stringify(description.geometry));
+        check(`${key}: the held pose is the spear's`, description.animations?.held_controller === "controller.animation.spear.held" && description.scripts?.animate?.includes("held_controller"));
+
+        const texture = path.join(RP, `${description.textures?.default}.png`);
+        check(`${key}: its texture exists`, existsSync(texture), rel(texture));
+        const info = existsSync(texture) ? pngInfo(texture) : null;
+        check(`${key}: the held texture is 32x32`, info?.width === 32 && info?.height === 32, JSON.stringify(info));
+        check(`${key}: with transparency`, info !== null && ALPHA_COLOR_TYPES.has(info.colorType));
+        check(`${key}: the inventory icon stays 16x16`, pngInfo(path.join(RP, "textures", "items", `${key}.png`))?.width === 16);
+    }
+
     done();
 });
