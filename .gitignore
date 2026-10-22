@@ -3,3 +3,4 @@ rae/node_modules/
 rae/.test-build/
 BountySys_RP/sounds/
 telemetry-data/
+tools/deploy/backup-*/
