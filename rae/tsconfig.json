@@ -5,9 +5,8 @@
     "moduleResolution": "bundler",
     "rootDir": "./src",
 
-    // CHANGE THIS if your behavior pack folder has a different name.
-    // rae/ and your_pack_name_BP/ are siblings under development_behavior_packs/,
-    // so this must go up one level, not into a subfolder of rae/.
+    // The build output is the behavior pack's scripts/ folder, a sibling of rae/ in the repo (your_pack_name_BP/scripts, gitignored).
+    // Change this only if the pack folder is renamed; docs/DEPLOY.md says how it reaches the game.
     "outDir": "../your_pack_name_BP/scripts",
 
     "strict": true,

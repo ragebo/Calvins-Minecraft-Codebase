@@ -1,7 +1,7 @@
 # RAE Architecture
 
-What the pieces of `rae/src` are for and how they fit together, as of the ARCH epic finishing
-(2026-09-29, `v2`). For the rules agents must follow while editing this codebase — the seven rules,
+What the pieces of `rae/src` are for and how they fit together. Every source file has a row below (checked against the source on 2026-10-21, `v2`); the decisions behind the big
+choices are in `docs/decisions/`, how a build reaches the game is `docs/DEPLOY.md`, and how the tests work is `docs/TESTING.md`. For the rules agents must follow while editing this codebase — the seven rules,
 the git-worktree workflow, the definition of done — see `CLAUDE.md`; this document doesn't restate
 them, only cross-references them, so there is exactly one place they can drift out of date.
 
@@ -146,6 +146,7 @@ importing `Vector3` as a type only (erased at compile time, so it costs nothing 
 | `balance.ts` | Every tunable number. |
 | `guns.ts` | Every gun and ammo stat — plus their item ids, display names and sound-cue ids, which aren't numbers at all. |
 | `world.ts` | Every coordinate — plus the train structure's name and the Overworld's build-limit Y bounds. |
+| `build.ts` | `BUILD_VERSION`, the behavior pack's version as the load line prints it. It must equal the manifest's version (`test/assets.test.mjs` fails when it does not), which is why a release bumps both (`docs/DEPLOY.md`). |
 
 `guns.ts` in particular holds real identifier and label strings alongside its numbers. That's a
 minor stretch of "numbers and coordinates only," not a violation worth fixing: those strings need

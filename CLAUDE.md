@@ -1,6 +1,6 @@
 # RAE: instructions for agents
 
-RAE is a bounty-hunter-vs-outlaws Minecraft Bedrock addon. TypeScript source in `rae/src` compiles into the behavior pack. You are working on the ARCH (Foundations) epic: a behavior-preserving refactor that adds shared core modules. **Do not change game behavior or any number unless your brief says so.**
+RAE is a bounty-hunter-vs-outlaws Minecraft Bedrock addon. TypeScript source in `rae/src` compiles into the behavior pack. The ARCH (Foundations) epic, a behavior-preserving refactor that added the shared core modules, is complete; work now is features and fixes on branch `v2`. **A refactor must not change game behavior or any number unless its brief says so.** Where the decisions behind the big choices are written down: `docs/decisions/`.
 
 ## Layout
 
@@ -9,7 +9,9 @@ rae/src/config/    numbers and coordinates only          rae/test/       tests (
 rae/src/logic/     pure rules, no game imports           rae/scripts/    test runner and legacy ratchet
 rae/src/core/      shared engines and contracts          your_pack_name_BP/   behavior pack (scripts/ is BUILD OUTPUT, gitignored)
 rae/src/systems/   one file per gameplay system          BountySys_RP/   resource pack
-rae/src/main.ts    imports + debug commands              docs/test-cards/   one manual test card per task
+rae/src/main.ts    imports + debug commands              docs/test-cards/   one in-game run sheet per feature or task
+                                                         docs/            DEPLOY.md, TESTING.md, decisions/ (why)
+                                                         tools/           telemetry reader, deploy scripts, mutation harness
 ```
 
 `rae/test/layers.test.mjs` enforces the layer rules below from the source, so a bad import fails `npm test`.
@@ -20,7 +22,9 @@ rae/src/main.ts    imports + debug commands              docs/test-cards/   one 
 |---|---|
 | `npm run check` | type-check (`tsc --noEmit`) |
 | `npm test` | compile to `.test-build/`, install the fake API, run `node --test` |
-| `npm run check:legacy` | fails if a legacy-pattern count is higher than on `main` |
+| `npm run check:legacy` | fails if a legacy-pattern count is higher than where this branch left `main` |
+
+Deploying a build to the game is `docs/DEPLOY.md`; checking that the tests would catch a regression is `docs/TESTING.md` (`tools/mutation/`).
 
 ## The seven rules
 
@@ -36,7 +40,9 @@ rae/src/main.ts    imports + debug commands              docs/test-cards/   one 
 
 - You are in your own git worktree on branch `task/<ID>`. Commit there. **Never push, tag, or touch other branches.**
 - Edit only the paths in your brief ("allowed paths"). **Never edit:** manifests (`*/manifest.json`), `README.md`, `ARCHITECTURE.md`, `MIGRATION.md`, `rae/package.json`, `rae/package-lock.json`, `rae/test/fake/*`, `rae/scripts/*`, `.github/`, `CLAUDE.md`, unless your brief names the file. If you need one changed, say so in your report.
-- **Public script-event ids are an API** (command blocks in the world call them): `bounty:start_round`, `bounty:teleport`, `bounty:fort`, `bounty:ranch`, `bounty:train`, `bounty:escape`, `bounty:lockpick`, `bounty:test_capture`, `rae:adopt`, `rae:aim_spike`, `rae:debug`, `rae:log_debug`, `rae:menu`, `rae:npc`, `rae:npc_probe`, `rae:probe_damage`, `rae:reset`, `rae:robbery_probe`, `rae:tumbleweed`, and the train recorder `rae:train_mark`, `rae:train_station`, `rae:train_undo`, `rae:train_clear`, `rae:train_loop`, `rae:train_info`, `rae:train_show`, `rae:train_spike`. Never rename or remove one. (`rae:log_debug` is registered directly on the raw engine signal by `core/log.ts`, not through `core/events.ts`'s `onScriptEvent`/`listScriptEvents` registry — log.ts cannot import `core/events.ts` — so it is real but does not show up in `rae:debug`'s event list.)
+- **Public script-event ids are an API** (command blocks in the world call them): `bounty:start_round`, `bounty:teleport`, `bounty:fort`, `bounty:ranch`, `bounty:train`, `bounty:escape`, `bounty:lockpick`, `bounty:test_capture`, `rae:adopt`, `rae:aim_spike`, `rae:debug`, `rae:ending`, `rae:log_debug`, `rae:melee_debug`, `rae:menu`, `rae:npc`, `rae:npc_probe`, `rae:persist_reset`, `rae:probe_damage`, `rae:reset`, `rae:robbery_probe`, `rae:tumbleweed`, and the train recorder `rae:train_mark`, `rae:train_station`, `rae:train_undo`, `rae:train_clear`, `rae:train_loop`, `rae:train_info`, `rae:train_show`, `rae:train_spike`. Never rename or remove one. (`rae:log_debug` is registered directly on the raw engine signal by `core/log.ts`, not through `core/events.ts`'s `onScriptEvent`/`listScriptEvents` registry — log.ts cannot import `core/events.ts` — so it is real but does not show up in `rae:debug`'s event list.)
+- **Saved-data keys are an API too: renaming one orphans what is saved.** The world dynamic properties the game writes: `rae:persist:*` (`core/persist.ts`), `rae:robbery:def:<id>`, `rae:robbery:dirty`, `rae:robbery:selected`, `rae:shop:def:<id>`, `rae:shop:at:*`, `rae:shop:selected`, `rae:start:shot:<id>`, `rae:start:commands:*`, `rae:ending:<id>`, `rae:endings-seeded`, `rae:telemetry:world` and `rae:train_route`; on a player, `rae:start:mark` and `rae:endingpan:mark`.
+  Each record carries a version and a reader refuses one it does not know (`docs/decisions/0001-authored-data-is-world-data.md`).
 - **Public custom-command ids are an API too, a separate mechanism from script events.** There are THREE, one per area, registered through `core/commands.ts`'s `registerFamily` on `@minecraft/server`'s `CustomCommandRegistry` (`system.beforeEvents.startup`), each operator-only via `CommandPermissionLevel.GameDirectors`: `/rae:config` (`systems/liveconfig.ts`), `/rae:robbery` (`systems/robberybuilder.ts`) and `/rae:shop` (`systems/shopbuilder.ts`). Each takes an optional action word (a namespaced enum, `rae:<area>_action`, which also holds `help`) and two optional text slots; typed alone, each opens its menu (the config editor, the robbery builder's menu after giving the wand, the list of shops). On 2026-10-11, at the owner's request ("all of the commands being separate commands and clogging up the screen/autocomplete"), the 38 separate commands that existed (16 `rae:robbery_*`, 15 `rae:shop_*`, 6 `rae:config_*` and the `rae:robbery_probe_ctx` measurement) were folded into these three, after a read-only scan of the owner's five worlds found none of them called by any command block or NPC button (only the legacy `bounty:*` events are). The old names are GONE: `rae:robbery_start` is `/rae:robbery start`, `rae:config_set_number` is `/rae:config set`. Dropped as redundant: `rae:robbery_wand` and `rae:robbery_edit` (the bare `/rae:robbery` gives the wand and opens the menu), `rae:robbery_area` (the menu sets the area; two corner positions do not fit a text slot) and `rae:robbery_probe_ctx` (a finished measurement). A new area gets a FAMILY, not a command of its own: `test/load-smoke.test.mjs` fails if any other `/rae:` command is registered. The actions: robbery `list info new select delete start stop reset activate teller view undo set`, shop `list info new sell buy trade service edit open select copy place move delete undo`, config `list get set reset`. `start`, `stop`, `reset` and `activate` take a robbery id and work from a command block or an NPC button, which is how an old command-block build hands part of itself to the framework. The other ids keep the never-rename rule: the item `bountysys:robbery_wand` and the script events `rae:robbery_probe`, `rae:npc` (what a shop NPC's dialogue button runs) and `rae:npc_probe`. `test/load-smoke.test.mjs` registers every public command together under the validating registry, so a bare name or two systems claiming one name fails a test instead of silently in the game. Engine facts for it: a `world.beforeEvents.*` callback is read-only (anything that changes the world must be deferred with `system.run`), and a registered enum or command name needs a namespace even where the typings do not say so. NOT yet run in the real game: that a command whose parameters are ALL optional (an optional enum first, then two optional text slots) registers and completes the way the typings say; the old `rae:config_*` commands, which did work, had mandatory parameters.
 - Write **characterization tests before refactoring** anything whose behavior you touch (tick cadences, death-handler order, round flow, jail rotation, compass output), watch them pass on the old code, then refactor.
 - **Definition of done:** `npm run check` clean, `npm test` green, `npm run check:legacy` not raised, diff inside allowed paths, and a manual test card at `docs/test-cards/<ID>.md`: numbered in-game steps, expected result, and the content-log line to look for. For risky logic, break it on purpose (a mutation) and confirm a test fails.
@@ -71,4 +77,4 @@ Known gotchas (details in `README.md`):
 
 ## Commit format
 
-Short imperative summary line, a blank line, a few lines on why, then `Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>`.
+Short imperative summary line, a blank line, a few lines on why (and, for a feature, the test and deliberate-break counts), then the `Co-Authored-By:` line for the model that wrote it (the session says which).
