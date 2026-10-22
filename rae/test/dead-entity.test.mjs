@@ -296,6 +296,18 @@ test("robbery: an outlaw who kills a homestead villager is paid, gains bounty an
     done();
 });
 
+test("robbery: the bounty gain adds to a bounty the outlaw already has, robbery after robbery", (t) => {
+    t.mock.method(Math, "random", () => 0);
+    const { check, done } = checks();
+    const [, bandit] = scene(["Sheriff", { tags: ["law"] }], ["Bandit", { tags: ["outlaw"] }]);
+    fake.setScore("bounty", "Bandit", 100);
+    emitDeath(villager("homestead"), bandit);
+    check("100 plus one gain", bountyOf("Bandit") === 100 + ECONOMY.villagerBountyGain, `(${bountyOf("Bandit")})`);
+    emitDeath(villager("homestead"), bandit);
+    check("and a second robbery adds again", bountyOf("Bandit") === 100 + 2 * ECONOMY.villagerBountyGain, `(${bountyOf("Bandit")})`);
+    done();
+});
+
 test("robbery: law, or a villager that is not a homestead's, pays nothing", () => {
     const { check, done } = checks();
     const [sheriff, bandit] = scene(["Sheriff", { tags: ["law"] }], ["Bandit", { tags: ["outlaw"] }]);
