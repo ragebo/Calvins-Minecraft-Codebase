@@ -137,6 +137,22 @@ test("a door binds both halves whichever half was clicked; the saved order is th
     done();
 });
 
+test("a copper chest binds as a chest element, alone or with its twin, like any other chest", () => {
+    setup();
+    const { check, done } = checks();
+    fake.placeBlock("overworld", { x: 50, y: 70, z: 5 }, "minecraft:copper_chest");
+    fake.placeBlock("overworld", { x: 60, y: 70, z: 5 }, "minecraft:waxed_exposed_copper_chest");
+    fake.placeBlock("overworld", { x: 61, y: 70, z: 5 }, "minecraft:waxed_exposed_copper_chest");
+    empty();
+
+    const alone = E.addElementAt("bank", { kind: "chest", name: "Copper", pos: [50, 70, 5], withNeighbour: false });
+    check("a copper chest is accepted as a chest", alone.ok === true && cellsOf(alone.robbery, "Copper") === "50,70,5", JSON.stringify(alone));
+
+    const twin = E.addElementAt("bank", { kind: "chest", name: "Waxed pair", pos: [60, 70, 5], withNeighbour: true });
+    check("a waxed pair of the same kind binds both halves", twin.ok === true && cellsOf(twin.robbery, "Waxed pair") === "60,70,5 61,70,5", JSON.stringify(twin));
+    done();
+});
+
 test("a chest binds alone, or with its twin when asked and there is exactly one", () => {
     setup();
     const { check, done } = checks();

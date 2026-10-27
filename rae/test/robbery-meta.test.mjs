@@ -265,6 +265,10 @@ test("what a block is suggested to be, and what it may not be", () => {
     check("a trapdoor and a gate too", M.whyBlockCannotBe("door", "minecraft:trapdoor") === undefined && M.whyBlockCannotBe("door", "minecraft:fence_gate") === undefined);
     check("stone cannot be a door, and it says why", /does not open and close/.test(M.whyBlockCannotBe("door", "minecraft:stone") ?? ""));
     check("chests, barrels and shulker boxes can be chests", ["minecraft:chest", "minecraft:trapped_chest", "minecraft:barrel", "minecraft:white_shulker_box", "minecraft:undyed_shulker_box"].every((id) => M.whyBlockCannotBe("chest", id) === undefined));
+    const copper = ["copper", "exposed_copper", "weathered_copper", "oxidized_copper", "waxed_copper", "waxed_exposed_copper", "waxed_weathered_copper", "waxed_oxidized_copper"].map((stage) => `minecraft:${stage}_chest`);
+    check("every copper chest, bare, weathered or waxed, can be a chest", copper.every((id) => M.whyBlockCannotBe("chest", id) === undefined), copper.map((id) => M.whyBlockCannotBe("chest", id)).join(" | "));
+    check("a copper chestplate (an item, not a block) cannot", /cannot hold loot/.test(M.whyBlockCannotBe("chest", "minecraft:copper_chestplate") ?? ""));
+    check("a copper door and a copper block still cannot be a chest", ["minecraft:copper_door", "minecraft:copper_block"].every((id) => /cannot hold loot/.test(M.whyBlockCannotBe("chest", id) ?? "")));
     check("an ender chest, a furnace and a hopper cannot", ["minecraft:ender_chest", "minecraft:furnace", "minecraft:hopper", "minecraft:stone"].every((id) => /cannot hold loot/.test(M.whyBlockCannotBe("chest", id) ?? "")));
     check("any real block can be a switch", ["minecraft:stone_button", "minecraft:lever", "minecraft:stone", "minecraft:iron_door"].every((id) => M.whyBlockCannotBe("switch", id) === undefined));
     check("air can be nothing", ["door", "chest", "switch"].every((kind) => /no block there/.test(M.whyBlockCannotBe(kind, "minecraft:air") ?? "")));

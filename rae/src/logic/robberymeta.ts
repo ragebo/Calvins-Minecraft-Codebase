@@ -435,10 +435,13 @@ export function suggestKind(blockClass: BlockClass): ElementKind {
     return "switch";
 }
 
-/** Chests whose contents a script can fill (an ender chest, a hopper or a furnace are not loot boxes). */
+/**
+ * Chests whose contents a script can fill (an ender chest, a hopper or a furnace are not loot boxes). A copper chest is one in all eight of its ids
+ * (bare, exposed, weathered, oxidized, and each waxed): they weather over time, so they are matched by their ending rather than listed.
+ */
 function isLootContainer(typeId: string): boolean {
     const id = bareId(typeId);
-    return id === "chest" || id === "trapped_chest" || id === "barrel" || id === "shulker_box" || id.endsWith("_shulker_box");
+    return id === "chest" || id === "trapped_chest" || id === "barrel" || id === "shulker_box" || id.endsWith("_shulker_box") || id === "copper_chest" || id.endsWith("_copper_chest");
 }
 
 /** Why a block cannot be an element of this kind, or undefined when it can. */
@@ -453,7 +456,7 @@ export function whyBlockCannotBe(kind: ElementKind, typeId: string): string | un
     }
 
     if (kind === "chest" && !isLootContainer(typeId)) {
-        return `${name} cannot hold loot: a ${kindLabel("chest")} element needs a chest, trapped chest, barrel or shulker box`;
+        return `${name} cannot hold loot: a ${kindLabel("chest")} element needs a chest, trapped chest, copper chest, barrel or shulker box`;
     }
 
     // A teller is an NPC or a villager: nothing is bound to a block for it, and the add-element form never offers it. This is for the callers that ask anyway.

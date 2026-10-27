@@ -377,7 +377,7 @@ the train route), no coordinates in config and no command chains. Fort, ranch an
 
 **What a robbery is made of (Phase 1a, "Vault").**
 - *Elements:* a **door** (a door, trapdoor or gate: both halves of a door are always bound and swung together), a
-  **chest** (a chest, barrel or shulker box: loot from a loot table plus fixed items goes in when it is unlocked and
+  **chest** (a chest, trapped chest, copper chest, barrel or shulker box: loot from a loot table plus fixed items goes in when it is unlocked and
   comes out when the site is put back), an **item frame** (an item frame or glow item frame: whoever opens it is given
   its loot and the frame is emptied; see "Item frames" below) and a **switch** (a button, lever, plate, or any block:
   the "keypad").
