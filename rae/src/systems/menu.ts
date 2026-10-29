@@ -1,9 +1,12 @@
 import { world, type Player } from "@minecraft/server";
 import { ActionFormData, ModalFormData } from "@minecraft/server-ui";
-import { TELEPORT_TARGETS } from "../config/world.js";
+import { TELEPORT_TARGETS_AFTER_JAILS, TELEPORT_TARGETS_BEFORE_JAILS, type TeleportTarget } from "../config/world.js";
 import { toggleTumbleweeds, tumbleweedsEnabled } from "../core/ambience.js";
 import { openEndingsEditor } from "../core/endingforms.js";
 import { onScriptEvent } from "../core/events.js";
+import { boundJustNow, hasPendingBind } from "../core/jailbind.js";
+import { openJailsEditor } from "../core/jailforms.js";
+import { allJails } from "../core/jailstore.js";
 import { showForm } from "../core/forms.js";
 import { resetGame, sendEveryoneToSpawns, startChosenRound, startRandomRound, type Choice } from "../core/game.js";
 import { warn } from "../core/log.js";
@@ -132,18 +135,25 @@ async function resetMenu(player: Player): Promise<void> {
     resetGame();
 }
 
+function teleportTargets(): readonly TeleportTarget[] {
+    return [...TELEPORT_TARGETS_BEFORE_JAILS, ...allJails().map((jail) => ({ name: jail.name, at: jail.jail })), ...TELEPORT_TARGETS_AFTER_JAILS];
+}
+
 async function teleportMenu(player: Player): Promise<void> {
 
     const form = new ActionFormData()
         .title(TITLE)
         .body("Where to?");
 
-    for (const target of TELEPORT_TARGETS) form.button(target.name);
+    // The jails are the ones in the world now (an operator can add them), not the config's two: they replace the config's "Jail N" entries, in the same place.
+    const targets = teleportTargets();
+
+    for (const target of targets) form.button(target.name);
 
     const response = await showForm(player, form);
     if (!response || response.canceled || response.selection === undefined) return;
 
-    const target = TELEPORT_TARGETS[response.selection];
+    const target = targets[response.selection];
     if (!target) return;
 
     try {
@@ -166,7 +176,7 @@ async function mainMenu(player: Player): Promise<void> {
         .button(tumbleweedsEnabled() ? "Turn tumbleweeds off" : "Turn tumbleweeds on");
 
     // The start sequence's and the endings' settings are the operator's: the buttons are not there for anyone else (and the screens refuse them too).
-    if (isOperator(player)) form.button("Start sequence").button("Endings");
+    if (isOperator(player)) form.button("Start sequence").button("Endings").button("Jails");
 
     const response = await showForm(player, form);
     if (!response || response.canceled) return;
@@ -186,6 +196,7 @@ async function mainMenu(player: Player): Promise<void> {
         }
         case 5: await openStartEditor(player); break;
         case 6: await openEndingsEditor(player); break;
+        case 7: await openJailsEditor(player); break;
         default: break;
     }
 }
@@ -209,7 +220,13 @@ async function openMenu(player: Player): Promise<void> {
 // ---------------------------------------------------------------------------------------------------------
 
 world.afterEvents.itemUse.subscribe((event) => {
-    if (event.itemStack.typeId === MENU_ITEM_ID) void openMenu(event.source);
+
+    if (event.itemStack.typeId !== MENU_ITEM_ID) return;
+
+    // An operator binding a block to a jail right-clicks it with this item in hand, and the game can report an item use for that click too: it is the bind's, not a request for the menu.
+    if (hasPendingBind(event.source) || boundJustNow(event.source)) return;
+
+    void openMenu(event.source);
 });
 
 onScriptEvent("rae:menu", (player) => {

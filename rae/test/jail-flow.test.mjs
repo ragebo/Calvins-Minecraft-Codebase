@@ -22,6 +22,8 @@ const respawn = (player) => {
     fake.advance(1);                                     // system.run callbacks (teleports, messages)
 };
 const sameSpot = (a, b) => a.x === b.x && a.y === b.y && a.z === b.z;
+/** The same site by value: the jail now comes from the jail store, which hands out its own copy of what the config names, not the config's object. */
+const sameSite = (a, b) => a !== null && sameSpot(a.jail, b.jail) && sameSpot(a.doorTrigger, b.doorTrigger);
 const chat = () => fake.chat.map(strip);
 const overworld = () => fake.dimension("overworld");
 const settle = () => new Promise((resolve) => setImmediate(resolve));   // the form resolves on a promise
@@ -323,7 +325,7 @@ test("jail site: the jail keeps the site it rolls in state, and the jailbreak op
 
     scriptEvent("bounty:test_capture", prisoner);
     fake.advance(1);
-    check("the jail put the site it rolled into state", state.getJailSite() === JAIL_SITES[0], JSON.stringify(state.getJailSite()));
+    check("the jail put the site it rolled into state", sameSite(state.getJailSite(), JAIL_SITES[0]), JSON.stringify(state.getJailSite()));
     check("and sent the prisoner there", prisoner.teleports.length === 1 && sameSpot(prisoner.teleports[0], JAIL_SITES[0].jail), JSON.stringify(prisoner.teleports));
 
     // The jailbreak has no site of its own: whatever state holds is where it looks for the door.
@@ -346,14 +348,14 @@ test("jail site: a reset of the jail system forgets the site, so the next prison
     const [a, b] = cast(["A", { tags: ["outlaw"] }], ["B", { tags: ["outlaw"] }]);
 
     scriptEvent("bounty:test_capture", a);
-    check("(setup) a site is in use", state.getJailSite() === JAIL_SITES[0]);
+    check("(setup) a site is in use", sameSite(state.getJailSite(), JAIL_SITES[0]));
 
     listSystems().find((s) => s.name === "jail").reset();
     check("the reset cleared it", state.getJailSite() === null);
 
     roll = 0.99;                                         // A is still in jail, but with no site remembered the next capture must roll
     scriptEvent("bounty:test_capture", b);
-    check("and the next capture rolled afresh", state.getJailSite() === JAIL_SITES[1], JSON.stringify(state.getJailSite()));
+    check("and the next capture rolled afresh", sameSite(state.getJailSite(), JAIL_SITES[1]), JSON.stringify(state.getJailSite()));
     done();
 });
 

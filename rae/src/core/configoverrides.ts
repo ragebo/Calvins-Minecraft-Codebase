@@ -366,9 +366,11 @@ function registerWorldFields(): void {
     LAW_SPAWNS.forEach((spawn, i) => vector3(`world.lawSpawn.${i + 1}`, `Law spawn ${i + 1}`, "World", spawn));
     OUTLAW_SPAWNS.forEach((spawn, i) => vector3(`world.outlawSpawn.${i + 1}`, `Outlaw spawn ${i + 1}`, "World", spawn));
 
+    // These two jails are the DEFAULT ones: they are what a world has until its first jail is saved on the Jails screen (core/jailstore.ts), which copies them
+    // as they are then (so an edit here, restored at load, still reaches a world that has not used the screen). After that the screen is the way to move them.
     JAIL_SITES.forEach((site, i) => {
-        vector3(`world.jail.${i + 1}`, `Jail ${i + 1}`, "World", site.jail);
-        vector3(`world.jailDoorTrigger.${i + 1}`, `Jail ${i + 1} door trigger`, "World", site.doorTrigger);
+        vector3(`world.jail.${i + 1}`, `Jail ${i + 1} (default)`, "World", site.jail);
+        if (site.doorTrigger) vector3(`world.jailDoorTrigger.${i + 1}`, `Jail ${i + 1} door trigger (default)`, "World", site.doorTrigger);
     });
 
     vector3("world.ranchArea.min", "Ranch area (min corner)", "World", RANCH_AREA.min);

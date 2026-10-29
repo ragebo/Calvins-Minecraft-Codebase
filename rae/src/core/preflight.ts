@@ -3,11 +3,12 @@ import { BUILD_VERSION } from "../config/build.js";
 import { AMMO, GUNS } from "../config/guns.js";
 import {
     BRIDGE_AREA, FORT_AREA, FORT_REWARD_CHEST, FORT_SPAWNS,
-    JAIL_SITES, LAW_SPAWNS, OUTLAW_SPAWNS, OVERWORLD_Y_BOUNDS, RANCH_AREA, RANCH_LOWER_SPAWNS,
+    LAW_SPAWNS, OUTLAW_SPAWNS, OVERWORLD_Y_BOUNDS, RANCH_AREA, RANCH_LOWER_SPAWNS,
     RANCH_SAFE_TRIGGER, RANCH_UPPER_SPAWNS, TRAIN_END, TRAIN_START, TRAIN_STRUCTURE, TRAIN_VAULT_CHEST
 } from "../config/world.js";
 import { ensureScoreboards, missingScoreboards } from "./economy.js";
 import { listEndings } from "./endingstore.js";
+import { listJails } from "./jailstore.js";
 import { error } from "./log.js";
 
 /**
@@ -70,11 +71,6 @@ function worldCoordinatePoints(): { label: string; at: Vector3 }[] {
     addEach("Law spawn", LAW_SPAWNS);
     addEach("Outlaw spawn", OUTLAW_SPAWNS);
 
-    JAIL_SITES.forEach((site, i) => {
-        points.push({ label: `Jail ${i + 1} (jail)`, at: site.jail });
-        points.push({ label: `Jail ${i + 1} (door trigger)`, at: site.doorTrigger });
-    });
-
     points.push({ label: "Ranch area (min)", at: RANCH_AREA.min });
     points.push({ label: "Ranch area (max)", at: RANCH_AREA.max });
     addEach("Ranch lower spawn", RANCH_LOWER_SPAWNS);
@@ -94,6 +90,32 @@ function worldCoordinatePoints(): { label: string; at: Vector3 }[] {
     points.push({ label: "Bridge area (max)", at: BRIDGE_AREA.max });
 
     return points;
+}
+
+/**
+ * Every jail's places (the jail spot, the door trigger and each button), named by the jail, and a note for any that cannot be read. Jails are data in the world
+ * (the config's two until the first is saved), so they are read here at the time of the check. Only the bounds are checked, as for every other point.
+ */
+function jailProblems(): string[] {
+
+    const points: { label: string; at: Vector3 }[] = [];
+    const unreadable: string[] = [];
+
+    for (const stored of listJails()) {
+
+        if (!stored.ok) {
+            unreadable.push(`Jail ${stored.id} cannot be read (${stored.problem}): delete it from the Jails screen`);
+            continue;
+        }
+
+        const jail = stored.value;
+
+        points.push({ label: `Jail ${jail.name} (jail spot)`, at: jail.jail });
+        if (jail.doorTrigger) points.push({ label: `Jail ${jail.name} (door trigger)`, at: jail.doorTrigger });
+        jail.buttons.forEach((button, index) => points.push({ label: `Jail ${jail.name} (button ${index + 1})`, at: button }));
+    }
+
+    return [...unreadable, ...checkCoordinateBounds(points)];
 }
 
 /**
@@ -177,6 +199,7 @@ export function runPreflightChecks(): { readonly ok: boolean; readonly problems:
     problems.push(...missingItems());
     problems.push(...checkCoordinateBounds(worldCoordinatePoints()));
     problems.push(...endingProblems());
+    problems.push(...jailProblems());
 
     const ok = problems.length === 0;
 

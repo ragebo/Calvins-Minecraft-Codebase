@@ -1,14 +1,19 @@
 import { world, system, type Player, type Vector3 } from "@minecraft/server";
 import { ModalFormData } from "@minecraft/server-ui";
-import { JAILBREAK } from "../config/balance.js";
+import { JAILBREAK, JAILS } from "../config/balance.js";
+import { showForm } from "../core/forms.js";
+import { completeBind, hasPendingBind, type Clicked } from "../core/jailbind.js";
+import { getJail, holdsPrisoners, jailAtButton } from "../core/jailstore.js";
 import { registerSystem } from "../core/registry.js";
 import { onScriptEvent } from "../core/events.js";
 import { onTick } from "../core/tick.js";
 import { addCoins, clearBounty } from "../core/economy.js";
-import { error } from "../core/log.js";
+import { error, warn } from "../core/log.js";
 import { playFor } from "../core/sound.js";
 import { getRecord, getJailSite, update } from "../core/state.js";
+import type { JailSite } from "../config/world.js";
 import { lawPlayers, prisoners } from "../core/players.js";
+import type { Jail } from "../logic/jails.js";
 
 /**
  * Flip to true while testing solo. Normally a player who's currently
@@ -42,6 +47,23 @@ function getOnlinePlayers(): Player[] {
     return world.getAllPlayers();
 }
 
+/**
+ * The jail that holds prisoners, as it is NOW: the site kept in core/state is a copy taken at the capture, so if an operator has moved the jail or changed its
+ * door since, the saved jail (found by the id the site carries) is what counts. A site with no id, or whose jail is gone, is used as it was taken.
+ */
+function activeSite(): JailSite | null {
+
+    const site = getJailSite();
+
+    if (!site) return null;
+
+    const current = site.id !== undefined ? getJail(site.id) : undefined;
+
+    if (!current) return site;
+
+    return { id: current.id, jail: current.jail, ...(current.doorTrigger ? { doorTrigger: current.doorTrigger } : {}) };
+}
+
 function getLawNear(point: Vector3, radius: number): Player[] {
     return lawPlayers().filter((player) => distance(player.location, point) <= radius);
 }
@@ -51,12 +73,10 @@ function getLawNear(point: Vector3, radius: number): Player[] {
  * currently active, powering whatever redstone contraption actually
  * opens that jail's door.
  */
-function openJailDoor(doorTrigger: Vector3 | null): void {
+function openJailDoor(doorTrigger: Vector3 | undefined): void {
 
-    if (!doorTrigger) {
-        error("jailbreak", "No door trigger point for the current jail.");
-        return;
-    }
+    // A jail with no door trigger frees its prisoners and opens nothing (its door is worked some other way): not an error.
+    if (!doorTrigger) return;
 
     const dimension = world.getDimension("overworld");
 
@@ -69,7 +89,7 @@ function openJailDoor(doorTrigger: Vector3 | null): void {
     }
 }
 
-function succeedBreakout(rescuerIds: readonly string[], jailLocation: Vector3, doorTrigger: Vector3 | null): void {
+function succeedBreakout(rescuerIds: readonly string[], jailLocation: Vector3, doorTrigger: Vector3 | undefined): void {
 
     world.sendMessage("§6The jailbreak succeeded!");
 
@@ -194,11 +214,12 @@ function showSliderChallenge(player: Player): void {
         .title("§6Pick the Lock")
         .slider("§7Turn the pick... listen for the ping.", 0, 100, { valueStep: 1, defaultValue: 50 });
 
-    form.show(player).then((response) => {
+    // Through showForm, which waits and tries again when the game says the player is busy (a form opened straight from a right-click, with food or a bow in hand, hits that).
+    void showForm(player, form).then((response) => {
 
-        if (response.canceled) return;
+        if (!response || response.canceled || !response.formValues) return;
 
-        resolveLockpickAttempt(player, response.formValues![0] as number);
+        resolveLockpickAttempt(player, response.formValues[0] as number);
 
     }).catch((err) => {
         error("jailbreak", `Slider failed for ${player.name}: ${err}`);
@@ -227,7 +248,7 @@ function resolveLockpickAttempt(player: Player, sliderValue: number): void {
 
     lastClickTick.set(player.id, nowTick);
 
-    const site = getJailSite();
+    const site = activeSite();
 
     if (!site) return;
 
@@ -285,10 +306,98 @@ function resolveLockpickAttempt(player: Player, sliderValue: number): void {
 // Run this from a command block (e.g. wired to a lever at the
 // jail), set to "Execute as Initiator" so it runs as the player:
 // scriptevent bounty:lockpick
+// It works on whichever jail is holding prisoners. A jail's own buttons (below) are the in-game way: no command block needed.
 onScriptEvent("bounty:lockpick", (player) => {
     if (!player) return;
     showSliderChallenge(player);
 });
+
+// ---------------------------------------------------------------------------------------------------------
+// A jail's buttons: any block an operator has bound to a jail (core/jailforms.ts), right-clicked
+// ---------------------------------------------------------------------------------------------------------
+
+const lastPress = new Map<string, number>(); // player id -> tick, so one click reported twice opens one form
+
+/**
+ * A player pressed one of this jail's buttons. Prisoners are held in one jail at a time (the one the last capture chose), so a button of any other jail says
+ * so instead of starting a pick for a lock nobody is behind.
+ */
+function pressJailButton(player: Player, jail: Jail): void {
+
+    const check = checkEligibility(player);
+
+    if (!check.eligible) {
+        if (check.message) player.sendMessage(check.message);
+        return;
+    }
+
+    if (!holdsPrisoners(jail.id)) {
+        player.sendMessage(`§7No one is held in ${jail.name}.`);
+        return;
+    }
+
+    showSliderChallenge(player);
+}
+
+try {
+    world.beforeEvents.playerInteractWithBlock.subscribe((event) => {
+
+        try {
+            const player = event.player;
+            const block = event.block;
+
+            // An operator who has just pressed "bind a block" on a jail's screen: this click is the answer, whatever the block is.
+            if (hasPendingBind(player)) {
+                event.cancel = true;
+
+                if (!event.isFirstEvent) return;
+
+                const where = block.location;
+                const clicked: Clicked = { dimensionId: block.dimension.id, x: where.x, y: where.y, z: where.z, typeId: block.typeId };
+
+                system.run(() => {
+                    try {
+                        completeBind(player, clicked);
+                    } catch (err) {
+                        error("jailbreak", `Could not finish binding a block: ${err instanceof Error ? err.message : String(err)}`);
+                    }
+                });
+                return;
+            }
+
+            const at = block.location;
+            const jail = jailAtButton(block.dimension.id, at.x, at.y, at.z);
+
+            if (!jail) return;
+
+            // A jail that is switched off has no use for its buttons, unless it still holds prisoners (it was on when they were put there): then the click is left to the game.
+            if (!jail.enabled && !holdsPrisoners(jail.id)) return;
+
+            // The button only starts the pick: it does not also press, and a held click repeats the event every tick, so only the first counts.
+            event.cancel = true;
+
+            if (!event.isFirstEvent) return;
+
+            const now = system.currentTick;
+
+            if (now - (lastPress.get(player.id) ?? -Infinity) < JAILS.pressGapTicks) return;
+
+            lastPress.set(player.id, now);
+
+            system.run(() => {
+                try {
+                    if (player.isValid) pressJailButton(player, jail);
+                } catch (err) {
+                    error("jailbreak", `A jail button failed: ${err instanceof Error ? err.message : String(err)}`);
+                }
+            });
+        } catch (err) {
+            error("jailbreak", `Could not read a click on a block: ${err instanceof Error ? err.message : String(err)}`);
+        }
+    });
+} catch (err) {
+    warn("jailbreak", `Could not listen for jail buttons: ${err instanceof Error ? err.message : String(err)}`);
+}
 
 // (scriptevent bounty:test_capture, which jails you instantly so the whole
 // capture → lockpick → escort loop can be tested alone with TESTING_MODE
@@ -335,6 +444,7 @@ registerSystem({
         contributors = new Set();
         sweetSpotTarget = null;
         lastClickTick.clear();
+        lastPress.clear();
         escortOrigin.clear();
 
         if (failTimeoutId !== null) {

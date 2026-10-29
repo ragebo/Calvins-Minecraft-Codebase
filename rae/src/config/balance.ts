@@ -107,6 +107,21 @@ export const JAILBREAK = {
     escortEffectTicks: 60
 };
 
+/** The jails an operator makes in game (core/jailstore.ts; a world that has never saved one has the two in config/world.ts's JAIL_SITES). */
+export const JAILS = {
+    /** At most this many jails. */
+    maxJails: 8,
+    /** At most this many buttons (blocks that start the lockpick) on one jail. */
+    maxButtons: 8,
+    maxName: 40,
+    /** A saved jail longer than this many characters is refused. The longest a valid one can be (a name of 40 characters that each need a backslash, a spot at the edge of the world and every button) is about 650. */
+    maxChars: 900,
+    /** How long an operator has, after pressing "bind a block", to right-click it (seconds). */
+    bindSeconds: 30,
+    /** A second press of the same button inside this many ticks is the same press (the game can report one click more than once). */
+    pressGapTicks: 5
+};
+
 export const RAIDS = {
     /** Applied to every raid mob so they hit less hard. */
     mobWeaknessAmplifier: 0,

@@ -10,6 +10,7 @@ import { warn } from "./log.js";
 import { registerSystem } from "./registry.js";
 import { allRobberies, boundAt, getRobbery, getStored, isDirtyAt, listStored, saveRobbery } from "./robberystore.js";
 import { dimensionNameOf, homeOf, markTeller, tellerOf, unmarkElement, whyNotATeller } from "./robberyteller.js";
+import { jailUses } from "./jailstore.js";
 import { captureFrame, cellsToBind, neighbourChest, typeAt } from "./robberyworld.js";
 
 /**
@@ -71,13 +72,19 @@ export function selectedRobbery(player: Player): Robbery | undefined {
 // Making an edit
 // ---------------------------------------------------------------------------------------------------------
 
-/** The first block of this robbery that another robbery already uses, as a sentence, or undefined. */
+/** The first block of this robbery that another robbery, or a jail, already uses, as a sentence, or undefined. */
 function conflictWithOthers(robbery: Robbery): string | undefined {
+
+    const overworld = sameDimension(robbery.dimension) === "overworld";
 
     for (const element of robbery.elements) {
         for (const cell of element.cells) {
             const other = boundAt(robbery.dimension, cell[0], cell[1], cell[2]);
             if (other && other.robbery !== robbery.id) return `the block at ${label(cell)} already belongs to the robbery ${other.robbery}`;
+
+            // A block a jail has bound (a button, or its door trigger) would have both play it at once: a jail's blocks and a robbery's are kept apart, in both directions.
+            const jail = overworld ? jailUses(cell[0], cell[1], cell[2]) : undefined;
+            if (jail) return `the block at ${label(cell)} is a button or the door trigger of the jail ${jail.name}`;
         }
     }
 

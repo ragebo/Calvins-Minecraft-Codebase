@@ -39,7 +39,7 @@ Use a real kill by the law player (a sword, or a gun from README). `/kill` has n
 | # | Do | Expect |
 |---|---|---|
 | B1 | `/scoreboard players set A bounty 120`. L kills A. Watch chat, and A's screen. | Chat, in this order: `L collected a bounty of 120 coins from A!` then `A was captured by the law and sent to jail!`. L's `coins` rose by 120 (`/scoreboard players list L`); A's `bounty` is 0. **No red `[DEATH ERROR]` line.** A has not moved yet: A is on the death screen. |
-| B2 | A clicks Respawn. | A appears at one of the two jail sites, (-254, 64, 235) or (76, 69, 214), **not** at an outlaw spawn, and stays there. A sees `You have been captured! This is your second and final life.` `/tag @s list` for A: `outlaw`, `jailed`, `in_jail`, and **no** `send_to_jail`. |
+| B2 | A clicks Respawn. | A appears at one of the jails that are on (in a world that has not used the Jails screen, one of the two old sites, (-254, 64, 235) or (76, 69, 214); see docs/test-cards/JAILS.md), **not** at an outlaw spawn, and stays there. A sees `You have been captured! This is your second and final life.` `/tag @s list` for A: `outlaw`, `jailed`, `in_jail`, and **no** `send_to_jail`. |
 | B3 | An outlaw with a bounty of 0 is killed by L. | The capture line only: no `collected a bounty` line. |
 | B4 | (Needs a fourth player, C, an outlaw.) L kills C while A is still in jail. C respawns. | C appears at the **same** jail site as A. |
 | B5 | An outlaw dies to something that is not law (a fall, drowning, a mob). | No capture message. The outlaw respawns at an outlaw spawn, not in jail, tags unchanged. |

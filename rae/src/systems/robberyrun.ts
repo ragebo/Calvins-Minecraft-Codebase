@@ -1,5 +1,6 @@
 import { system, world, type Block, type Entity, type ItemStack, type Player } from "@minecraft/server";
 import { ROBBERY as R } from "../config/balance.js";
+import { hasPendingBind } from "../core/jailbind.js";
 import { debug, error, warn } from "../core/log.js";
 import { isOperator } from "../core/players.js";
 import { registerSystem } from "../core/registry.js";
@@ -59,6 +60,9 @@ listen("block interaction", () => world.beforeEvents.playerInteractWithBlock.sub
 
         const ref = refOf(event.block);
         if (!ref) return;
+
+        // An operator binding a block to a jail (core/jailbind.ts): this click is theirs, not a play.
+        if (hasPendingBind(event.player)) return;
 
         if (holdsWand(event.player, event.itemStack)) return;
 

@@ -55,6 +55,8 @@ export interface RecordStore<T> {
     remove(id: string): PlainResult;
     undoAvailable(id: string): boolean;
     undo(id: string): PlainResult;
+    /** Forgets this record's undo, for a change nobody asked for (a default made real) that must not be offered as "undo my last change". */
+    forgetUndo(id: string): void;
     /** The saved text exactly as stored, for a backup in the log. */
     rawText(id: string): string | undefined;
     /** Forgets everything read so far, so the next call reads the world again: the state a script reload leaves. For tests. */
@@ -242,6 +244,10 @@ export function createRecordStore<T>(options: RecordStoreOptions<T>): RecordStor
 
         undoAvailable(id) {
             return undoSlots.has(id);
+        },
+
+        forgetUndo(id) {
+            undoSlots.delete(id);
         },
 
         /** Puts a record back as it was before its last save or delete. Doing it again redoes. */

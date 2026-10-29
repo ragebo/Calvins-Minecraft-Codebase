@@ -1,6 +1,7 @@
 import { EquipmentSlot, system, world, type Block, type CustomCommandOrigin, type ItemStack, type Player, type Vector3 } from "@minecraft/server";
 import { ROBBERY as R } from "../config/balance.js";
 import { failure, later as laterTo, ok, playerOf, registerFamily, type Family } from "../core/commands.js";
+import { hasPendingBind } from "../core/jailbind.js";
 import { debug, error, info, warn } from "../core/log.js";
 import { isOperator } from "../core/players.js";
 import { registerSystem } from "../core/registry.js";
@@ -98,6 +99,9 @@ try {
         guarded("a wand click on a block", () => {
 
             if (!holdsWand(event.player, event.itemStack)) return;
+
+            // An operator binding a block to a jail (core/jailbind.ts): this click is theirs, not a wand click.
+            if (hasPendingBind(event.player)) return;
 
             // The wand never places a block, opens a chest or presses a button, whatever it is pointed at.
             event.cancel = true;

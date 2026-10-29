@@ -1,5 +1,5 @@
 import { world, system, type Player, type ScoreboardIdentity, type Vector3 } from "@minecraft/server";
-import { JAIL_SITES } from "../config/world.js";
+import { usableJails } from "../core/jailstore.js";
 import { registerSystem } from "../core/registry.js";
 import { onDeath, onScriptEvent, onSpawn } from "../core/events.js";
 import { addCoins, getBounty, clearBounty } from "../core/economy.js";
@@ -9,7 +9,7 @@ import { getRecord, recordOf, getJailSite, setJailSite, syncTags, update, update
 import { players, prisoners } from "../core/players.js";
 
 /**
- * Chooses which jail site prisoners are sent to and captures outlaws
+ * Chooses which jail prisoners are sent to (one of the jails that are on in core/jailstore.ts) and captures outlaws
  * caught by law. A prisoner's first capture sends them to jail; a
  * second capture eliminates them permanently.
  *
@@ -33,7 +33,12 @@ export function assignJailForNewPrisoner(): Vector3 {
     let site = getJailSite();
 
     if (!isJailOccupied() || !site) {
-        site = JAIL_SITES[Math.floor(Math.random() * JAIL_SITES.length)];
+
+        // Never empty: the store falls back to the config's two when no saved jail is usable.
+        const jails = usableJails();
+        const chosen = jails[Math.floor(Math.random() * jails.length)]!;
+
+        site = { id: chosen.id, jail: chosen.jail, ...(chosen.doorTrigger ? { doorTrigger: chosen.doorTrigger } : {}) };
         setJailSite(site);
     }
 

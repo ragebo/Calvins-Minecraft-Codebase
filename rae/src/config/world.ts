@@ -54,7 +54,10 @@ export interface JailSite {
     /** Where the prisoner is teleported. */
     jail: Vector3;
     /** Where a redstone block is placed to open that jail's door. */
-    doorTrigger: Vector3;
+    /** Absent on a jail with no door of its own: a successful jailbreak then frees the prisoners and opens nothing. */
+    doorTrigger?: Vector3;
+    /** The id of the jail this site was taken from (core/jailstore.ts), so it can be found again if the jail is edited while prisoners are held. Absent on a site that was not. */
+    id?: string;
 }
 
 export const JAIL_SITES: JailSite[] = [
@@ -158,14 +161,24 @@ export interface TeleportTarget {
  * above, so there is still exactly one copy of each. The train, the vault and the boat spots are the ones to
  * check in game (stand on them and adjust y here if needed): they were spawn or structure positions, not standing spots.
  */
-export const TELEPORT_TARGETS: readonly TeleportTarget[] = [
+export const TELEPORT_TARGETS_BEFORE_JAILS: readonly TeleportTarget[] = [
     ...LAW_SPAWNS.map((at, i) => ({ name: `Law spawn ${i + 1}`, at })),
-    ...OUTLAW_SPAWNS.map((at, i) => ({ name: `Outlaw spawn ${i + 1}`, at })),
-    ...JAIL_SITES.map((site, i) => ({ name: `Jail ${i + 1}`, at: site.jail })),
+    ...OUTLAW_SPAWNS.map((at, i) => ({ name: `Outlaw spawn ${i + 1}`, at }))
+];
+
+/** The places after the jails. The menu puts the jails that are in the world NOW (an operator can add them) between the two lists. */
+export const TELEPORT_TARGETS_AFTER_JAILS: readonly TeleportTarget[] = [
     { name: "Ranch", at: RANCH_LOWER_SPAWNS[0]! },
     { name: "Fort", at: FORT_SPAWNS[0]! },
     { name: "Train (start of the track)", at: { x: TRAIN_START.x, y: TRAIN_START.y + 1, z: TRAIN_START.z } },
     { name: "Train vault", at: { x: TRAIN_VAULT_CHEST.x, y: TRAIN_VAULT_CHEST.y + 1, z: TRAIN_VAULT_CHEST.z } },
     { name: "Boat escape NPC", at: BOAT_NPC },
     { name: "Boat win spot", at: BOAT_WIN_TELEPORT }
+];
+
+/** The whole list with the config's two jails in it: what the menu shows in a world that has not used the Jails screen. */
+export const TELEPORT_TARGETS: readonly TeleportTarget[] = [
+    ...TELEPORT_TARGETS_BEFORE_JAILS,
+    ...JAIL_SITES.map((site, i) => ({ name: `Jail ${i + 1}`, at: site.jail })),
+    ...TELEPORT_TARGETS_AFTER_JAILS
 ];

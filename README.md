@@ -130,6 +130,17 @@ An ending can also have a **cinematic**: a camera pan (two marks, a length, ever
 
 Operators make and change endings from the RAE menu's **Endings** button (place and win spot by standing there, the item from the hand, the messages, delete, undo). Players try one with `/scriptevent rae:ending <id>` (an NPC's button or a command block); `bounty:escape` still tries the boat. Telemetry: `round.end` names the group ending that ended the round and a solo escape writes an `ending.escape` line. The run sheet is `docs/test-cards/ENDINGS.md`.
 
+### Jails
+
+A captured outlaw is put in a jail, and a jailbreak frees them. Jails are made **in game** (not in code): an operator opens the RAE menu's **Jails** button and adds as many as they like (up to eight). A jail is:
+
+- a **spot** where prisoners are put (where the operator stood when they made or moved it);
+- an optional **door trigger**: the block where a redstone block is placed when a jailbreak succeeds, to open the door. A jail made on the screens has none until the operator clicks one, so a successful jailbreak frees the prisoners and places nothing;
+- up to eight **buttons**: any block an outlaw can right-click (a button or lever is best; a door or chest bound this way stops doing its usual job). A right-click on one starts the lockpick for that jail, so no command block is needed. The operator binds a block by pressing "bind a button" on the jail's screen and then right-clicking the block;
+- an **on/off** switch: a jail that is off is not chosen for new prisoners (one that holds prisoners keeps working until they are free).
+
+A world that has never used the screen has the two jails the code always had ("Jail 1" and "Jail 2"); the first thing saved makes both real. A capture picks one of the jails that are on at random **when the jail is empty**, and prisoners share it until it is empty, so a button of any other jail says "No one is held in <name>". The last jail that is on can never be deleted or switched off, and a jail that holds prisoners cannot be deleted. `/scriptevent bounty:lockpick` still works (it acts on whichever jail holds prisoners). The reasons are in `docs/decisions/0005-jails-are-records-with-buttons.md`; the run sheet is `docs/test-cards/JAILS.md`.
+
 ### Gun system
 
 7 guns in `src/config/guns.ts`, one shared firing engine in `src/systems/guns.ts`:
@@ -290,12 +301,13 @@ is no permission check.
   nobody is playing and only warns when a side is empty, so testing alone works.
 - **Reset game** confirms, then does what `/scriptevent rae:reset` does.
 - **Teleport** lists the places in `TELEPORT_TARGETS` (`config/world.ts`, built from the spawn,
-  jail, ranch, fort, train and boat coordinates already there) and moves the person who opened it.
+  jail, ranch, fort, train and boat coordinates already there; the jails shown are the ones in the world now) and moves the person who opened it.
 - **Send everyone to their spawns** is `bounty:teleport`.
 - **Turn tumbleweeds on / off** toggles the ambient tumbleweeds (they start off).
 - **Start sequence** (operators only; the button is not there for anyone else) is where the start commands and the camera shots are edited: see
   "Start sequence" below.
 - **Endings** (operators only too) is where the ways out are made and changed: see "Endings" above.
+- **Jails** (operators only too) is where jails and their buttons are made and changed: see "Jails" above.
 
 The old script events (`bounty:start_round`, `rae:reset`, `bounty:teleport`) are unchanged, so a
 physical button still works. The game's own actions live in `core/game.ts`, shared by both, and
