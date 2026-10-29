@@ -1,0 +1,18 @@
+{
+    "format_version": "1.26.50",
+    "minecraft:item": {
+        "description": {
+            "identifier": "bountysys:bread_roll",
+            "menu_category": {
+                "category": "items"
+            }
+        },
+        "components": {
+            "minecraft:icon": "bread_roll",
+            "minecraft:display_name": {
+                "value": "Bread Roll"
+            },
+            "minecraft:max_stack_size": 64
+        }
+    }
+}

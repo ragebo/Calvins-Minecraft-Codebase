@@ -28,6 +28,8 @@ turned 45 degrees clockwise). The other five gun sprites (`pistol.png`, `bolt_ri
 sprites (`handgun_ammo.png`, `rifle_ammo.png`, `shotgun_ammo.png`) were supplied by the
 project owner in the same way; their source and terms are not known.
 
+The seventeen sandwich and ingredient sprites (`BountySys_RP/textures/items/italian_sub.png` and the rest, see "In-game testing") came from a texture pack the project owner supplied on 2026-10-29, `POS18`, whose files are named after vanilla dyes but whose art is food; they were copied unchanged and renamed. Its source and terms are not known.
+
 The five melee weapon sprites (`knife.png`, `machete.png`, `baton.png`, `axe.png`, `sledgehammer.png`) came from a
 texture pack the project owner supplied on 2026-10-12, `weapons11.mcpack`, which is also a createtextures.com pack and
 states no license, so its terms are unconfirmed. It redrew several vanilla swords and spears; only five of its item sprites
@@ -657,6 +659,8 @@ Every item is `bountysys:<name>` (`/give @s bountysys:<name>`):
 | `game_menu` | The RAE menu |
 | `robbery_wand` | The robbery builder's wand (operators) |
 | `bond` | A plain item with no behavior of its own, for a bank to sell through a shop deal |
+| `italian_sub`, `pepperoni_sub`, `club_sub` | Three sandwiches (edible, 8 hunger, stack of 16) |
+| `bread_roll`, `tomato_slices`, `lettuce`, `red_onion`, `bacon`, `ham`, `salami`, `pepperoni`, `provolone`, `mayo`, `mustard`, `honey_mustard`, `hot_sauce`, `oregano` | The sandwiches' ingredients: plain items with no behavior and no recipes yet (a shop can sell them) |
 | `aim_probe_bow`, `aim_probe_plain`, `aim_probe_spyglass` | Measurement items for `rae:aim_spike` |
 
 The compass (needs the `law` tag to work): `/give @s bountysys:law_compass`, or from a

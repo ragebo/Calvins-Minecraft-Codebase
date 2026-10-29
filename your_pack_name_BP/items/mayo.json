@@ -1,0 +1,18 @@
+{
+    "format_version": "1.26.50",
+    "minecraft:item": {
+        "description": {
+            "identifier": "bountysys:mayo",
+            "menu_category": {
+                "category": "items"
+            }
+        },
+        "components": {
+            "minecraft:icon": "mayo",
+            "minecraft:display_name": {
+                "value": "Mayo"
+            },
+            "minecraft:max_stack_size": 64
+        }
+    }
+}

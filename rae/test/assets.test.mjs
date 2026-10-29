@@ -686,3 +686,30 @@ test("the axe and the sledgehammer are held like spears, with a 32x32 texture ea
 
     done();
 });
+
+// The sandwiches and their ingredients: 17 items whose sprites came from the owner's POS18 texture pack (its files are named after vanilla dyes, the art is food).
+// The three subs are edible, in the shape of the game's own apple (food, the is_food tag, the eat animation, use modifiers); the ingredients are plain items.
+const SANDWICHES = ["italian_sub", "pepperoni_sub", "club_sub"];
+const INGREDIENTS = ["bread_roll", "tomato_slices", "lettuce", "red_onion", "bacon", "ham", "salami", "pepperoni", "provolone", "mayo", "mustard", "honey_mustard", "hot_sauce", "oregano"];
+
+test("the three subs are edible and the fourteen ingredients are plain items, each with its own sprite", () => {
+    const { check, done } = checks();
+
+    for (const key of [...SANDWICHES, ...INGREDIENTS]) {
+        const item = items.find((candidate) => candidate.id === `bountysys:${key}`);
+        const body = item ? readJson(path.join(BP, "items", `${key}.json`))["minecraft:item"] : undefined;
+
+        check(`${key}: the item exists, with its own icon mapped to a sprite`, item?.icon === key && textureMap[key]?.textures === `textures/items/${key}` && existsSync(path.join(RP, "textures", "items", `${key}.png`)), JSON.stringify(textureMap[key]));
+        check(`${key}: it has a name`, typeof body?.components["minecraft:display_name"]?.value === "string" && body.components["minecraft:display_name"].value.length > 0);
+
+        const edible = SANDWICHES.includes(key);
+        const c = body?.components ?? {};
+
+        check(`${key}: ${edible ? "edible, as the game's own food is" : "a plain item, not food"}`, edible
+            ? c["minecraft:food"]?.nutrition === 8 && typeof c["minecraft:food"]?.saturation_modifier === "number" && c["minecraft:tags"]?.tags?.includes("minecraft:is_food") && c["minecraft:use_animation"]?.value === "eat" && c["minecraft:use_modifiers"]?.use_duration > 0
+            : !("minecraft:food" in c) && !("minecraft:use_modifiers" in c), JSON.stringify(c));
+        check(`${key}: stacks to ${edible ? 16 : 64}`, c["minecraft:max_stack_size"] === (edible ? 16 : 64));
+    }
+
+    done();
+});

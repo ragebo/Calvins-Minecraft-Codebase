@@ -1,0 +1,18 @@
+{
+    "format_version": "1.26.50",
+    "minecraft:item": {
+        "description": {
+            "identifier": "bountysys:salami",
+            "menu_category": {
+                "category": "items"
+            }
+        },
+        "components": {
+            "minecraft:icon": "salami",
+            "minecraft:display_name": {
+                "value": "Salami"
+            },
+            "minecraft:max_stack_size": 64
+        }
+    }
+}

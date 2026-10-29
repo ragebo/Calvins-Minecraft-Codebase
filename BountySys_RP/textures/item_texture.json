@@ -17,6 +17,23 @@
         "baton": { "textures": "textures/items/baton" },
         "axe": { "textures": "textures/items/axe" },
         "sledgehammer": { "textures": "textures/items/sledgehammer" },
-        "bond": { "textures": "textures/items/bond" }
+        "bond": { "textures": "textures/items/bond" },
+        "italian_sub": { "textures": "textures/items/italian_sub" },
+        "pepperoni_sub": { "textures": "textures/items/pepperoni_sub" },
+        "club_sub": { "textures": "textures/items/club_sub" },
+        "bread_roll": { "textures": "textures/items/bread_roll" },
+        "tomato_slices": { "textures": "textures/items/tomato_slices" },
+        "lettuce": { "textures": "textures/items/lettuce" },
+        "red_onion": { "textures": "textures/items/red_onion" },
+        "bacon": { "textures": "textures/items/bacon" },
+        "ham": { "textures": "textures/items/ham" },
+        "salami": { "textures": "textures/items/salami" },
+        "pepperoni": { "textures": "textures/items/pepperoni" },
+        "provolone": { "textures": "textures/items/provolone" },
+        "mayo": { "textures": "textures/items/mayo" },
+        "mustard": { "textures": "textures/items/mustard" },
+        "honey_mustard": { "textures": "textures/items/honey_mustard" },
+        "hot_sauce": { "textures": "textures/items/hot_sauce" },
+        "oregano": { "textures": "textures/items/oregano" }
     }
 }
