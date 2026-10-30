@@ -5,4 +5,4 @@
  * It must equal the behavior pack's manifest version (your_pack_name_BP/manifest.json: the header and both modules). test/assets.test.mjs
  * fails when they differ, so a version bump that forgets this file does not get as far as a commit.
  */
-export const BUILD_VERSION = "0.2.11";
+export const BUILD_VERSION = "0.2.12";
